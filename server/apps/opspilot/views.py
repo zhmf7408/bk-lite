@@ -594,18 +594,18 @@ def execute_chat_flow(request, bot_id, node_id):
 
 
 @api_exempt
-def execute_chat_flow_wechat_official(request, bot_id):
+def execute_chat_flow_wechat_official(request, bot_id, node_id):
     """微信公众号ChatFlow执行入口
 
     通过微信公众号发送消息，调用指定的ChatFlow进行流程节点执行并返回数据
     """
-    # 1. 验证Bot ID
-    if not bot_id:
-        logger.error("微信公众号ChatFlow执行失败：缺少Bot ID")
+    # 1. 验证Bot ID和Node ID
+    if not bot_id or not node_id:
+        logger.error("微信公众号ChatFlow执行失败：缺少Bot ID或Node ID")
         return HttpResponse("success")
 
     # 2. 创建工具类实例并验证Bot和工作流配置
-    wechat_official_utils = WechatOfficialChatFlowUtils(bot_id)
+    wechat_official_utils = WechatOfficialChatFlowUtils(bot_id, node_id)
     bot_chat_flow, error_response = wechat_official_utils.validate_bot_and_workflow()
     if error_response:
         return error_response
@@ -632,18 +632,18 @@ def execute_chat_flow_wechat_official(request, bot_id):
 
 
 @api_exempt
-def execute_chat_flow_wechat(request, bot_id):
+def execute_chat_flow_wechat(request, bot_id, node_id):
     """企业微信ChatFlow执行入口
 
     通过企业微信发送消息，调用指定的ChatFlow进行流程节点执行并返回数据
     """
-    # 1. 验证Bot ID
-    if not bot_id:
-        logger.error("企业微信ChatFlow执行失败：缺少Bot ID")
+    # 1. 验证Bot ID和Node ID
+    if not bot_id or not node_id:
+        logger.error("企业微信ChatFlow执行失败：缺少Bot ID或Node ID")
         return HttpResponse("success")
 
     # 2. 创建工具类实例并验证Bot和工作流配置
-    wechat_utils = WechatChatFlowUtils(bot_id)
+    wechat_utils = WechatChatFlowUtils(bot_id, node_id)
     bot_chat_flow, error_response = wechat_utils.validate_bot_and_workflow()
     if error_response:
         return error_response
@@ -675,7 +675,7 @@ def execute_chat_flow_wechat(request, bot_id):
 
 
 @api_exempt
-def execute_chat_flow_dingtalk(request, bot_id):
+def execute_chat_flow_dingtalk(request, bot_id, node_id):
     """钉钉ChatFlow执行入口
 
     支持两种模式：
@@ -684,21 +684,21 @@ def execute_chat_flow_dingtalk(request, bot_id):
 
     GET请求返回状态，POST请求处理消息
     特殊操作：
-    - POST /dingtalk/{bot_id}/stream/start - 启动Stream客户端
+    - POST /dingtalk/{bot_id}/{node_id}/stream/start - 启动Stream客户端
     """
     loader = get_loader(request)
 
     # 处理GET请求 - 健康检查/状态查询
     if request.method == "GET":
-        return JsonResponse({"status": "ok", "bot_id": bot_id})
+        return JsonResponse({"status": "ok", "bot_id": bot_id, "node_id": node_id})
 
-    # 1. 验证Bot ID
-    if not bot_id:
-        logger.error("钉钉ChatFlow执行失败：缺少Bot ID")
-        return JsonResponse({"success": False, "message": loader.get("error.missing_bot_id", "Missing bot_id")})
+    # 1. 验证Bot ID和Node ID
+    if not bot_id or not node_id:
+        logger.error("钉钉ChatFlow执行失败：缺少Bot ID或Node ID")
+        return JsonResponse({"success": False, "message": loader.get("error.missing_bot_or_node_id", "Missing bot_id or node_id")})
 
     # 2. 创建工具类实例并验证Bot和工作流配置
-    dingtalk_utils = DingTalkChatFlowUtils(bot_id)
+    dingtalk_utils = DingTalkChatFlowUtils(bot_id, node_id)
     bot_chat_flow, error_response = dingtalk_utils.validate_bot_and_workflow()
     if error_response:
         return error_response
@@ -713,7 +713,7 @@ def execute_chat_flow_dingtalk(request, bot_id):
         data = json.loads(request.body) if request.body else {}
         if data.get("action") == "start_stream":
             # 启动Stream客户端
-            success = start_dingtalk_stream_client(bot_id, bot_chat_flow, dingtalk_config)
+            success = start_dingtalk_stream_client(bot_id, node_id, bot_chat_flow, dingtalk_config)
             if success:
                 return JsonResponse({"success": True, "message": "DingTalk Stream client started successfully", "mode": "stream"})
             else:
