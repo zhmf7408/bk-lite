@@ -63,25 +63,32 @@ class WechatChatFlowUtils(BaseChatFlowUtils):
     def get_wechat_node_config(self, bot_chat_flow):
         """从ChatFlow中获取企业微信节点配置
 
+        使用初始化时传入的 node_id 获取指定节点配置
+
         Returns:
             tuple: (wechat_config_dict, error_response)
                    成功时返回配置字典和None，失败时返回None和错误响应
         """
         flow_nodes = bot_chat_flow.flow_json.get("nodes", [])
-        wechat_nodes = [node for node in flow_nodes if node.get("type") == "enterprise_wechat"]
 
-        if not wechat_nodes:
-            logger.error(f"企业微信ChatFlow执行失败：Bot {self.bot_id} 工作流中没有企业微信节点")
+        # 根据 node_id 查找指定节点
+        wechat_node = None
+        for node in flow_nodes:
+            if node.get("id") == self.node_id and node.get("type") == "enterprise_wechat":
+                wechat_node = node
+                break
+
+        if not wechat_node:
+            logger.error(f"企业微信ChatFlow执行失败：Bot {self.bot_id} 工作流中没有找到指定的企业微信节点 {self.node_id}")
             return None, HttpResponse("success")
 
-        wechat_node = wechat_nodes[0]
         wechat_data = wechat_node.get("data", {})
         wechat_config = wechat_data.get("config", {})
 
         # 验证必需参数
         required_params = ["token", "aes_key", "corp_id", "agent_id", "secret"]
         missing_params = [p for p in required_params if not wechat_config.get(p)]
-        wechat_config["node_id"] = wechat_node["id"]
+        wechat_config["node_id"] = self.node_id
         if missing_params:
             logger.error(f"企业微信ChatFlow执行失败：Bot {self.bot_id} 缺少配置参数: {', '.join(missing_params)}")
             return None, HttpResponse("success")

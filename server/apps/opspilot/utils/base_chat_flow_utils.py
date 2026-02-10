@@ -29,13 +29,15 @@ class BaseChatFlowUtils(ABC):
     channel_code: str = ""  # 渠道代码，用于 input_data
     cache_key_prefix: str = ""  # 缓存键前缀，用于消息去重
 
-    def __init__(self, bot_id):
+    def __init__(self, bot_id, node_id):
         """初始化工具类
 
         Args:
             bot_id: Bot ID
+            node_id: 入口节点 ID
         """
         self.bot_id = bot_id
+        self.node_id = node_id
 
     def validate_bot_and_workflow(self):
         """验证 Bot 和 ChatFlow 配置
