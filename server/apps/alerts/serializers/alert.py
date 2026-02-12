@@ -12,6 +12,7 @@ class AlertModelSerializer(serializers.ModelSerializer):
     """
     Serializer for Alert model.
     """
+
     event_count = serializers.SerializerMethodField()
     source_names = serializers.SerializerMethodField()
     # 持续时间
@@ -50,9 +51,9 @@ class AlertModelSerializer(serializers.ModelSerializer):
         if isinstance(instance, list):
             # 如果是列表实例，预处理通知状态
             from apps.alerts.models.models import NotifyResult
+
             alerts = [i.alert_id for i in instance]
-            notify_result = NotifyResult.objects.filter(notify_type="alert", notify_object__in=alerts).values_list(
-                "notify_object", "notify_result")
+            notify_result = NotifyResult.objects.filter(notify_type="alert", notify_object__in=alerts).values_list("notify_object", "notify_result")
             notify_result_map = {i[0]: i[1] for i in notify_result}
             for alert in instance:
                 alert_result = notify_result_map.get(alert.alert_id)
@@ -100,7 +101,7 @@ class AlertModelSerializer(serializers.ModelSerializer):
         通过 Alert -> Events -> AlertSource 获取告警源名称
         """
         # 如果使用了注解（推荐）
-        if hasattr(obj, 'source_names_annotated') and obj.source_names_annotated:
+        if hasattr(obj, "source_names_annotated") and obj.source_names_annotated:
             return obj.source_names_annotated
 
         # fallback: 通过关联查询获取
@@ -120,7 +121,7 @@ class AlertModelSerializer(serializers.ModelSerializer):
         Get the count of events associated with the alert.
         """
         # 如果使用了注解（推荐）
-        if hasattr(obj, 'event_count_annotated'):
+        if hasattr(obj, "event_count_annotated"):
             return obj.event_count_annotated
 
         # fallback: 直接计数
@@ -141,11 +142,19 @@ class AlertModelSerializer(serializers.ModelSerializer):
         """
         获取关联的事故标题
         """
-
-        if hasattr(obj, 'incident_title_annotated'):
+        # 如果使用了注解（推荐，PostgreSQL）
+        if hasattr(obj, "incident_title_annotated") and obj.incident_title_annotated:
             return obj.incident_title_annotated
 
-        return ""
+        # fallback: 通过预加载的关联查询获取（其他数据库）
+        try:
+            incident_titles = set()
+            for incident in obj.incident_set.all():
+                if incident.title:
+                    incident_titles.add(incident.title)
+            return ", ".join(sorted(incident_titles))
+        except Exception:
+            return ""
 
     def get_notify_status(self, obj):
         """

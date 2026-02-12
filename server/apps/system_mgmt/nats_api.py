@@ -9,11 +9,11 @@ import jwt
 import pyotp
 import qrcode
 from django.contrib.auth.hashers import check_password, make_password
+from django.core.cache import cache
 from django.db.models import Q
 from django.utils import timezone
 
 import nats_client
-from apps.core.backends import cache
 from apps.core.logger import system_mgmt_logger as logger
 from apps.core.utils.loader import LanguageLoader
 from apps.core.utils.permission_cache import clear_users_permission_cache
@@ -119,6 +119,7 @@ def get_pilot_permission_by_token(token, bot_id, group_list):
 def verify_token(token):
     if not token:
         return {"result": False, "message": "Token is missing"}
+
     try:
         user = _verify_token(token)
     except Exception as e:
@@ -126,19 +127,23 @@ def verify_token(token):
 
     # 获取用户所有角色（个人角色 + 组角色）
     all_role_ids = get_user_all_roles(user)
+
     role_list = Role.objects.filter(id__in=all_role_ids)
     role_names = [f"{role.app}--{role.name}" if role.app else role.name for role in role_list]
+
     is_superuser = "admin" in role_names or "system-manager--admin" in role_names
     group_list = Group.objects.all().order_by("id")
     if not is_superuser:
         group_list = group_list.filter(id__in=user.group_list)
-    # groups = GroupUtils.build_group_tree(group_list)
     groups = list(group_list.values("id", "name", "parent_id"))
+
     queryset = Group.objects.prefetch_related("roles").all()
 
     # 构建嵌套组结构
     groups_data = GroupUtils.build_group_tree(queryset, is_superuser, [i["id"] for i in groups])
+
     menus = cache.get(f"menus-user:{user.id}")
+
     if not menus:
         menus = {}
         if not is_superuser:
@@ -149,7 +154,9 @@ def verify_token(token):
             menu_data = Menu.objects.filter(id__in=list(set(menu_ids))).values_list("app", "name")
             for app, name in menu_data:
                 menus.setdefault(app, []).append(name)
+
         cache.set(f"menus-user:{user.id}", menus, 60)
+
     return {
         "result": True,
         "data": {
@@ -187,8 +194,10 @@ def get_user_menus(client_id, roles, username, is_superuser):
 @nats_client.register
 def get_client(client_id="", username="", domain="domain.com"):
     app_list = App.objects.all()
+
     if client_id:
         app_list = app_list.filter(name__in=client_id.split(";"))
+
     if username:
         user = User.objects.filter(username=username, domain=domain).first()
         if not user:
@@ -196,10 +205,14 @@ def get_client(client_id="", username="", domain="domain.com"):
 
         # 获取用户所有角色（个人角色 + 组角色）
         all_role_ids = get_user_all_roles(user)
+
         app_name_list = list(Role.objects.filter(id__in=all_role_ids).values_list("app", flat=True).distinct())
+
         if "" not in app_name_list:
             app_list = app_list.filter(name__in=app_name_list)
+
     return_data = list(app_list.order_by("id").values())
+
     return {"result": True, "data": return_data}
 
 
@@ -255,13 +268,21 @@ def search_users(query_params):
     page = int(query_params.get("page", 1))
     page_size = int(query_params.get("page_size", 10))
     search = query_params.get("search", "")
+
     queryset = User.objects.filter(Q(username__icontains=search) | Q(display_name__icontains=search) | Q(email__icontains=search))
+
     start = (page - 1) * page_size
     end = page * page_size
+
     total = queryset.count()
+
     display_fields = User.display_fields() + ["group_list"]
+
     data = queryset.values(*display_fields)[start:end]
-    return {"result": True, "data": {"count": total, "users": list(data)}}
+
+    result_list = list(data)
+
+    return {"result": True, "data": {"count": total, "users": result_list}}
 
 
 @nats_client.register
@@ -356,6 +377,21 @@ def create_default_rule(llm_model, ocr_model, embed_model, rerank_model):
 def get_all_groups():
     groups = Group.objects.prefetch_related("roles").all()
     return_data = GroupUtils.build_group_tree(groups, True)
+    return {"result": True, "data": return_data}
+
+
+@nats_client.register
+def get_channel_detail(channel_id):
+    channel_obj = Channel.objects.filter(id=channel_id).first()
+    if not channel_obj:
+        return {"result": False, "message": "传入的channel_id无法匹配到channel"}
+    return_data = {
+        "name": channel_obj.name,
+        "description": channel_obj.description,
+        "config": channel_obj.config,
+        "team": channel_obj.team,
+        "channel_type": channel_obj.channel_type,
+    }
     return {"result": True, "data": return_data}
 
 

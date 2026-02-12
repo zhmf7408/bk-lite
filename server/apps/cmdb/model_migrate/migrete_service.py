@@ -7,12 +7,12 @@ from apps.cmdb.constants.constants import (
     CLASSIFICATION,
     CREATE_CLASSIFICATION_CHECK_ATTR_MAP,
     CREATE_MODEL_CHECK_ATTR,
+    INIT_MODEL_GROUP,
     INSTANCE,
     MODEL,
     MODEL_ASSOCIATION,
     ORGANIZATION,
     SUBORDINATE_MODEL,
-    INIT_MODEL_GROUP,
 )
 from apps.cmdb.constants.field_constraints import (
     DEFAULT_NUMBER_CONSTRAINT,
@@ -22,11 +22,10 @@ from apps.cmdb.constants.field_constraints import (
     TimeDisplayFormat,
     WidgetType,
 )
-from apps.cmdb.validators import IdentifierValidator
 from apps.cmdb.graph.drivers.graph_client import GraphClient
 from apps.cmdb.utils.base import get_default_group_id
+from apps.cmdb.validators import IdentifierValidator
 from apps.core.logger import cmdb_logger as logger
-
 
 EXCEL_STR_TYPE_MAP = {
     "ipv4": StringValidationType.IPV4,
@@ -70,8 +69,8 @@ class ModelMigrate:
             if isinstance(sheet_data, pd.Series):
                 sheet_data = sheet_data.to_frame()  # 将 Series 转换为 DataFrame
 
-            # 对 NaN 值进行填充，先转换为 object 类型避免类型不兼容警告
-            sheet_data = sheet_data.astype(object).fillna("")
+            # 对 NaN 值进行填充
+            sheet_data = sheet_data.fillna("").infer_objects(copy=False)
 
             # 将 DataFrame 转换为字典格式，使用 'records' 使每行成为一个字典
             data = sheet_data.to_dict(orient="records")
@@ -145,9 +144,7 @@ class ModelMigrate:
 
         type_value = parsed.get("type")
         if type_value and type_value != "none":
-            validation_type = EXCEL_STR_TYPE_MAP.get(
-                type_value, StringValidationType.UNRESTRICTED
-            )
+            validation_type = EXCEL_STR_TYPE_MAP.get(type_value, StringValidationType.UNRESTRICTED)
         else:
             validation_type = StringValidationType.UNRESTRICTED
 
@@ -167,18 +164,14 @@ class ModelMigrate:
         min_val = parsed.get("min")
         if min_val is not None and min_val != "":
             try:
-                result["min_value"] = (
-                    float(min_val) if "." in str(min_val) else int(min_val)
-                )
+                result["min_value"] = float(min_val) if "." in str(min_val) else int(min_val)
             except (ValueError, TypeError):
                 pass
 
         max_val = parsed.get("max")
         if max_val is not None and max_val != "":
             try:
-                result["max_value"] = (
-                    float(max_val) if "." in str(max_val) else int(max_val)
-                )
+                result["max_value"] = float(max_val) if "." in str(max_val) else int(max_val)
             except (ValueError, TypeError):
                 pass
 
@@ -222,15 +215,9 @@ class ModelMigrate:
         with GraphClient() as ag:
             exist_items, _ = ag.query_entity(MODEL, [])
             exist_classifications, _ = ag.query_entity(CLASSIFICATION, [])
-            classification_map = {
-                i["classification_id"]: i["_id"] for i in exist_classifications
-            }
-            models = [
-                i for i in models if i.get("classification_id") in classification_map
-            ]
-            result = ag.batch_create_entity(
-                MODEL, models, CREATE_MODEL_CHECK_ATTR, exist_items
-            )
+            classification_map = {i["classification_id"]: i["_id"] for i in exist_classifications}
+            models = [i for i in models if i.get("classification_id") in classification_map]
+            result = ag.batch_create_entity(MODEL, models, CREATE_MODEL_CHECK_ATTR, exist_items)
 
             success_models = [i["data"] for i in result if i["success"]]
             asso_list = [
@@ -263,6 +250,7 @@ class ModelMigrate:
             association.update(is_pre=True)
 
         with GraphClient() as ag:
+            logger.info("77777")
             models, _ = ag.query_entity(MODEL, [])
             model_map = {i["model_id"]: i["_id"] for i in models}
             asso_list = [
@@ -274,9 +262,9 @@ class ModelMigrate:
                 )
                 for i in associations
             ]
-            result = ag.batch_create_edge(
-                MODEL_ASSOCIATION, MODEL, MODEL, asso_list, "model_asst_id"
-            )
+            logger.info("888888")
+            result = ag.batch_create_edge(MODEL_ASSOCIATION, MODEL, MODEL, asso_list, "model_asst_id")
+        logger.info("99999")
         return result
 
     def main(self):
@@ -302,9 +290,7 @@ class ModelMigrate:
         except Exception as err:  # noqa
             import traceback
 
-            logger.error(
-                f"Error updating old instances organization: {traceback.format_exc()}"
-            )
+            logger.error(f"Error updating old instances organization: {traceback.format_exc()}")
 
         return dict(
             classification=classification_resp,
@@ -324,9 +310,7 @@ class ModelMigrate:
             for model in all_models:
                 if INIT_MODEL_GROUP not in model or not model[INIT_MODEL_GROUP]:
                     models_without_group.append(model["_id"])
-                elif INIT_MODEL_GROUP in model and isinstance(
-                    model[INIT_MODEL_GROUP], int
-                ):
+                elif INIT_MODEL_GROUP in model and isinstance(model[INIT_MODEL_GROUP], int):
                     # 如果组织字段是单个整数，转换为列表
                     models_without_group.append(model["_id"])
 
@@ -359,14 +343,10 @@ class ModelMigrate:
 
             # 批量更新需要修复的实例
             if instances_need_fix:
-                logger.info(
-                    f"Found {len(instances_need_fix)} instances with incorrect organization field type"
-                )
+                logger.info(f"Found {len(instances_need_fix)} instances with incorrect organization field type")
                 ag.batch_update_node_properties(
                     label=INSTANCE,
                     node_ids=instances_need_fix,
                     properties={ORGANIZATION: self.default_group_id},
                 )
-                logger.info(
-                    f"Successfully updated {len(instances_need_fix)} instances organization field to list type"
-                )
+                logger.info(f"Successfully updated {len(instances_need_fix)} instances organization field to list type")
