@@ -69,6 +69,17 @@ elif db_engine == "dameng":
     SESSION_CACHE_ALIAS = "locmem"
 
     # ============================================================
+    # 达梦数据库 Migration 补丁说明
+    # ============================================================
+    # Migration 补丁通过 cw_cornerstone.migrate_patch 自动加载
+    # 补丁文件位于: migrate_patch/patches/dameng/{app_label}/{migration_name}.py
+    # 补丁机制: 在 pre_migrate 信号时替换原始 migration 的 operations
+    # 当前已有补丁:
+    #   - django_celery_results/0006_taskresult_date_created.py (重复索引)
+    #   - django_celery_results/0009_groupresult.py (重复索引)
+    #   - alerts/0001_initial.py (PostgreSQL 专属索引: GinIndex, BTreeIndex)
+
+    # ============================================================
     # 达梦数据库 + ASGI 重要提示：
     # ============================================================
     # 由于达梦数据库驱动是同步的，在 uvicorn ASGI 模式下可能导致：

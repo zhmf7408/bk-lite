@@ -160,24 +160,35 @@ def _patch_cursor_execute_with_lock():
         """
         start_time = time.time()
         lock_acquired = False
+        current_thread = threading.current_thread()
+        sql_preview = (sql[:80] + "...") if sql and len(sql) > 80 else sql
 
         # 预处理参数：将无法用 GBK 编码的 Unicode 字符进行替换
         # 这解决了达梦驱动使用 GBK 编码时的 UnicodeEncodeError 问题
         sanitized_params = _sanitize_unicode_for_gbk(params) if params else params
 
+        logger.debug(f"[DAMENG_LOCK] Thread={current_thread.name}({current_thread.ident}) WAITING for lock, sql={sql_preview}")
+
         try:
             lock_acquired = _dameng_global_lock.acquire(blocking=True, timeout=60.0)
 
             if not lock_acquired:
-                logger.error(f"[DAMENG_LOCK] Failed to acquire lock after 60s, sql={sql[:100] if sql else 'None'}")
+                logger.error(f"[DAMENG_LOCK] Thread={current_thread.name}({current_thread.ident}) TIMEOUT after 60s, sql={sql_preview}")
                 raise TimeoutError("Failed to acquire database lock within 60 seconds")
 
             wait_time = time.time() - start_time
+            logger.debug(
+                f"[DAMENG_LOCK] Thread={current_thread.name}({current_thread.ident}) ACQUIRED lock after {wait_time:.3f}s, sql={sql_preview}"
+            )
             if wait_time > _LOCK_WAIT_WARNING_THRESHOLD:
                 logger.warning(f"[DAMENG_LOCK] Lock wait time {wait_time:.2f}s exceeded threshold")
 
             try:
-                return base_execute(self, sql, sanitized_params)
+                exec_start = time.time()
+                result = base_execute(self, sql, sanitized_params)
+                exec_time = time.time() - exec_start
+                logger.debug(f"[DAMENG_LOCK] Thread={current_thread.name}({current_thread.ident}) EXECUTED in {exec_time:.3f}s, sql={sql_preview}")
+                return result
 
             except dmPython.DatabaseError as e:
                 error_code = getattr(e.args[0], "code", None) if e.args else None
@@ -203,6 +214,7 @@ def _patch_cursor_execute_with_lock():
         finally:
             if lock_acquired:
                 _dameng_global_lock.release()
+                logger.debug(f"[DAMENG_LOCK] Thread={current_thread.name}({current_thread.ident}) RELEASED lock, sql={sql_preview}")
 
     CursorWrapper.execute = locked_execute
     logger.info("[DAMENG_LOCK] cursor.execute patched with global lock for ASGI concurrency safety")
