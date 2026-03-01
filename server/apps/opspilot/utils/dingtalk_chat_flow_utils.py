@@ -38,13 +38,15 @@ def is_valid_dingtalk_url(url: str) -> bool:
 
 
 class DingTalkChatFlowUtils(object):
-    def __init__(self, bot_id):
+    def __init__(self, bot_id, node_id):
         """初始化钉钉ChatFlow工具类
 
         Args:
             bot_id: Bot ID
+            node_id: 入口节点 ID
         """
         self.bot_id = bot_id
+        self.node_id = node_id
 
     def validate_bot_and_workflow(self):
         """验证Bot和ChatFlow配置
@@ -74,25 +76,32 @@ class DingTalkChatFlowUtils(object):
     def get_dingtalk_node_config(self, bot_chat_flow):
         """从ChatFlow中获取钉钉节点配置
 
+        使用初始化时传入的 node_id 获取指定节点配置
+
         Returns:
             tuple: (dingtalk_config_dict, error_response)
                    成功时返回配置字典和None，失败时返回None和错误响应
         """
         flow_nodes = bot_chat_flow.flow_json.get("nodes", [])
-        dingtalk_nodes = [node for node in flow_nodes if node.get("type") == "dingtalk"]
 
-        if not dingtalk_nodes:
-            logger.error(f"钉钉ChatFlow执行失败：Bot {self.bot_id} 工作流中没有钉钉节点")
+        # 根据 node_id 查找指定节点
+        dingtalk_node = None
+        for node in flow_nodes:
+            if node.get("id") == self.node_id and node.get("type") == "dingtalk":
+                dingtalk_node = node
+                break
+
+        if not dingtalk_node:
+            logger.error(f"钉钉ChatFlow执行失败：Bot {self.bot_id} 工作流中没有找到指定的钉钉节点 {self.node_id}")
             return None, JsonResponse({"success": False, "message": "DingTalk node not found"})
 
-        dingtalk_node = dingtalk_nodes[0]
         dingtalk_data = dingtalk_node.get("data", {})
         dingtalk_config = dingtalk_data.get("config", {})
 
         # 验证必需参数
         required_params = ["client_id", "client_secret"]
         missing_params = [p for p in required_params if not dingtalk_config.get(p)]
-        dingtalk_config["node_id"] = dingtalk_node["id"]
+        dingtalk_config["node_id"] = self.node_id
         if missing_params:
             logger.error(f"钉钉ChatFlow执行失败：Bot {self.bot_id} 缺少配置参数: {', '.join(missing_params)}")
             return None, JsonResponse(
@@ -343,12 +352,13 @@ class DingTalkStreamEventHandler(dingtalk_stream.EventHandler):
 class DingTalkStreamCallbackHandler(dingtalk_stream.CallbackHandler):
     """钉钉Stream模式回调处理器"""
 
-    def __init__(self, bot_id, bot_chat_flow, dingtalk_config):
+    def __init__(self, bot_id, node_id, bot_chat_flow, dingtalk_config):
         super().__init__()
         self.bot_id = bot_id
+        self.node_id = node_id
         self.bot_chat_flow = bot_chat_flow
         self.dingtalk_config = dingtalk_config
-        self.utils = DingTalkChatFlowUtils(bot_id)
+        self.utils = DingTalkChatFlowUtils(bot_id, node_id)
 
     async def process(self, callback):
         """处理钉钉机器人消息回调
@@ -400,11 +410,12 @@ class DingTalkStreamCallbackHandler(dingtalk_stream.CallbackHandler):
             return dingtalk_stream.AckMessage.STATUS_SYSTEM_EXCEPTION, str(e)
 
 
-def start_dingtalk_stream_client(bot_id, bot_chat_flow, dingtalk_config):
+def start_dingtalk_stream_client(bot_id, node_id, bot_chat_flow, dingtalk_config):
     """启动钉钉Stream客户端（长连接模式）
 
     Args:
         bot_id: Bot ID
+        node_id: 入口节点 ID
         bot_chat_flow: Bot工作流对象
         dingtalk_config: 钉钉配置字典（需包含client_id和client_secret）
 
@@ -427,7 +438,7 @@ def start_dingtalk_stream_client(bot_id, bot_chat_flow, dingtalk_config):
         client.register_all_event_handler(DingTalkStreamEventHandler(bot_id))
 
         # 注册回调处理器
-        callback_handler = DingTalkStreamCallbackHandler(bot_id, bot_chat_flow, dingtalk_config)
+        callback_handler = DingTalkStreamCallbackHandler(bot_id, node_id, bot_chat_flow, dingtalk_config)
         client.register_callback_handler(dingtalk_stream.ChatbotMessage.TOPIC, callback_handler)
 
         # 在新线程中启动客户端
