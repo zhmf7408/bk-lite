@@ -8,7 +8,7 @@ class CollectionPluginLoader:
     _loaded = False
     _package_names = [
         "apps.cmdb.collection.plugins.community",
-        "apps.cmdb.collection.plugins.enterprise",
+        "apps.cmdb.enterprise",
     ]
 
     @classmethod

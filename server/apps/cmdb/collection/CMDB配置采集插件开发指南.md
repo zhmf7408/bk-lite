@@ -114,7 +114,7 @@ class SSHNodeParamsMixin:
 
 社区版对象继续定义在 `apps/cmdb/constants/constants.py` 的 `COLLECT_OBJ_TREE` 中。
 
-如果是企业版新增对象，推荐在 `apps/cmdb/collection/plugins/enterprise/tree.py` 中声明该对象所在分组与 children，运行时会自动追加到对应分组下。
+如果是企业版新增对象，推荐在 `apps/cmdb/enterprise/tree.py` 中声明该对象所在分组与 children，运行时会自动追加到对应分组下。
 
 示例：
 

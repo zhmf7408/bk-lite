@@ -6,7 +6,7 @@ from apps.cmdb.constants.constants import COLLECT_OBJ_TREE
 
 def _get_enterprise_collect_obj_tree():
     try:
-        module = import_module("apps.cmdb.collection.plugins.enterprise.tree")
+        module = import_module("apps.cmdb.enterprise.tree")
     except ModuleNotFoundError:
         return []
     return deepcopy(getattr(module, "ENTERPRISE_COLLECT_OBJ_TREE", []))
