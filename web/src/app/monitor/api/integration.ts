@@ -8,7 +8,7 @@ import {
 import { AxiosRequestConfig } from 'axios';
 
 const useIntegrationApi = () => {
-  const { get, post, del } = useApiClient();
+  const { get, post, del, put } = useApiClient();
 
   const getInstanceGroupRule = async (
     params: {
@@ -33,6 +33,7 @@ const useIntegrationApi = () => {
     instance_type?: string;
     collect_type?: string;
     collector?: string;
+    monitor_plugin_id?: string | number;
   }) => {
     return await post(`/monitor/api/node_mgmt/get_instance_asso_config/`, data);
   };
@@ -134,6 +135,27 @@ const useIntegrationApi = () => {
     return await get(`/monitor/api/monitor_plugin/${data.id}/ui_template/`);
   };
 
+  const getTemplateAccessGuide = async (
+    id: React.Key,
+    params: { organization_id: React.Key; cloud_region_id: React.Key }
+  ) => {
+    return await get(`/monitor/api/monitor_plugin/${id}/access_guide/`, {
+      params,
+    });
+  };
+
+  const createCustomTemplate = async (data: Record<string, any>) => {
+    return await post(`/monitor/api/monitor_plugin/`, data);
+  };
+
+  const updateCustomTemplate = async (id: React.Key, data: Record<string, any>) => {
+    return await put(`/monitor/api/monitor_plugin/${id}/`, data);
+  };
+
+  const deleteCustomTemplate = async (id: React.Key) => {
+    return await del(`/monitor/api/monitor_plugin/${id}/`);
+  };
+
   const getUiTemplateByParams = async (params: {
     collector: string;
     collect_type: string;
@@ -142,6 +164,10 @@ const useIntegrationApi = () => {
     return await get(`/monitor/api/monitor_plugin/ui_template_by_params/`, {
       params,
     });
+  };
+
+  const getUiTemplateByPlugin = async (pluginId: React.Key) => {
+    return await get(`/monitor/api/monitor_plugin/${pluginId}/ui_template/`);
   };
 
   const getInstanceListByPrimaryObject = async (
@@ -215,12 +241,17 @@ const useIntegrationApi = () => {
     updateMonitorInstance,
     setInstancesGroup,
     getUiTemplate,
+    getTemplateAccessGuide,
+    createCustomTemplate,
+    updateCustomTemplate,
+    deleteCustomTemplate,
     getInstanceListByPrimaryObject,
     getCloudRegionList,
     createK8sInstance,
     getK8sCommand,
     checkCollectStatus,
     getUiTemplateByParams,
+    getUiTemplateByPlugin,
   };
 };
 

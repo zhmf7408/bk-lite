@@ -120,12 +120,43 @@ export interface InstNameConfig {
 
 export interface PluginItem {
   name: string;
+  plugin_id?: number;
+  template_id?: string;
+  template_type?: string;
+  is_custom?: boolean;
+  display_description?: string;
   collector: string;
   collect_type: string;
   status: string;
   collect_mode: string;
   time: string;
   config_ids?: string[];
+}
+
+export interface TemplateAccessGuideMetricItem {
+  name: string;
+  display_name?: string;
+  description?: string;
+  unit?: string;
+  data_type?: string;
+  dimensions?: any[];
+}
+
+export interface TemplateAccessGuideDoc {
+  template_id: string;
+  display_name: string;
+  plugin_id: number;
+  description: string;
+  metrics: TemplateAccessGuideMetricItem[];
+  organization_id: number;
+  cloud_region_id: number;
+  monitor_object_id: number;
+  instance_type: string;
+  monitor_object_name: string;
+  endpoint: string;
+  line_protocol_example: string;
+  line_protocol_example_without_timestamp: string;
+  line_protocol_example_with_timestamp_ms: string;
 }
 
 export interface ConfigItem {
