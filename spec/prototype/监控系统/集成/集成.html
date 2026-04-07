@@ -1475,19 +1475,19 @@
                     <input type="text" class="form-input" id="templateId" placeholder="请输入模版ID（唯一标识）">
                 </div>
                 <div class="form-group">
-                    <label class="form-label">模版类型 <span class="required">*</span></label>
+                    <label class="form-label">接入方式 <span class="required">*</span></label>
                     <div class="radio-group">
                         <label class="radio-label">
                             <input type="radio" name="templateType" value="API" checked>
-                            <span class="radio-text">API</span>
+                            <span class="radio-text">API上报</span>
                         </label>
                         <label class="radio-label">
                             <input type="radio" name="templateType" value="PULL">
-                            <span class="radio-text">PULL</span>
+                            <span class="radio-text">PULL拉取</span>
                         </label>
                         <label class="radio-label">
                             <input type="radio" name="templateType" value="SNMP">
-                            <span class="radio-text">SNMP</span>
+                            <span class="radio-text">SNMP采集</span>
                         </label>
                     </div>
                 </div>
@@ -1633,6 +1633,12 @@
             const id = document.getElementById('templateId').value;
             const desc = document.getElementById('templateDesc').value;
             const templateType = document.querySelector('input[name="templateType"]:checked')?.value || 'API';
+            const templateTypeLabelMap = {
+                API: 'API上报',
+                PULL: 'PULL拉取',
+                SNMP: 'SNMP采集'
+            };
+            const templateTypeLabel = templateTypeLabelMap[templateType] || templateType;
 
             if (!objectType || !object || !name || !id) {
                 alert('请填写必填项');
@@ -1641,7 +1647,7 @@
 
             console.log('新建模版:', { objectType, object, name, id, desc, templateType });
             closeModal('addTemplateModal');
-            alert(templateType + ' 模版创建成功！');
+            alert(templateTypeLabel + '模版创建成功！');
         }
 
         // 切换卡片菜单

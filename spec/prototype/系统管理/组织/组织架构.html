@@ -3045,8 +3045,8 @@
         },
         settings: {
           title: "设置",
-          desc: "管理 API 密钥与平台基础配置",
-          subtabs: ["密钥"],
+          desc: "管理 API 密钥、门户与许可等平台级配置",
+          subtabs: ["密钥", "门户", "许可"],
           actions: '',
         },
       };
@@ -3587,6 +3587,26 @@
         if (tabName === '操作日志') {
           renderOperationLogs();
         }
+      }
+
+      function switchSettingsTab(tabName) {
+        if (tabName === '门户') {
+          window.location.href = '../设置/门户.html';
+          return;
+        }
+
+        if (tabName === '许可') {
+          window.location.href = '../设置/许可管理.html';
+        }
+      }
+
+      function applyInitialRoute() {
+        const route = decodeURIComponent(window.location.hash || '').replace(/^#/, '');
+        if (route === 'settings' || route === 'settings-密钥') {
+          switchModule('settings');
+          return;
+        }
+        switchModule('organization');
       }
 
       function parseTime(timeText) {
@@ -4172,6 +4192,9 @@
         }
         if (activeModule === 'security') {
           switchSecurityTab(btn.dataset.subtab || '登录设置');
+        }
+        if (activeModule === 'settings') {
+          switchSettingsTab(btn.dataset.subtab || '密钥');
         }
       });
 
@@ -4990,7 +5013,7 @@
         hideUserModal();
       });
 
-      switchModule("organization");
+      applyInitialRoute();
       renderAdminTable();
       renderLauncherApps();
       applyConsoleAppIcons();

@@ -4,7 +4,7 @@ from apps.rpc.base import AppClient, RpcClient
 
 
 class SystemMgmt(object):
-    def __init__(self, is_local_client=False):
+    def __init__(self, is_local_client=True):
         is_local_client = os.getenv("IS_LOCAL_RPC", "0") == "1" or is_local_client
         self.client = AppClient("apps.system_mgmt.nats_api") if is_local_client else RpcClient()
 
