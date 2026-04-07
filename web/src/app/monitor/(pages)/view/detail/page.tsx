@@ -4,7 +4,6 @@ import React, { useState } from 'react';
 import { Segmented } from 'antd';
 import { useTranslation } from '@/utils/i18n';
 import { useSearchParams, useRouter } from 'next/navigation';
-import Icon from '@/components/icon';
 import detailStyle from '../index.module.scss';
 import { ArrowLeftOutlined } from '@ant-design/icons';
 import Overview from './overview';
@@ -40,10 +39,17 @@ const ViewDetail = () => {
     <div className={detailStyle.detail}>
       <div className={detailStyle.leftSide}>
         <div className={detailStyle.topIntro}>
-          <Icon
-            type={icon as string}
-            className="mr-[10px] text-[30px] min-w-[30px]"
-          />
+          <div className="w-[40px] h-[40px] mr-[10px] min-w-[40px] rounded flex items-center justify-center bg-[var(--color-fill-2)]">
+            <img
+              src={`/app/assets/assetModelIcon/${icon || 'cc-default_默认'}.svg`}
+              alt={monitorObjDisplayName || monitorObjectName || 'icon'}
+              className="w-7 h-7"
+              onError={(e) => {
+                (e.target as HTMLImageElement).src =
+                  '/app/assets/assetModelIcon/cc-default_默认.svg';
+              }}
+            />
+          </div>
           <span className="flex items-center">
             <span
               className="w-[140px] hide-text"
@@ -62,7 +68,7 @@ const ViewDetail = () => {
             value={activeMenu}
             className="custom-tabs"
             options={[
-              { value: 'metrics', label: t('monitor.views.metrics') },
+              { value: 'metrics', label: t('monitor.views.metrics') }
               //   { value: 'overview', label: t('monitor.views.overview') },
             ]}
             onChange={onTabChange}

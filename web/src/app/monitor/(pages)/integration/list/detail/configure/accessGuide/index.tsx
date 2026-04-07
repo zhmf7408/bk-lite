@@ -215,6 +215,8 @@ const TemplateAccessGuide: React.FC = () => {
     return buildCurlExample(endpoint, lineProtocolExample);
   }, [doc?.endpoint, lineProtocolExample, sampleFormat]);
 
+  console.log(sampleCode);
+
   const requestParamDocs = useMemo(() => buildRequestParamDocs(doc), [doc]);
 
   const sampleExamples = useMemo(
