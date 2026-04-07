@@ -23,6 +23,7 @@ import { useTranslation } from '@/utils/i18n';
 import { useUserInfoContext } from '@/context/userInfo';
 import { AttrFieldType, UserItem, FullInfoGroupItem, FullInfoAttrItem, FieldConfig } from '@/app/cmdb/types/assetManage';
 import { deepClone, getStringValidationRule, getNumberRangeRule, normalizeTimeValueForForm, normalizeTimeValueForSubmit, getFieldItem } from '@/app/cmdb/utils/common';
+import { getEnumDefaultValueForForm } from '@/app/cmdb/utils/enumDefaultValue';
 import { useInstanceApi } from '@/app/cmdb/api';
 import styles from './filterBar.module.scss';
 import useAssetDataStore from '@/app/cmdb/store/useAssetDataStore';
@@ -91,6 +92,7 @@ const FieldMoadal = forwardRef<FieldModalRef, FieldModalProps>(
     useImperativeHandle(ref, () => ({
       showModal: ({
         type,
+        source,
         attrList,
         subTitle,
         title,
@@ -128,6 +130,20 @@ const FieldMoadal = forwardRef<FieldModalRef, FieldModalProps>(
               ? [Number(selectedGroup.id)]
               : undefined,
           });
+
+          if ((source || 'create') === 'create') {
+            for (const attr of allAttrs) {
+              if (attr.attr_type !== 'enum' || forms[attr.attr_id] !== undefined) {
+                continue;
+              }
+
+              const enumDefaultValue = getEnumDefaultValueForForm(attr);
+              if (enumDefaultValue === undefined || (Array.isArray(enumDefaultValue) && enumDefaultValue.length === 0)) {
+                continue;
+              }
+              forms[attr.attr_id] = enumDefaultValue;
+            }
+          }
         }
         setInstanceData(forms);
       },

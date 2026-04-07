@@ -646,6 +646,7 @@ const AssetDataContent = () => {
     fieldRef.current?.showModal({
       title,
       type,
+      source: type === 'add' ? 'create' : type,
       attrList: propertyListGroups,
       formInfo: row,
       subTitle: '',
@@ -666,6 +667,7 @@ const AssetDataContent = () => {
     fieldRef.current?.showModal({
       title: t('common.copy'),
       type: 'add',
+      source: 'copy',
       attrList: propertyListGroups,
       formInfo: copyData,
       subTitle: '',

@@ -65,9 +65,7 @@ def create_library(payload: dict, operator: str) -> dict:
         updated_by=operator,
     )
 
-    logger.info(
-        f"[PublicEnumLibrary] created library_id={library_id}, name={name}, operator={operator}"
-    )
+    logger.info(f"[PublicEnumLibrary] created library_id={library_id}, name={name}, operator={operator}")
 
     return {
         "library_id": library.library_id,
@@ -111,14 +109,10 @@ def update_library(library_id: str, payload: dict, operator: str) -> dict:
 
     library.save(update_fields=update_fields)
 
-    logger.info(
-        f"[PublicEnumLibrary] updated library_id={library_id}, fields={update_fields}, operator={operator}"
-    )
+    logger.info(f"[PublicEnumLibrary] updated library_id={library_id}, fields={update_fields}, operator={operator}")
 
     if "options" in payload:
-        enqueue_library_snapshot_refresh(
-            library_id, trigger="update", operator=operator
-        )
+        enqueue_library_snapshot_refresh(library_id, trigger="update", operator=operator)
 
     return {
         "library_id": library.library_id,
@@ -147,19 +141,14 @@ def delete_library(library_id: str, operator: str) -> None:
     )
 
     if references:
-        ref_details = ", ".join(
-            f"{ref['model_name']}({ref['model_id']}).{ref['attr_name']}({ref['attr_id']})"
-            for ref in references
-        )
+        ref_details = ", ".join(f"{ref['model_name']}({ref['model_id']}).{ref['attr_name']}({ref['attr_id']})" for ref in references)
         raise BaseAppException(
             f"该公共选项库正在被以下属性引用，无法删除: {ref_details}",
             data={"references": references},
         )
 
     library.delete()
-    logger.info(
-        f"[PublicEnumLibrary] deleted library_id={library_id}, operator={operator}"
-    )
+    logger.info(f"[PublicEnumLibrary] deleted library_id={library_id}, operator={operator}")
 
 
 def find_library_references(library_id: str) -> list[dict]:
@@ -193,22 +182,18 @@ def find_library_references(library_id: str) -> list[dict]:
 
     query_cost_ms = int((time.time() - start_time) * 1000)
     logger.info(
-        f"[PublicEnumLibrary] find_library_references library_id={library_id}, "
-        f"query_cost_ms={query_cost_ms}, references_count={len(references)}"
+        f"[PublicEnumLibrary] find_library_references library_id={library_id}, query_cost_ms={query_cost_ms}, references_count={len(references)}"
     )
 
     return references
 
 
-def enqueue_library_snapshot_refresh(
-    library_id: str, trigger: str, operator: str
-) -> str:
+def enqueue_library_snapshot_refresh(library_id: str, trigger: str, operator: str) -> str:
     from apps.cmdb.tasks.celery_tasks import sync_public_enum_library_snapshots_task
 
     task = sync_public_enum_library_snapshots_task.delay(library_id, trigger, operator)
     logger.info(
-        f"[PublicEnumLibrary] enqueue_library_snapshot_refresh library_id={library_id}, "
-        f"trigger={trigger}, operator={operator}, task_id={task.id}"
+        f"[PublicEnumLibrary] enqueue_library_snapshot_refresh library_id={library_id}, trigger={trigger}, operator={operator}, task_id={task.id}"
     )
     return task.id
 
@@ -248,19 +233,12 @@ def list_libraries(team: list | None = None) -> list[dict]:
     return libraries
 
 
-def sync_library_snapshots(
-    library_id: str, trigger: str, operator: str | None = None
-) -> dict:
-    logger.info(
-        f"[SyncPublicEnumSnapshots] started library_id={library_id}, "
-        f"trigger={trigger}, operator={operator}"
-    )
+def sync_library_snapshots(library_id: str, trigger: str, operator: str | None = None) -> dict:
+    logger.info(f"[SyncPublicEnumSnapshots] started library_id={library_id}, trigger={trigger}, operator={operator}")
 
     library = PUBLIC_ENUM_LIBRARY_MANAGER.filter(library_id=library_id).first()
     if not library:
-        logger.warning(
-            f"[SyncPublicEnumSnapshots] library not found library_id={library_id}"
-        )
+        logger.warning(f"[SyncPublicEnumSnapshots] library not found library_id={library_id}")
         return {
             "result": False,
             "message": "library not found",
@@ -273,7 +251,7 @@ def sync_library_snapshots(
     failed_items = []
 
     with GraphClient() as client:
-        models = client.search_entity(MODEL, [])
+        models, _ = client.query_entity(MODEL, [])
 
         for model in models:
             model_id = model.get("model_id", "")
@@ -305,9 +283,7 @@ def sync_library_snapshots(
                     )
                     affected_models.add(model_id)
                 except Exception as e:
-                    logger.error(
-                        f"[SyncPublicEnumSnapshots] failed to update model={model_id}, error={e}"
-                    )
+                    logger.error(f"[SyncPublicEnumSnapshots] failed to update model={model_id}, error={e}")
                     failed_items.append({"model_id": model_id, "error": str(e)})
 
     logger.info(

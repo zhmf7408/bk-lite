@@ -43,6 +43,11 @@ import {
   EnumRuleType,
   PublicEnumLibraryItem,
 } from '@/app/cmdb/types/assetManage';
+import {
+  getAttributeEnumOptionIds,
+  normalizeDefaultValue,
+  sanitizeDefaultValue,
+} from '@/app/cmdb/utils/enumDefaultValue';
 import { useTranslation } from '@/utils/i18n';
 import { useModelApi } from '@/app/cmdb/api';
 const { Option } = Select;
@@ -117,6 +122,31 @@ const AttributesModal = forwardRef<AttrModalRef, AttrModalProps>(
     const modelId: string = searchParams.get('model_id') || '';
     const { t } = useTranslation();
 
+    const getCurrentEnumOptionIds = () => getAttributeEnumOptionIds({
+      enumRuleType,
+      publicLibraryId,
+      publicLibraries,
+      enumList,
+    });
+
+    const getCurrentEnumOptions = () => {
+      if (enumRuleType === 'public_library') {
+        return publicLibraries.find((item) => item.library_id === publicLibraryId)?.options || [];
+      }
+      return enumList;
+    };
+
+    const syncEnumDefaultValue = (candidate?: unknown) => {
+      const sanitized = sanitizeDefaultValue(
+        candidate ?? formRef.current?.getFieldValue('default_value'),
+        getCurrentEnumOptionIds(),
+        enumSelectMode,
+      );
+      formRef.current?.setFieldsValue({
+        default_value: enumSelectMode === 'multiple' ? sanitized : sanitized[0] ?? undefined,
+      });
+    };
+
 
     useEffect(() => {
       if (modelVisible) {
@@ -124,12 +154,22 @@ const AttributesModal = forwardRef<AttrModalRef, AttrModalProps>(
         const selectedGroup = groups.find(
           (group) => group.group_name === attrInfo.attr_group
         );
+        const normalizedDefaultValue = normalizeDefaultValue(attrInfo.default_value);
         formRef.current?.setFieldsValue({
           ...attrInfo,
           group_id: selectedGroup?.id,
+          default_value:
+            (attrInfo.enum_select_mode || 'single') === 'multiple'
+              ? normalizedDefaultValue
+              : normalizedDefaultValue[0] ?? undefined,
         });
       }
     }, [modelVisible, attrInfo, groups]);
+
+    useEffect(() => {
+      if (!modelVisible || attrInfo.attr_type !== 'enum') return;
+      syncEnumDefaultValue();
+    }, [modelVisible, attrInfo.attr_type, enumRuleType, publicLibraryId, publicLibraries, enumList, enumSelectMode]);
 
     useImperativeHandle(ref, () => ({
       showModal: ({ type, attrInfo, subTitle, title }) => {
@@ -137,7 +177,6 @@ const AttributesModal = forwardRef<AttrModalRef, AttrModalProps>(
         setSubTitle(subTitle);
         setType(type);
         setTitle(title);
-        // Load public libraries for enum type
         getPublicEnumLibraries().then((res: any) => {
           setPublicLibraries(res || []);
         }).catch(() => {
@@ -148,6 +187,7 @@ const AttributesModal = forwardRef<AttrModalRef, AttrModalProps>(
             is_required: false,
             editable: true,
             is_only: false,
+            default_value: [],
           });
           setEnumList([
             {
@@ -172,7 +212,6 @@ const AttributesModal = forwardRef<AttrModalRef, AttrModalProps>(
         } else {
           const option = attrInfo.option;
           if (attrInfo.attr_type === 'enum') {
-            // Handle enum_rule_type for edit mode
             const ruleType = attrInfo.enum_rule_type || 'custom';
             setEnumRuleType(ruleType);
             setEnumSelectMode(attrInfo.enum_select_mode || 'single');
@@ -293,6 +332,7 @@ const AttributesModal = forwardRef<AttrModalRef, AttrModalProps>(
         delete restValues.min_value;
         delete restValues.max_value;
         delete restValues.tag_mode;
+        delete restValues.default_value;
 
         const submitParams: Record<string, unknown> = {
           ...restValues,
@@ -302,11 +342,19 @@ const AttributesModal = forwardRef<AttrModalRef, AttrModalProps>(
         };
 
         if (values.attr_type === 'enum') {
+          const sanitizedDefaultValue = sanitizeDefaultValue(
+            values.default_value,
+            getCurrentEnumOptionIds(),
+            enumSelectMode,
+          );
           submitParams.enum_rule_type = enumRuleType;
           submitParams.enum_select_mode = enumSelectMode;
+          submitParams.default_value = sanitizedDefaultValue;
           if (enumRuleType === 'public_library') {
             submitParams.public_library_id = publicLibraryId;
           }
+        } else {
+          submitParams.default_value = [];
         }
 
         operateAttr(submitParams as AttrFieldType);
@@ -730,11 +778,11 @@ const AttributesModal = forwardRef<AttrModalRef, AttrModalProps>(
                         <span className="text-sm text-[var(--color-text-secondary)] shrink-0">
                           {t('Model.enumSelectMode')}：
                         </span>
-                        <Radio.Group
-                          value={enumSelectMode}
-                          onChange={(e) => setEnumSelectMode(e.target.value)}
-                          disabled={type === 'edit'}
-                        >
+                          <Radio.Group
+                            value={enumSelectMode}
+                            onChange={(e) => setEnumSelectMode(e.target.value)}
+                            disabled={type === 'edit'}
+                          >
                           <Radio value="single">{t('Model.singleSelect')}</Radio>
                           <Radio value="multiple">{t('Model.multipleSelect')}</Radio>
                         </Radio.Group>
@@ -762,10 +810,10 @@ const AttributesModal = forwardRef<AttrModalRef, AttrModalProps>(
                           <div className="flex items-center gap-2 mb-3">
                             <Select
                               value={publicLibraryId || undefined}
-                            onChange={(value) => {
-                              setPublicLibraryId(value);
-                              formRef.current?.validateFields(['option']);
-                            }}
+                              onChange={(value) => {
+                                setPublicLibraryId(value || '');
+                                formRef.current?.validateFields(['option']);
+                              }}
                               placeholder={t(
                                 'PublicEnumLibrary.selectPublicLibraryPlaceholder',
                               )}
@@ -888,6 +936,29 @@ const AttributesModal = forwardRef<AttrModalRef, AttrModalProps>(
                           </SortableContext>
                         </DndContext>
                       )}
+                      <div className="pl-[72px] mt-4">
+                        <Form.Item<AttrFieldType>
+                          label={t('Model.defaultValue')}
+                          name="default_value"
+                          className="mb-2"
+                        >
+                          <Select
+                            mode={enumSelectMode === 'multiple' ? 'multiple' : undefined}
+                            allowClear
+                            placeholder={t('common.selectTip')}
+                            onChange={(value) => syncEnumDefaultValue(value)}
+                          >
+                            {getCurrentEnumOptions().map((opt) => (
+                              <Option key={String(opt.id)} value={String(opt.id)}>
+                                {opt.name}
+                              </Option>
+                            ))}
+                          </Select>
+                        </Form.Item>
+                        <div className="text-xs text-[var(--color-text-tertiary)]">
+                          {t('Model.defaultValueHint')}
+                        </div>
+                      </div>
                     </div>
                   </Form.Item>
                 ) : getFieldValue('attr_type') === 'time' ? (
