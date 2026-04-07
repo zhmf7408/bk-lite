@@ -17,9 +17,20 @@ def cloud_init():
             defaults={
                 "id": CloudRegionConstants.DEFAULT_CLOUD_REGION_ID,
                 "name": CloudRegionConstants.DEFAULT_CLOUD_REGION_NAME,
-                "introduction": CloudRegionConstants.DEFAULT_CLOUD_REGION_INTRODUCTION
-            }
+                "introduction": CloudRegionConstants.DEFAULT_CLOUD_REGION_INTRODUCTION,
+            },
         )
+
+        default_service_defaults = {
+            CloudRegionServiceConstants.STARGAZER_SERVICE_NAME: {
+                "status": CloudRegionServiceConstants.NORMAL,
+                "deployed_status": CloudRegionServiceConstants.DEPLOYED,
+            },
+            CloudRegionServiceConstants.NATS_EXECUTOR_SERVICE_NAME: {
+                "status": CloudRegionServiceConstants.NORMAL,
+                "deployed_status": CloudRegionServiceConstants.DEPLOYED,
+            },
+        }
 
         # 初始化云区域下的服务
         for service_name in CloudRegionServiceConstants.SERVICES:
@@ -27,9 +38,12 @@ def cloud_init():
                 cloud_region_id=CloudRegionConstants.DEFAULT_CLOUD_REGION_ID,
                 name=service_name,
                 defaults={
-                    "status": CloudRegionServiceConstants.NOT_DEPLOYED,
-                    "description": f"Service {service_name} for default cloud region"
-                }
+                    **default_service_defaults.get(
+                        service_name,
+                        {"status": CloudRegionServiceConstants.NOT_DEPLOYED},
+                    ),
+                    "description": f"Service {service_name} for default cloud region",
+                },
             )
 
         aes_obj = AESCryptor()
@@ -45,12 +59,7 @@ def cloud_init():
                 SidecarEnv.objects.get_or_create(
                     key=new_key,
                     cloud_region_id=CloudRegionConstants.DEFAULT_CLOUD_REGION_ID,
-                    defaults={
-                        "value": stored_value,
-                        "cloud_region_id": CloudRegionConstants.DEFAULT_CLOUD_REGION_ID,
-                        "is_pre": True,
-                        "type": _type
-                    },
+                    defaults={"value": stored_value, "cloud_region_id": CloudRegionConstants.DEFAULT_CLOUD_REGION_ID, "is_pre": True, "type": _type},
                 )
     except Exception as e:
         logger.exception(e)
