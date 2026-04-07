@@ -105,7 +105,7 @@
       "widget_props": {
         "placeholder": "请选择节点"
       },
-      "enable_row_filter": true
+      "enable_row_filter": false
     },
     {
       "name": "host",

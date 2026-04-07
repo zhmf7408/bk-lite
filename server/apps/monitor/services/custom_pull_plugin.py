@@ -98,7 +98,7 @@ DEFAULT_PULL_UI_TEMPLATE = {
             "type": "select",
             "required": True,
             "widget_props": {"placeholder": "请选择节点"},
-            "enable_row_filter": True,
+            "enable_row_filter": False,
         },
         {
             "name": "server_url",
