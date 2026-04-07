@@ -243,6 +243,26 @@ async def download_object_to_workspace(
     if not file_name:
         raise ValueError("file name is required")
 
+    logger.info(
+        "download_object_to_workspace config: "
+        "task_file=%s "
+        "bucket_name=%s "
+        "nats_servers=%r "
+        "nats_protocol=%s "
+        "nats_conn_timeout=%s "
+        "has_nats_username=%s "
+        "has_nats_password=%s "
+        "has_nats_tls_ca_file=%s",
+        file_name,
+        bucket_name,
+        list(config.nats_servers),
+        config.nats_protocol,
+        config.nats_conn_timeout,
+        bool(config.nats_username),
+        bool(config.nats_password),
+        bool(config.nats_tls_ca_file),
+    )
+
     nats_client_module = importlib.import_module("nats.aio.client")
     nc = nats_client_module.Client()
 
