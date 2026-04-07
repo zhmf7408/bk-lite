@@ -161,7 +161,23 @@ def to_playbook_request(payload: dict[str, Any]) -> PlaybookRequest:
         sorted(payload.keys()),
     )
 
-    if not playbook_path and not playbook_content and not file_distribution:
+    no_playbook_path = not playbook_path
+    no_playbook_content = not playbook_content
+    no_file_distribution = not file_distribution
+
+    logger.info(
+        "to_playbook_request validation booleans: "
+        "task_id=%s "
+        "no_playbook_path=%s "
+        "no_playbook_content=%s "
+        "no_file_distribution=%s",
+        payload.get("task_id", ""),
+        no_playbook_path,
+        no_playbook_content,
+        no_file_distribution,
+    )
+
+    if no_playbook_path and no_playbook_content and no_file_distribution:
         logger.error(
             "to_playbook_request validation failed: "
             "missing playbook_path/playbook_content/file_distribution "
