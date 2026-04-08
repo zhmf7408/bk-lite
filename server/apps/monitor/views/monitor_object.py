@@ -26,10 +26,11 @@ class MonitorObjectViewSet(viewsets.ModelViewSet):
     pagination_class = CustomPageNumberPagination
 
     def get_queryset(self):
-        """默认只返回父对象（parent 为空的对象）"""
+        """默认返回所有对象（父+子），传 parent_only=true 时只返回父对象"""
         queryset = super().get_queryset()
-        # 如果请求参数中没有明确指定 parent，则只返回父对象
-        if 'parent' not in self.request.query_params:
+        if "parent" in self.request.query_params:
+            return queryset
+        if self.request.query_params.get("parent_only") in ["true", "True"]:
             queryset = queryset.filter(parent__isnull=True)
         return queryset
 
