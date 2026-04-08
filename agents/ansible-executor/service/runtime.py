@@ -5,8 +5,6 @@ from pathlib import Path
 from core.config import logger
 
 
-
-
 def application_root() -> Path:
     if getattr(sys, "frozen", False):
         return Path(sys.executable).resolve().parent
@@ -69,6 +67,7 @@ def configure_ansible_environment() -> None:
     candidates = [
         root / "collections",
         root / "ansible-executor" / "collections",
+        root / "_internal" / "collections",
     ]
     for collections_dir in candidates:
         if collections_dir.exists() and collections_dir.is_dir():
