@@ -42,6 +42,7 @@ const LayoutWithProviders = ({ children }: { children: React.ReactNode }) => {
   const isLoading = isAuthLoading || (isAuthenticated && (permissionsLoading || menusLoading));
   const authPaths = ['/auth/signin', '/auth/signout'];
   const excludedPaths = ['/no-permission', '/no-found', '/', ...authPaths];
+  const isAuthRoute = Boolean(pathname && authPaths.includes(pathname));
 
   const shouldRenderMenu = useMemo(() => {
     if (pathname?.startsWith('/ops-console')) {
@@ -108,12 +109,12 @@ const LayoutWithProviders = ({ children }: { children: React.ReactNode }) => {
   return (
     <AntdRegistry>
       <div className="flex flex-col min-h-screen">
-        {isAuthenticated && (
+        {isAuthenticated && !isAuthRoute && (
           <header className="sticky top-0 left-0 right-0 flex justify-between items-center header-bg">
             <TopMenu hideMainMenu={hideTopMenu} />
           </header>
         )}
-        <main className={`flex-1 p-4 flex text-sm ${!isAuthenticated ? 'h-screen' : ''}`}>
+        <main className={`flex-1 p-4 flex text-sm ${!isAuthenticated || isAuthRoute ? 'h-screen' : ''}`}>
           {shouldRenderMenu ? (
             <WithSideMenuLayout
               layoutType="segmented"

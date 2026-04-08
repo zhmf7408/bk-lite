@@ -465,6 +465,10 @@ export default function SigninClient({
   };
 
   useEffect(() => {
+    if (thirdLoginFlag) {
+      return;
+    }
+
     if (!isPopupWindowMode || !provider || hasTriggeredPopupProvider || authStep !== 'login') {
       return;
     }
@@ -498,7 +502,7 @@ export default function SigninClient({
         }
       })();
     }
-  }, [authStep, bkSettings?.is_open_logining, hasTriggeredPopupProvider, isPopupWindowMode, loadingBkSettings, loadingWechatSettings, provider, wechatSettings?.enabled]);
+  }, [authStep, bkSettings?.is_open_logining, hasTriggeredPopupProvider, isPopupWindowMode, loadingBkSettings, loadingWechatSettings, provider, thirdLoginFlag, wechatSettings?.enabled]);
 
   const renderLoginForm = () => (
     <form onSubmit={handleLoginSubmit} className={`flex w-full flex-col ${isModalMode ? 'space-y-5' : 'space-y-6'}`}>

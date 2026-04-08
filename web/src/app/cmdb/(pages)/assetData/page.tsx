@@ -372,7 +372,7 @@ const AssetDataContent = () => {
     } else {
       setQuickContext({});
     }
-    
+
     if (source === 'drawer') {
       setSubscriptionDrawerOpen(true);
     } else {

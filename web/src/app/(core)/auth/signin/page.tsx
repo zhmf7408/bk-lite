@@ -40,7 +40,7 @@ export default async function SigninPage({ searchParams }: SignInPageProp) {
   );
   const isPopupMode = resolvedSearchParams.popup === 'true' || resolvedSearchParams.popup === '1';
 
-  if (session && session.user && session.user.id) {
+  if (!thirdLoginFlag && session && session.user && session.user.id) {
     if (isPopupMode) {
       return (
         <PopupAuthBridge
