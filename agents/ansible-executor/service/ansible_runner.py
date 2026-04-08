@@ -136,7 +136,7 @@ def to_playbook_request(payload: dict[str, Any]) -> PlaybookRequest:
         raise ValueError("file_distribution must be object")
 
     logger.info(
-        "to_playbook_request payload check: "
+        "to_playbook_request payload check4: "
         "task_id=%s "
         "playbook_path=%r "
         "playbook_content_is_none=%s "
@@ -162,7 +162,7 @@ def to_playbook_request(payload: dict[str, Any]) -> PlaybookRequest:
     no_file_distribution = not file_distribution
 
     logger.info(
-        "to_playbook_request validation booleans: "
+        "to_playbook_request validation booleans3: "
         "task_id=%s "
         "no_playbook_path=%s "
         "no_playbook_content=%s "
@@ -175,7 +175,7 @@ def to_playbook_request(payload: dict[str, Any]) -> PlaybookRequest:
 
     if no_playbook_path and no_playbook_content and no_file_distribution:
         logger.error(
-            "to_playbook_request validation failed: "
+            "to_playbook_request validation failed2: "
             "missing playbook_path/playbook_content/file_distribution "
             "task_id=%s "
             "raw_file_distribution=%r "
@@ -239,7 +239,7 @@ async def download_object_to_workspace(
         raise ValueError("file name is required")
 
     logger.info(
-        "download_object_to_workspace config: "
+        "download_object_to_workspace config1: "
         "task_file=%s "
         "bucket_name=%s "
         "nats_servers=%r "
