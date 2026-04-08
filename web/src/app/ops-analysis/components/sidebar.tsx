@@ -19,6 +19,8 @@ import { Input, Button, Modal, Dropdown, Menu, Tree, Empty, Spin } from 'antd';
 import { useSearchParams } from 'next/navigation';
 import { useDirectoryApi } from '@/app/ops-analysis/api/index';
 import { useUserInfoContext } from '@/context/userInfo';
+import { ExportModal, ImportModal } from './importExport';
+import { ObjectType } from '@/app/ops-analysis/api/importExport';
 import {
   SidebarProps,
   SidebarRef,
@@ -56,6 +58,10 @@ const Sidebar = forwardRef<SidebarRef, SidebarProps>(
     const { getDirectoryTree, createItem, updateItem, deleteItem } =
       useDirectoryApi();
     const [currentDir, setCurrentDir] = useState<DirItem | null>(null);
+    const [exportModalVisible, setExportModalVisible] = useState(false);
+    const [exportItem, setExportItem] = useState<DirItem | null>(null);
+    const [importModalVisible, setImportModalVisible] = useState(false);
+    const [importTargetDir, setImportTargetDir] = useState<DirItem | null>(null);
 
     useImperativeHandle(
       ref,
@@ -196,6 +202,25 @@ const Sidebar = forwardRef<SidebarRef, SidebarProps>(
       });
     };
 
+    const mapTypeToObjectType = (type: DirectoryType): ObjectType | null => {
+      const typeMap: Record<string, ObjectType> = {
+        dashboard: 'dashboard',
+        topology: 'topology',
+        architecture: 'architecture',
+      };
+      return typeMap[type] || null;
+    };
+
+    const handleExport = (item: DirItem) => {
+      setExportItem(item);
+      setExportModalVisible(true);
+    };
+
+    const handleImport = (dir: DirItem) => {
+      setImportTargetDir(dir);
+      setImportModalVisible(true);
+    };
+
     const getDirectoryIcon = (type: DirectoryType) => {
       switch (type) {
         case 'dashboard':
@@ -230,6 +255,10 @@ const Sidebar = forwardRef<SidebarRef, SidebarProps>(
       const isGroup = item.type === 'directory';
       const canDelete = item.type !== 'directory' || !hasChildren(item);
 
+      const stopEventPropagation = (event?: React.MouseEvent<HTMLElement> | React.KeyboardEvent<HTMLElement> | Event) => {
+        event?.stopPropagation?.();
+      };
+
       // 根据 item.type 确定需要的权限
       const isCatalogue = item.type === 'directory';
       const editPermission = isCatalogue ? 'EditCatalogue' : 'EditChart';
@@ -241,7 +270,8 @@ const Sidebar = forwardRef<SidebarRef, SidebarProps>(
             <>
               <Menu.Item
                 key="addDashboard"
-                onClick={() => {
+                onClick={(e) => {
+                  stopEventPropagation(e.domEvent);
                   if (!hasPermission(['AddChart'])) return;
                   setNewItemType('dashboard');
                   showModal(
@@ -259,7 +289,8 @@ const Sidebar = forwardRef<SidebarRef, SidebarProps>(
               </Menu.Item>
               <Menu.Item
                 key="addTopology"
-                onClick={() => {
+                onClick={(e) => {
+                  stopEventPropagation(e.domEvent);
                   if (!hasPermission(['AddChart'])) return;
                   setNewItemType('topology');
                   showModal(
@@ -267,7 +298,7 @@ const Sidebar = forwardRef<SidebarRef, SidebarProps>(
                     t('opsAnalysisSidebar.addTopo'),
                     '',
                     item,
-                    'topology'
+                    'topology',
                   );
                 }}
               >
@@ -277,7 +308,8 @@ const Sidebar = forwardRef<SidebarRef, SidebarProps>(
               </Menu.Item>
               <Menu.Item
                 key="addArchitecture"
-                onClick={() => {
+                onClick={(e) => {
+                  stopEventPropagation(e.domEvent);
                   if (!hasPermission(['AddChart'])) return;
                   setNewItemType('architecture');
                   showModal(
@@ -285,7 +317,7 @@ const Sidebar = forwardRef<SidebarRef, SidebarProps>(
                     t('opsAnalysisSidebar.addArch'),
                     '',
                     item,
-                    'architecture'
+                    'architecture',
                   );
                 }}
               >
@@ -293,12 +325,25 @@ const Sidebar = forwardRef<SidebarRef, SidebarProps>(
                   {t('opsAnalysisSidebar.addArch')}
                 </PermissionWrapper>
               </Menu.Item>
+              <Menu.Item
+                key="import"
+                onClick={(e) => {
+                  stopEventPropagation(e.domEvent);
+                  if (!hasPermission(['AddChart'])) return;
+                  handleImport(item);
+                }}
+              >
+                <PermissionWrapper requiredPermissions={['AddChart']}>
+                  {t('opsAnalysisSidebar.importYaml')}
+                </PermissionWrapper>
+              </Menu.Item>
             </>
           )}
           {isRoot && (
             <Menu.Item
               key="addGroup"
-              onClick={() => {
+              onClick={(e) => {
+                stopEventPropagation(e.domEvent);
                 if (!hasPermission(['AddCatalogue'])) return;
                 setNewItemType('directory');
                 showModal(
@@ -318,7 +363,8 @@ const Sidebar = forwardRef<SidebarRef, SidebarProps>(
 
           <Menu.Item
             key="edit"
-            onClick={() => {
+            onClick={(e) => {
+              stopEventPropagation(e.domEvent);
               if (!hasPermission([editPermission])) return;
               showModal(
                 'edit',
@@ -331,7 +377,7 @@ const Sidebar = forwardRef<SidebarRef, SidebarProps>(
                       : t('opsAnalysisSidebar.editArch'),
                 item.name,
                 item,
-                item.type
+                item.type,
               );
             }}
           >
@@ -343,7 +389,8 @@ const Sidebar = forwardRef<SidebarRef, SidebarProps>(
           <Menu.Item
             key="delete"
             disabled={!canDelete}
-            onClick={() => {
+            onClick={(e) => {
+              stopEventPropagation(e.domEvent);
               if (!hasPermission([deletePermission])) return;
               handleDelete(item);
             }}
@@ -352,6 +399,21 @@ const Sidebar = forwardRef<SidebarRef, SidebarProps>(
               {t('common.delete')}
             </PermissionWrapper>
           </Menu.Item>
+
+          {!isGroup && (
+            <Menu.Item
+              key="export"
+              onClick={(e) => {
+                stopEventPropagation(e.domEvent);
+                if (!hasPermission(['EditChart'])) return;
+                handleExport(item);
+              }}
+            >
+              <PermissionWrapper requiredPermissions={['EditChart']}>
+                {t('opsAnalysisSidebar.exportYaml')}
+              </PermissionWrapper>
+            </Menu.Item>
+          )}
         </Menu>
       );
     };
@@ -385,6 +447,7 @@ const Sidebar = forwardRef<SidebarRef, SidebarProps>(
                 type="text"
                 icon={<MoreOutlined />}
                 onClick={(e) => e.stopPropagation()}
+                onMouseDown={(e) => e.stopPropagation()}
                 className="flex-shrink-0"
                 size="small"
               />
@@ -604,6 +667,31 @@ const Sidebar = forwardRef<SidebarRef, SidebarProps>(
             )}
           </Form>
         </Modal>
+
+        {exportItem && (
+          <ExportModal
+            visible={exportModalVisible}
+            onCancel={() => {
+              setExportModalVisible(false);
+              setExportItem(null);
+            }}
+            objectType={mapTypeToObjectType(exportItem.type)!}
+            objectId={parseInt(exportItem.data_id, 10)}
+            objectName={exportItem.name}
+          />
+        )}
+
+        <ImportModal
+          visible={importModalVisible}
+          onCancel={() => {
+            setImportModalVisible(false);
+            setImportTargetDir(null);
+          }}
+          targetDirectoryId={importTargetDir ? parseInt(importTargetDir.data_id, 10) : null}
+          onSuccess={() => {
+            loadDirectories();
+          }}
+        />
       </div>
     );
   }

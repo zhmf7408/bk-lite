@@ -2,6 +2,9 @@
   "common": {
     "edit": "Edit",
     "delete": "Delete",
+    "export": "Export",
+    "import": "Import",
+    "exportSuccess": "Export successful",
     "pin": "Pin",
     "unpin": "Unpin",
     "pinSuccess": "Pinned successfully",
