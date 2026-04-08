@@ -1,15 +1,38 @@
 # -*- mode: python ; coding: utf-8 -*-
 
+from pathlib import Path
+
+from PyInstaller.building.datastruct import Tree
 from PyInstaller.utils.hooks import collect_all, copy_metadata
 
 
+COLLECTIONS_ROOT = Path("build/pyinstaller-collections").resolve()
+ANSIBLE_WINDOWS_ROOT = (
+    COLLECTIONS_ROOT / "ansible_collections" / "ansible" / "windows"
+)
+
+if not ANSIBLE_WINDOWS_ROOT.exists():
+    raise SystemExit(
+        "Missing ansible.windows collection under build/pyinstaller-collections. "
+        "Run 'make package' so the collection is installed before PyInstaller builds the binary."
+    )
+
 ansible_datas, ansible_binaries, ansible_hiddenimports = collect_all("ansible")
+ansible_windows_datas = Tree(
+    str(ANSIBLE_WINDOWS_ROOT),
+    prefix="collections/ansible_collections/ansible/windows",
+    excludes=["*.pyc", "__pycache__"],
+)
 
 a = Analysis(
     ["main.py"],
     pathex=[],
     binaries=ansible_binaries,
-    datas=ansible_datas + copy_metadata("ansible-core") + copy_metadata("jinja2") + [("config.example.yml", ".")],
+    datas=ansible_datas
+    + copy_metadata("ansible-core")
+    + copy_metadata("jinja2")
+    + [("config.example.yml", ".")]
+    + ansible_windows_datas,
     hiddenimports=ansible_hiddenimports + ["nats.aio.client"],
     hookspath=[],
     hooksconfig={},

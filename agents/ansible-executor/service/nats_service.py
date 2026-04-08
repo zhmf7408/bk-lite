@@ -315,7 +315,7 @@ class AnsibleNATSService:
             task.task_id, "running", {"started_at": started_at}, self._now_iso()
         )
         logger.info(
-            "server config1: "
+            "server config: "
             "nats_servers=%r "
             "nats_protocol=%s "
             "nats_conn_timeout=%s "
