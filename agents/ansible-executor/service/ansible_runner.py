@@ -239,7 +239,7 @@ async def download_object_to_workspace(
         raise ValueError("file name is required")
 
     logger.info(
-        "download_object_to_workspace config1: "
+        "download_object_to_workspace config: "
         "task_file=%s "
         "bucket_name=%s "
         "nats_servers=%r "
