@@ -1,7 +1,6 @@
 import asyncio
 import importlib
 import json
-import logging
 import os
 import re
 import shlex
@@ -14,14 +13,9 @@ from pathlib import Path
 from typing import Any
 
 import yaml
-from core.config import ServiceConfig
+from core.config import ServiceConfig, logger
 from service.runtime import current_entrypoint_command
 
-logging.basicConfig(
-    level=os.getenv("LOG_LEVEL", "INFO").upper(),
-    format="%(asctime)s %(levelname)s [ansible-executor] %(message)s",
-)
-logger = logging.getLogger(__name__)
 BASE_TASK_DIR = Path(os.getenv("ANSIBLE_WORK_DIR", "/tmp/ansible-executor"))
 
 
@@ -244,7 +238,7 @@ async def download_object_to_workspace(
         raise ValueError("file name is required")
 
     logger.info(
-        "download_object_to_workspace config: "
+        "download_object_to_workspace config1: "
         "task_file=%s "
         "bucket_name=%s "
         "nats_servers=%r "

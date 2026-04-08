@@ -1,3 +1,4 @@
+import logging
 import os
 import re
 from dataclasses import dataclass
@@ -5,6 +6,11 @@ from pathlib import Path
 
 import yaml
 
+logging.basicConfig(
+    level=os.getenv("LOG_LEVEL", "INFO").upper(),
+    format="%(asctime)s %(levelname)s [ansible-executor] %(message)s",
+)
+logger = logging.getLogger(__name__)
 
 @dataclass
 class ServiceConfig:

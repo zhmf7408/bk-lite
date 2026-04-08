@@ -8,7 +8,7 @@ from datetime import UTC, datetime
 from typing import Any
 
 import nats.errors
-from core.config import ServiceConfig
+from core.config import ServiceConfig, logger
 from nats.js.api import (
     AckPolicy,
     ConsumerConfig,
@@ -26,7 +26,6 @@ from service.ansible_runner import (
     run_command,
     to_adhoc_request,
     to_playbook_request,
-    logger,
 )
 from service.task_store import TaskStore
 
