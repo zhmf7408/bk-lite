@@ -49,6 +49,8 @@ class StrategyMatcher:
         "service": "service",
         "位置": "location",
         "location": "location",
+        "来源": "push_source_id",
+        "push_source_id": "push_source_id",
         "事件ID": "event_id",
         "event_id": "event_id",
         "资源ID": "resource_id",
@@ -81,10 +83,7 @@ class StrategyMatcher:
         try:
             q_filter = StrategyMatcher._build_q_filter(match_rules)
 
-            logger.debug(
-                f"match_rules过滤: {len(match_rules)}组条件, "
-                f"首组示例: {match_rules[0][:2] if match_rules and match_rules[0] else 'empty'}"
-            )
+            logger.debug(f"match_rules过滤: {len(match_rules)}组条件, 首组示例: {match_rules[0][:2] if match_rules and match_rules[0] else 'empty'}")
 
             filtered_events = events_queryset.filter(q_filter)
 
@@ -225,6 +224,7 @@ class StrategyMatcher:
             "item": event.item,
             "external_id": event.external_id,
             "action": event.action,
+            "push_source_id": event.push_source_id,
             "source_id": event.source_id,
             "rule_id": event.rule_id,
             "service": event.service,

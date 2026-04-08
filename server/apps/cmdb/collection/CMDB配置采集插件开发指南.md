@@ -110,13 +110,53 @@ class SSHNodeParamsMixin:
 
 ### 1.3 新增步骤
 
-#### 步骤 0：在 COLLECT_OBJ_TREE 中注册采集对象（**必须先做**）
+#### 步骤 0：注册采集对象元数据
 
-**⚠️ 重要**：必须先在前端配置树中注册采集对象，否则前端无法展示该采集类型，用户无法创建采集任务！
+社区版对象继续定义在 `apps/cmdb/constants/constants.py` 的 `COLLECT_OBJ_TREE` 中。
 
-**文件路径**：`apps/cmdb/constants/constants.py`
+如果是企业版新增对象，推荐在 `apps/cmdb/enterprise/tree.py` 中声明该对象所在分组与 children，运行时会自动追加到对应分组下。
 
-在 `COLLECT_OBJ_TREE` 列表中添加新的采集对象配置：
+示例：
+
+```python
+ENTERPRISE_COLLECT_OBJ_TREE = [
+    {
+        "id": "middleware",
+        "children": [
+            {
+                "id": "enterprise_demo",
+                "model_id": "enterprise_demo",
+                "name": "Enterprise Demo",
+                "task_type": CollectPluginTypes.MIDDLEWARE,
+                "type": CollectDriverTypes.JOB,
+                "tag": ["JOB", "Linux", "Enterprise"],
+                "desc": "企业版演示对象",
+                "encrypted_fields": ["token"],
+            }
+        ],
+    }
+]
+```
+
+也兼容更简化的单分组写法：
+
+```python
+ENTERPRISE_COLLECT_OBJ_TREE = {
+    "id": "middleware",
+    "children": {
+        "id": "enterprise_demo",
+        "model_id": "enterprise_demo",
+        "name": "Enterprise Demo",
+        "task_type": CollectPluginTypes.MIDDLEWARE,
+        "type": CollectDriverTypes.JOB,
+        "tag": ["JOB", "Linux", "Enterprise"],
+        "desc": "企业版演示对象",
+        "encrypted_fields": ["token"],
+    },
+}
+```
+
+历史社区版基线结构如下：
 
 ```python
 COLLECT_OBJ_TREE = [
@@ -138,7 +178,7 @@ COLLECT_OBJ_TREE = [
 ]
 ```
 
-**字段说明**：
+**collect_tree_meta 字段说明**：
 
 | 字段 | 类型 | 必填 | 说明 | 示例 |
 |------|------|------|------|------|

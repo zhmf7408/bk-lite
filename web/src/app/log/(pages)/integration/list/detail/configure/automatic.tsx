@@ -128,7 +128,7 @@ const AutomaticConfiguration: React.FC<IntegrationAccessProps> = () => {
         label: t('log.integration.node'),
         type: 'select' as const,
         required: true,
-        enable_row_filter: true
+        enable_row_filter: false
       },
       {
         name: 'instance_name',

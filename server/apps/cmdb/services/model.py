@@ -53,6 +53,50 @@ FIELD_GROUP_MANAGER: Any = getattr(FieldGroup, "objects")
 
 class ModelManage(object):
     @staticmethod
+    def _normalize_default_value(raw_value: Any) -> list[str]:
+        if raw_value in (None, ""):
+            return []
+
+        source = raw_value if isinstance(raw_value, list) else [raw_value]
+        seen: set[str] = set()
+        normalized: list[str] = []
+        for item in source:
+            value = str(item or "").strip()
+            if not value or value in seen:
+                continue
+            seen.add(value)
+            normalized.append(value)
+        return normalized
+
+    @staticmethod
+    def sanitize_attr_default_value(attr: dict, log_context: str = "") -> dict:
+        item = dict(attr)
+        normalized = ModelManage._normalize_default_value(item.get("default_value"))
+        if item.get("attr_type") != "enum":
+            item["default_value"] = normalized
+            return item
+
+        runtime_options = ModelManage.resolve_runtime_enum_options(item)
+        valid_ids = {str(option.get("id")).strip() for option in runtime_options if isinstance(option, dict) and str(option.get("id", "")).strip()}
+        sanitized = [value for value in normalized if value in valid_ids]
+        select_mode = item.get("enum_select_mode", ENUM_SELECT_MODE_DEFAULT)
+        if select_mode != "multiple":
+            sanitized = sanitized[:1]
+
+        removed_values = [value for value in normalized if value not in sanitized]
+        if removed_values:
+            logger.info(
+                "[ModelDefaultValue] pruned stale defaults context=%s attr_id=%s removed=%s rule_type=%s",
+                log_context or "runtime",
+                item.get("attr_id"),
+                removed_values,
+                item.get("enum_rule_type", "custom"),
+            )
+
+        item["default_value"] = sanitized
+        return item
+
+    @staticmethod
     def _normalize_attr_constraints(attrs: list[dict]) -> list[dict]:
         normalized: list[dict] = []
         for attr in attrs:
@@ -62,6 +106,8 @@ class ModelManage(object):
             item.setdefault("editable", True)
             item.setdefault("option", {})
             item.setdefault("user_prompt", "")
+            item.setdefault("default_value", [])
+            item = ModelManage.sanitize_attr_default_value(item, log_context="normalize_attr_constraints")
             normalized.append(item)
         return normalized
 
@@ -775,6 +821,8 @@ class ModelManage(object):
                 ModelManage.normalize_enum_public_binding(attr_info)
                 ModelManage.ensure_enum_select_mode(attr_info)
 
+            attr_info = ModelManage.sanitize_attr_default_value(attr_info, log_context="create_model_attr")
+
             ModelManage._validate_attr_id(attr_info["attr_id"])
             model_query = {"field": "model_id", "type": "str=", "value": model_id}
             models, _ = ag.query_entity(MODEL, [model_query])
@@ -874,6 +922,8 @@ class ModelManage(object):
                 ModelManage.validate_enum_select_mode_immutable(current_attr, attr_info)
                 ModelManage.normalize_enum_public_binding(attr_info, current_attr)
 
+            attr_info = ModelManage.sanitize_attr_default_value(attr_info, log_context="update_model_attr")
+
             for attr in attrs:
                 if attr_info["attr_id"] != attr["attr_id"]:
                     continue
@@ -884,6 +934,7 @@ class ModelManage(object):
                     editable=True if is_tag_attr else attr_info["editable"],
                     option=attr_info["option"],
                     user_prompt=attr_info["user_prompt"],
+                    default_value=attr_info.get("default_value", []),
                 )
                 if is_enum_attr:
                     attr["enum_rule_type"] = attr_info.get("enum_rule_type", "custom")
@@ -1080,6 +1131,7 @@ class ModelManage(object):
         """
         model_info = ModelManage.search_model_info(model_id)
         attrs = ModelManage._normalize_attr_constraints(ModelManage.parse_attrs(model_info.get("attrs", "[]")))
+        attrs = [ModelManage.sanitize_attr_default_value(attr, log_context="search_model_attr") for attr in attrs]
         unique_rules = build_unique_rule_context(model_id).unique_rules
         # TODO 语言包
         # lan = SettingLanguage(language)
@@ -1097,6 +1149,7 @@ class ModelManage(object):
         """
         model_info = ModelManage.search_model_info(model_id)
         attrs = ModelManage._normalize_attr_constraints(ModelManage.parse_attrs(model_info.get("attrs", "[]")))
+        attrs = [ModelManage.sanitize_attr_default_value(attr, log_context="search_model_attr_v2") for attr in attrs]
         unique_rules = build_unique_rule_context(model_id).unique_rules
         attr_types = {attr["attr_type"] for attr in attrs}
         system_mgmt_client = SystemMgmt()
@@ -1323,6 +1376,7 @@ class ModelManage(object):
             "是否必填",
             "用户提示",
             "唯一规则序号",
+            "默认值",
         ]
         ATTR_HEADERS_EN = [
             "attr_id",
@@ -1335,6 +1389,7 @@ class ModelManage(object):
             "is_required",
             "user_prompt",
             "unique_rule_order",
+            "default_value",
         ]
 
         ASSO_HEADERS_CN = ["源模型", "目标模型", "关联关系", "源-目标约束"]
@@ -1411,7 +1466,7 @@ class ModelManage(object):
             ws_attr.append(ATTR_HEADERS_CN)
             ws_attr.append(ATTR_HEADERS_EN)
 
-            attrs = ModelManage.parse_attrs(model.get("attrs", "[]"))
+            attrs = ModelManage._normalize_attr_constraints(ModelManage.parse_attrs(model.get("attrs", "[]")))
             unique_rules = build_unique_rule_context(model_id).unique_rules
             attr_rows = []
             for attr in attrs:
@@ -1440,6 +1495,7 @@ class ModelManage(object):
                         "editable": attr.get("editable", True),
                         "is_required": attr.get("is_required", False),
                         "user_prompt": attr.get("user_prompt", ""),
+                        "default_value": json.dumps(attr.get("default_value", []), ensure_ascii=False) if attr.get("attr_type") == "enum" else "",
                     }
                 )
 
@@ -1463,6 +1519,7 @@ class ModelManage(object):
                         row.get("is_required", False),
                         row.get("user_prompt", ""),
                         row.get("unique_rule_order", ""),
+                        row.get("default_value", ""),
                     ]
                 )
 

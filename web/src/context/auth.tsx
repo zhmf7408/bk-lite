@@ -20,6 +20,7 @@ import {
   SESSION_EXPIRED_EVENT,
   shouldTriggerSessionExpiry,
 } from '@/utils/sessionExpiry';
+import { forceLogoutAndRedirect } from '@/utils/forceLogout';
 
 // Type assertion helper for session
 type ExtendedSession = Session & {
@@ -87,6 +88,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
       const response = await nativeFetch(input, init);
 
+      if (response.status === 460 && shouldTriggerSessionExpiry(input)) {
+        void forceLogoutAndRedirect();
+      }
+
       if (response.status === 401 && shouldTriggerSessionExpiry(input)) {
         emitSessionExpired({ reason: 'global-fetch-session-expired', status: 401 });
       }
@@ -104,6 +109,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
     const axiosResponseInterceptor = axios.interceptors.response.use(
       (response) => {
+        if (response.status === 460 && shouldTriggerSessionExpiry(response.config.url)) {
+          void forceLogoutAndRedirect();
+        }
+
         if (response.status === 401 && shouldTriggerSessionExpiry(response.config.url)) {
           emitSessionExpired({ reason: 'global-axios-session-expired', status: 401 });
         }
@@ -111,6 +120,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         return response;
       },
       (error) => {
+        if (axios.isAxiosError(error) && error.response?.status === 460 && shouldTriggerSessionExpiry(error.config?.url)) {
+          void forceLogoutAndRedirect();
+        }
+
         if (axios.isAxiosError(error) && error.response?.status === 401 && shouldTriggerSessionExpiry(error.config?.url)) {
           emitSessionExpired({ reason: 'global-axios-session-expired', status: 401 });
         }
@@ -356,27 +369,41 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     <AuthContext.Provider value={{ token, isAuthenticated, isCheckingAuth }}>
       {children}
       {sessionExpiredOpen && !isCurrentAuthPath && (
-        <div className="fixed inset-0 z-1200 flex items-center justify-center bg-black/35 px-4">
-          <div className="w-full max-w-130 rounded-2xl border border-(--color-border-1) bg-(--color-bg-1) p-6 shadow-2xl">
-            <div className="mb-6">
-              <div className="mx-auto max-w-md text-center">
-                <div className="text-[16px] font-semibold leading-none text-(--color-text-1)">
-                  {t('common.sessionExpiredTitle')}
-                </div>
-
-                <div className="mx-auto mt-2 max-w-sm text-[12px] leading-5 text-(--color-text-3)">
-                  {t('common.sessionExpiredDescription')}
-                </div>
-
-                <div className="mx-auto mt-3 h-px w-12 bg-linear-to-r from-transparent via-[#D9E2EC] to-transparent" />
-              </div>
-            </div>
-            <SigninClient
-              mode="modal"
-              signinErrors={modalSigninErrors}
-              onAuthenticated={handleReloginSuccess}
-              showThirdPartyLogin
+        <div
+          className="fixed inset-0 z-1200 flex items-center justify-center bg-[rgba(15,23,42,0.52)] px-4 py-8"
+          style={{ backdropFilter: 'blur(4px)' }}
+        >
+          <div
+            className="relative w-full overflow-hidden rounded-[28px] border border-white/60 bg-[rgba(255,255,255,0.96)] shadow-[0_30px_90px_rgba(15,23,42,0.28)] backdrop-blur-xl"
+            style={{ maxWidth: 460 }}
+          >
+            <div
+              className="pointer-events-none absolute inset-x-0 top-0 h-24"
+              style={{
+                background: 'linear-gradient(180deg, rgba(236, 244, 255, 0.9) 0%, rgba(255, 255, 255, 0) 100%)',
+              }}
             />
+            <div className="relative px-7 pb-7 pt-6">
+              <div className="mb-6">
+                <div className="mx-auto max-w-md text-center">
+                  <div className="text-[16px] font-semibold leading-none text-(--color-text-1)">
+                    {t('common.sessionExpiredTitle')}
+                  </div>
+
+                  <div className="mx-auto mt-2 max-w-sm text-[12px] leading-5 text-[#7A879A]">
+                    {t('common.sessionExpiredDescription')}
+                  </div>
+
+                  <div className="mx-auto mt-4 h-px w-14 bg-linear-to-r from-transparent via-[#D5DEEA] to-transparent" />
+                </div>
+              </div>
+              <SigninClient
+                mode="modal"
+                signinErrors={modalSigninErrors}
+                onAuthenticated={handleReloginSuccess}
+                showThirdPartyLogin
+              />
+            </div>
           </div>
         </div>
       )}

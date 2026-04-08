@@ -3,7 +3,7 @@
 # @Time: 2025/12/10 10:53
 # @Author: windyzhao
 
-from apps.cmdb.constants.constants import COLLECT_OBJ_TREE
+from apps.cmdb.services.collect_object_tree import get_collect_object_meta
 
 
 def get_collect_model_passwords(collect_model_id):
@@ -12,14 +12,5 @@ def get_collect_model_passwords(collect_model_id):
     :param collect_model_id: 采集模型名称
     :return: 加密密码字典
     """
-    # 从 COLLECT_OBJ_TREE 中查找对应的采集模型配置
-    encrypted_fields = []
-    for parent in COLLECT_OBJ_TREE:
-        for child in parent.get("children", []):
-            if child.get("model_id") == collect_model_id:
-                encrypted_fields = child.get("encrypted_fields", [])
-                break
-        if encrypted_fields:
-            break
-
-    return encrypted_fields
+    collect_object_meta = get_collect_object_meta(collect_model_id)
+    return collect_object_meta.get("encrypted_fields", [])

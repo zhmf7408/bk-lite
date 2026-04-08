@@ -202,7 +202,8 @@
         "restartSuccess": "重启成功",
         "restartError": "重启失败",
         "restartTimeout": "重启超时",
-        "restarting": "重启中"
+        "restarting": "重启中",
+        "notDeployedTip": "当前云区域尚未完成环境部署，请前往「环境」页面进行部署后再继续使用相关功能。"
       },
       "editform": {
         "Introduction": "简介",

@@ -16,6 +16,7 @@ DEFAULT_SOURCE_CONFIG = {
           "source_id": "restful",
           "events": [
             {
+              "push_source_id": "zabbix",
               "title": "Jenkins流水线 frontend-deploy 构建状态成功1",
               "description": "流水线: frontend-deploy 状态: 成功",
               "value": 0,
@@ -47,9 +48,10 @@ DEFAULT_SOURCE_CONFIG = {
            "source_id": "restful",
            "events": [
               {
-                 "title": "Jenkins流水线 frontend-deploy 构建状态成功1",
-                 "description": "流水线: frontend-deploy 状态: 成功",
-                 "value": 0,
+                "push_source_id": "zabbix",
+                  "title": "Jenkins流水线 frontend-deploy 构建状态成功1",
+                  "description": "流水线: frontend-deploy 状态: 成功",
+                  "value": 0,
                  "item": "jenkins_build_status",
                  "level": "1",
                  "start_time": "1751964596",
@@ -98,6 +100,7 @@ DEFAULT_SOURCE_CONFIG = {
         "labels": "labels",
         "rule_id": "rule_id",
         "external_id": "external_id",
+        "push_source_id": "push_source_id",
         "resource_id": "resource_id",
         "resource_name": "resource_name",
         "resource_type": "resource_type",
@@ -117,6 +120,7 @@ DEFAULT_SOURCE_CONFIG = {
         "end_time": "事件结束时间 | 类型: string(时间戳) | 必填: 否 | 格式: 秒级(10位)或毫秒级(13位)",
         "action": "事件动作 | 类型: string | 必填: 否(默认created) | 可选值: created-创建, closed-关闭, recovery-恢复",
         "external_id": "外部事件ID(指纹) | 类型: string | 必填: 否(不传则自动生成) | 说明: 用于事件恢复关联",
+        "push_source_id": "事件来源 | 类型: string | 必填: 否(默认default) | 说明: 标记事件由哪个上游系统或模块推送, 例如zabbix, prometheus等",
         "service": "所属服务 | 类型: string | 必填: 否",
         "location": "事件发生位置 | 类型: string | 必填: 否",
         "tags": "事件标签 | 类型: object | 必填: 否",

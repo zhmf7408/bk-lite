@@ -6,7 +6,9 @@ from collections import defaultdict
 
 from apps.cmdb.collection.collect_plugin.base import CollectBase
 from apps.cmdb.collection.collect_util import timestamp_gt_one_day_ago
-from apps.cmdb.collection.constants import NETWORK_INTERFACES_RELATIONS, NETWORK_COLLECT
+from apps.cmdb.collection.constants import NETWORK_INTERFACES_RELATIONS
+from apps.cmdb.collection.plugins import get_collection_plugin
+from apps.cmdb.constants.constants import CollectPluginTypes
 from apps.cmdb.models import OidMapping
 from apps.core.logger import cmdb_logger as logger
 
@@ -41,7 +43,8 @@ class CollectNetworkMetrics(CollectBase):
 
     @property
     def _metrics(self):
-        return NETWORK_COLLECT
+        plugin_cls = get_collection_plugin(CollectPluginTypes.SNMP, self.model_id)
+        return plugin_cls._metrics.fget(self)
 
     @staticmethod
     def get_oid_map():
@@ -92,17 +95,8 @@ class CollectNetworkMetrics(CollectBase):
 
     @property
     def device_map(self):
-        # 网络设备
-        mapping = {
-            "inst_name": self.set_inst_name,
-            "ip_addr": "ip_addr",
-            "soid": "sysobjectid",
-            "port": "port",
-            "model": "model",
-            "brand": "brand",
-            "model_id": "model_id"
-        }
-        return mapping
+        plugin_cls = get_collection_plugin(CollectPluginTypes.SNMP, self.model_id)
+        return plugin_cls.device_map.fget(self)
 
     @staticmethod
     def interface_name(data, *args, **kwargs):
@@ -110,16 +104,8 @@ class CollectNetworkMetrics(CollectBase):
 
     @property
     def model_field_mapping(self):
-        # 接口
-        mapping = {
-            "inst_name": self.set_interface_inst_name,
-            "self_device": self.set_self_device,
-            "mac": "mac_address",
-            "name": self.interface_name,
-            "status": (self.set_interface_status, "oper_status"),
-            self.asso: self.get_interface_asso,
-        }
-        return mapping
+        plugin_cls = get_collection_plugin(CollectPluginTypes.SNMP, self.model_id)
+        return plugin_cls.model_field_mapping.fget(self)
 
     def format_data(self, data):
         """格式化数据"""

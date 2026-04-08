@@ -208,6 +208,8 @@
         "enumSelectMode": "Selection Mode",
         "singleSelect": "Single Select",
         "multipleSelect": "Multiple Select",
+        "defaultValue": "Default Value",
+        "defaultValueHint": "The system auto-fills this default value only when creating a new instance from the page.",
         "exportModelConfig": "Export Config",
         "importModelConfig": "Import Config",
         "importSuccess": "Import successful"

@@ -1,11 +1,11 @@
-"""YAML 配置读取器"""
-import os.path
+from dataclasses import dataclass
+from pathlib import Path
+from typing import Any, Dict, Optional, Tuple
 
 import yaml
-from pathlib import Path
-from typing import Dict, Any, Optional
-from dataclasses import dataclass
 from sanic.log import logger
+
+from core.plugin_source_resolver import PluginResolution, PluginSourceResolver
 
 
 @dataclass
@@ -97,63 +97,65 @@ class ExecutorConfig:
             raise ValueError(f"Unknown executor type: {self.executor_type}")
 
 
+@dataclass
+class ResolvedExecutorConfig:
+    executor_config: ExecutorConfig
+    plugin_resolution: PluginResolution
+    fallback_executor_config: Optional[ExecutorConfig] = None
+
+
 class PluginYamlReader:
     """插件 YAML 读取器"""
 
-    def __init__(self, plugins_base_dir: str = "plugins/inputs"):
+    def __init__(self, plugins_base_dir: str = 'plugins/inputs', resolver: Optional[PluginSourceResolver] = None):
         self.plugins_base_dir = Path(plugins_base_dir)
-        self._cache: Dict[str, Dict[str, Any]] = {}
+        self.resolver = resolver or PluginSourceResolver(oss_plugins_base_dir=self.plugins_base_dir)
+        self._config_cache: Dict[str, Dict[str, Any]] = {}
 
-    def read_plugin_config(self, model: str) -> Dict[str, Any]:
-        """
-        读取插件配置
-        
-        Args:
-            model: 模型名称，如 'mysql', 'vmware_vc'
-        
-        Returns:
-            插件配置字典
-        """
-        # 检查缓存
-        if model in self._cache:
-            logger.debug(f"Using cached config for: {model}")
-            return self._cache[model]
+    def _load_yaml(self, config_path: Path) -> Dict[str, Any]:
+        cache_key = str(config_path)
+        if cache_key in self._config_cache:
+            logger.debug(f'Using cached config for: {config_path}')
+            return self._config_cache[cache_key]
 
-        # 构建配置文件路径
-        config_path = os.path.join(self.plugins_base_dir, model, "plugin.yml")
+        if not config_path.exists():
+            raise FileNotFoundError(f'Plugin config not found: {config_path}')
 
-        if not os.path.exists(config_path):
-            raise FileNotFoundError(f"Plugin config not found: {config_path}")
+        logger.info(f'Loading plugin config: {config_path}')
+        with open(config_path, 'r', encoding='utf-8') as file_handler:
+            config = yaml.safe_load(file_handler)
 
-        # 读取 YAML
-        logger.info(f"Loading plugin config: {config_path}")
-        with open(config_path, 'r', encoding='utf-8') as f:
-            config = yaml.safe_load(f)
-
-        # 缓存
-        self._cache[model] = config
-
+        self._config_cache[cache_key] = config
         return config
 
-    def get_executor_config(self, model: str, executor_type: str) -> ExecutorConfig:
-        """
-        获取执行器配置
-        
-        Args:
-            model: 模型名称，如 'mysql', 'vmware_vc'
-            executor_type: 执行器类型，'job' 或 'protocol'
-        
-        Returns:
-            ExecutorConfig 对象
-        """
-        # 读取插件配置
-        plugin_config = self.read_plugin_config(model)
+    def get_plugin_resolution(self, model: str, prefer_enterprise: bool = True) -> PluginResolution:
+        return self.resolver.resolve(model, prefer_enterprise=prefer_enterprise)
 
-        # 获取执行器配置
+    def read_plugin_config_with_resolution(
+        self,
+        model: str,
+        prefer_enterprise: bool = True
+    ) -> Tuple[Dict[str, Any], PluginResolution]:
+        resolution = self.get_plugin_resolution(model, prefer_enterprise=prefer_enterprise)
+
+        if resolution.config is None:
+            resolution.config = self._load_yaml(resolution.plugin_path)
+
+        if resolution.source == 'enterprise' and resolution.has_oss_fallback and resolution.fallback_plugin_path:
+            if resolution.fallback_config is None:
+                resolution.fallback_config = self._load_yaml(resolution.fallback_plugin_path)
+
+        return resolution.config, resolution
+
+    @staticmethod
+    def _build_executor_config(
+        model: str,
+        executor_type: str,
+        plugin_config: Dict[str, Any]
+    ) -> ExecutorConfig:
         executors = plugin_config.get('executors', {})
 
         if executor_type not in executors:
-            # 尝试使用默认执行器
             default_executor = plugin_config.get('default_executor')
             if default_executor and default_executor in executors:
                 logger.info(f"Executor '{executor_type}' not found, using default: {default_executor}")
@@ -172,6 +174,51 @@ class PluginYamlReader:
             plugin_config=plugin_config
         )
 
+    def read_plugin_config(self, model: str) -> Dict[str, Any]:
+        """
+        读取插件配置
+        
+        Args:
+            model: 模型名称，如 'mysql', 'vmware_vc'
+        
+        Returns:
+            插件配置字典
+        """
+        config, _ = self.read_plugin_config_with_resolution(model)
+        return config
+
+    def get_executor_config_with_resolution(
+        self,
+        model: str,
+        executor_type: str,
+        prefer_enterprise: bool = True
+    ) -> ResolvedExecutorConfig:
+        plugin_config, resolution = self.read_plugin_config_with_resolution(model, prefer_enterprise=prefer_enterprise)
+        executor_config = self._build_executor_config(model, executor_type, plugin_config)
+
+        fallback_executor_config = None
+        if resolution.source == 'enterprise' and resolution.has_oss_fallback and resolution.fallback_config:
+            fallback_executor_config = self._build_executor_config(model, executor_type, resolution.fallback_config)
+
+        return ResolvedExecutorConfig(
+            executor_config=executor_config,
+            plugin_resolution=resolution,
+            fallback_executor_config=fallback_executor_config
+        )
+
+    def get_executor_config(self, model: str, executor_type: str) -> ExecutorConfig:
+        """
+        获取执行器配置
+        
+        Args:
+            model: 模型名称，如 'mysql', 'vmware_vc'
+            executor_type: 执行器类型，'job' 或 'protocol'
+        
+        Returns:
+            ExecutorConfig 对象
+        """
+        return self.get_executor_config_with_resolution(model, executor_type).executor_config
+
     def list_executors(self, model: str) -> list:
         """列出插件的所有执行器"""
         config = self.read_plugin_config(model)
@@ -179,7 +226,8 @@ class PluginYamlReader:
 
     def clear_cache(self):
         """清除缓存"""
-        self._cache.clear()
+        self._config_cache.clear()
+        self.resolver.clear_cache()
 
 
 # 全局实例

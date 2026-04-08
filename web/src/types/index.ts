@@ -114,6 +114,7 @@ export interface EntityListProps<T> {
   operateSection?: React.ReactNode;
   infoText?: string;
   nameField?: string;
+  iconRender?: (icon: string) => React.ReactNode;
   descSlot?: (item: T) => React.ReactNode;
   menuActions?: (item: T) => React.ReactNode;
   singleAction?: (item: T) => { text: string; onClick: (item: T) => void };

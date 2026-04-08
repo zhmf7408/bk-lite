@@ -26,7 +26,8 @@ from apps.core.models.maintainer_info import MaintainerInfo
 class Event(models.Model):
     """原始事件"""
 
-    source = models.ForeignKey(AlertSource, on_delete=models.CASCADE, db_index=True, help_text="告警源")
+    source = models.ForeignKey(AlertSource, on_delete=models.CASCADE, db_index=True, help_text="通道")
+    push_source_id = models.CharField(max_length=100, default="default", help_text="事件推送来源")
     raw_data = JSONField(help_text="原始数据")
     received_at = models.DateTimeField(auto_now_add=True, db_index=True, help_text="接收时间")
 
@@ -160,9 +161,7 @@ class Alert(models.Model):
         if target_timezone is None:
             target_timezone = django_timezone.get_current_timezone()
 
-        return django_timezone.localtime(
-            self.created_at, target_timezone
-        ).strftime("%Y-%m-%d %H:%M:%S")
+        return django_timezone.localtime(self.created_at, target_timezone).strftime("%Y-%m-%d %H:%M:%S")
 
     @classmethod
     def model_fields(cls):

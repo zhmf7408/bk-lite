@@ -16,18 +16,29 @@ import {
   type FlattenedRole
 } from '@/app/system-manager/utils/roleTreeUtils';
 
+const areKeysEqual = (left: React.Key[], right: React.Key[]) => {
+  if (left.length !== right.length) {
+    return false;
+  }
+
+  return left.every((key, index) => String(key) === String(right[index]));
+};
+
 interface TreeTransferProps {
   treeData: TreeDataNode[];
-  selectedKeys: number[];
+  selectedKeys: React.Key[];
+  personalRoleIds?: React.Key[];
   groupRules?: { [key: string]: { [app: string]: number } };
-  onChange: (newKeys: number[]) => void;
+  onChange: (newKeys: React.Key[]) => void;
   onChangeRule?: (newKey: number, newRules: { [app: string]: number }) => void;
   mode?: 'group' | 'role';
   disabled?: boolean;
   loading?: boolean;
   forceOrganizationRole?: boolean;
-  organizationRoleIds?: number[];
+  organizationRoleIds?: React.Key[];
   enableSubGroupSelect?: boolean;
+  inheritedRoleIds?: React.Key[];
+  inheritedRoleSourceMap?: Record<string, string>;
 }
 
 export { flattenRoleData };
@@ -35,6 +46,7 @@ export { flattenRoleData };
 const RoleTransfer: React.FC<TreeTransferProps> = ({
   treeData,
   selectedKeys,
+  personalRoleIds = [],
   groupRules = {},
   onChange,
   onChangeRule,
@@ -44,6 +56,8 @@ const RoleTransfer: React.FC<TreeTransferProps> = ({
   forceOrganizationRole = false,
   organizationRoleIds = [],
   enableSubGroupSelect = false,
+  inheritedRoleIds = [],
+  inheritedRoleSourceMap = {},
 }) => {
   const { t } = useTranslation();
   const [isPermissionModalVisible, setIsPermissionModalVisible] = useState<boolean>(false);
@@ -57,15 +71,15 @@ const RoleTransfer: React.FC<TreeTransferProps> = ({
   const handleSubGroupToggle = useCallback((node: TreeDataNode, includeAll: boolean) => {
     if (disabled || loading) return;
 
-    let newSelectedKeys = [...selectedKeys];
+    let newSelectedKeys: React.Key[] = [...selectedKeys];
 
     if (includeAll) {
       const allChildrenIds = getSubtreeKeys(node);
-      const idsToAdd = allChildrenIds.filter(id => !newSelectedKeys.includes(id));
+      const idsToAdd = allChildrenIds.filter(id => !newSelectedKeys.some((key) => String(key) === String(id)));
       newSelectedKeys = [...newSelectedKeys, ...idsToAdd];
     } else {
       const allChildrenIds = getSubtreeKeys(node);
-      newSelectedKeys = newSelectedKeys.filter(id => !allChildrenIds.includes(id));
+      newSelectedKeys = newSelectedKeys.filter(id => !allChildrenIds.some((key) => String(key) === String(id)));
     }
 
     onChange(newSelectedKeys);
@@ -80,17 +94,16 @@ const RoleTransfer: React.FC<TreeTransferProps> = ({
   }, [treeData, leftSearchValue]);
 
   useEffect(() => {
-    if (leftSearchValue) {
-      setLeftExpandedKeys(getSearchExpandedKeys(treeData, leftSearchValue));
-    } else {
-      setLeftExpandedKeys(getAllKeys(treeData));
-    }
+    const nextExpandedKeys = leftSearchValue
+      ? getSearchExpandedKeys(treeData, leftSearchValue)
+      : getAllKeys(treeData);
+
+    setLeftExpandedKeys((prevKeys) => (areKeysEqual(prevKeys, nextExpandedKeys) ? prevKeys : nextExpandedKeys));
   }, [leftSearchValue, treeData]);
 
-  const flattenedRoleData = useMemo(() => flattenRoleData(leftTreeData), [leftTreeData]);
-
   const filteredRightData = useMemo(() => {
-    let filtered = filterTreeData(treeData, selectedKeys);
+    const allRightKeys = [...new Map([...selectedKeys, ...inheritedRoleIds].map((key) => [String(key), key])).values()];
+    let filtered = filterTreeData(treeData, allRightKeys);
 
     if (rightSearchValue) {
       filtered = filtered
@@ -99,15 +112,17 @@ const RoleTransfer: React.FC<TreeTransferProps> = ({
     }
 
     return filtered;
-  }, [treeData, selectedKeys, rightSearchValue]);
+  }, [treeData, selectedKeys, inheritedRoleIds, rightSearchValue]);
 
   useEffect(() => {
-    if (rightSearchValue) {
-      setRightExpandedKeys(getSearchExpandedKeys(filteredRightData, rightSearchValue));
-    } else {
-      setRightExpandedKeys(getAllKeys(filteredRightData));
-    }
+    const nextExpandedKeys = rightSearchValue
+      ? getSearchExpandedKeys(filteredRightData, rightSearchValue)
+      : getAllKeys(filteredRightData);
+
+    setRightExpandedKeys((prevKeys) => (areKeysEqual(prevKeys, nextExpandedKeys) ? prevKeys : nextExpandedKeys));
   }, [rightSearchValue, filteredRightData]);
+
+  const flattenedRoleData = useMemo(() => flattenRoleData(leftTreeData), [leftTreeData]);
 
   const handlePermissionSetting = useCallback((node: TreeDataNode, e: React.MouseEvent) => {
     e.stopPropagation();
@@ -146,24 +161,28 @@ const RoleTransfer: React.FC<TreeTransferProps> = ({
         <Transfer
           oneWay
           dataSource={transferDataSource}
-          targetKeys={selectedKeys}
+          targetKeys={selectedKeys.map((key) => String(key))}
           className="tree-transfer"
           render={(item) => item.title}
           showSelectAll={false}
           disabled={disabled || loading}
           onChange={(nextTargetKeys) => {
             if (!disabled && !loading) {
-              onChange(nextTargetKeys as number[]);
+              onChange(nextTargetKeys);
             }
           }}
         >
           {({ direction }) => {
             if (direction === 'left') {
+              const leftTreePersonalRoleIds = forceOrganizationRole ? selectedKeys : personalRoleIds;
+              const leftTreeOrganizationRoleIds = forceOrganizationRole ? inheritedRoleIds : organizationRoleIds;
+
               return (
                 <TransferLeftTree
                   treeData={leftTreeData}
                   selectedKeys={selectedKeys}
-                  organizationRoleIds={organizationRoleIds}
+                  personalRoleIds={leftTreePersonalRoleIds}
+                  organizationRoleIds={leftTreeOrganizationRoleIds}
                   leftSearchValue={leftSearchValue}
                   leftExpandedKeys={leftExpandedKeys}
                   disabled={disabled}
@@ -183,7 +202,10 @@ const RoleTransfer: React.FC<TreeTransferProps> = ({
                   treeData={treeData}
                   filteredRightData={filteredRightData}
                   selectedKeys={selectedKeys}
+                  personalRoleIds={personalRoleIds}
                   organizationRoleIds={organizationRoleIds}
+                  inheritedRoleIds={inheritedRoleIds}
+                  inheritedRoleSourceMap={inheritedRoleSourceMap}
                   rightSearchValue={rightSearchValue}
                   rightExpandedKeys={rightExpandedKeys}
                   disabled={disabled}

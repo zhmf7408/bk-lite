@@ -37,6 +37,15 @@ class CollectionService:
         self.model_id = self.params["model_id"]
         self.host = self.params.get("host")  # 可能为None（云采集）
 
+    @staticmethod
+    def _get_bool_param(params: Dict[str, Any], key: str, default: bool) -> bool:
+        value = params.get(key, default)
+        if isinstance(value, bool):
+            return value
+        if isinstance(value, str):
+            return value.strip().lower() in {'1', 'true', 'yes', 'on'}
+        return bool(value)
+
     async def collect(self):
         """
         单次采集方法
@@ -56,8 +65,25 @@ class CollectionService:
             executor_type = self.params["executor_type"]
             logger.info(f"🔧 Executor type: {executor_type}")
 
-            # 获取执行器配置
-            executor_config = self.yaml_reader.get_executor_config(self.model_id, executor_type)
+            prefer_enterprise = self._get_bool_param(self.params, 'prefer_enterprise', True)
+            strict_enterprise = self._get_bool_param(self.params, 'strict_enterprise', False)
+
+            # 插件来源解析入口：先判断 enterprise 能力是否可用，再按
+            # enterprise/plugins/inputs/{model}/plugin.yml -> plugins/inputs/{model}/plugin.yml
+            # 的顺序选中最终 plugin.yml；若命中 enterprise 且后续 import 失败，executor 会按 strict_enterprise
+            # 决定是直接报错还是回退到同名 oss 插件。
+            resolved_executor = self.yaml_reader.get_executor_config_with_resolution(
+                self.model_id,
+                executor_type,
+                prefer_enterprise=prefer_enterprise
+            )
+            executor_config = resolved_executor.executor_config
+            plugin_resolution = resolved_executor.plugin_resolution
+
+            logger.info(
+                f'Plugin source selected: model_id={self.model_id}, selected_source={plugin_resolution.source}, '
+                f'selected_plugin_path={plugin_resolution.plugin_path}, has_fallback={plugin_resolution.has_oss_fallback}'
+            )
 
             # 对于job类型且有host，获取节点信息
             if executor_config.is_job and self.host:
@@ -66,7 +92,14 @@ class CollectionService:
                     self.params["node_info"] = self._node_info
 
             # 执行单次采集
-            executor = PluginExecutor(self.model_id, executor_config, self.params)
+            executor = PluginExecutor(
+                self.model_id,
+                executor_config,
+                self.params,
+                plugin_resolution=plugin_resolution,
+                fallback_executor_config=resolved_executor.fallback_executor_config,
+                strict_enterprise=strict_enterprise
+            )
             result = await executor.execute()
 
             # 处理结果并转换为 Prometheus 格式
@@ -176,10 +209,8 @@ class CollectionService:
             return {"result": [], "success": False}
 
         try:
-            # 读取 YAML 配置
-            plugin_config = self.yaml_reader.read_plugin_config(self.model_id)
-            executor_config = self.yaml_reader.get_executor_config(self.model_id,
-                                                                   plugin_config.get('default_executor', 'protocol'))
+            resolved_executor = self.yaml_reader.get_executor_config_with_resolution(self.model_id, 'protocol')
+            executor_config = resolved_executor.executor_config
 
             # 只有 protocol 类型支持 list_regions
             if not executor_config.is_cloud_protocol:

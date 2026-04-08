@@ -202,7 +202,8 @@
         "restartSuccess": "Restart Success",
         "restartError": "Restart Failed",
         "restartTimeout": "Restart Timeout",
-        "restarting": "Restarting"
+        "restarting": "Restarting",
+        "notDeployedTip": "The current cloud region has not completed environment deployment. Please go to the \"Environment\" page to deploy before using related features."
       },
       "editform": {
         "Introduction": "Introduction",

@@ -39,8 +39,12 @@ class BaseCollect(object):
             return self.inst_name
         return self.task.id
 
+    def get_collect_plugin(self):
+        return self.COLLECT_PLUGIN
+
     def run(self):
-        if self.COLLECT_PLUGIN is None:
+        collect_plugin = self.get_collect_plugin()
+        if collect_plugin is None:
             raise NotImplementedError("Please implement the collect plugin")
 
         metrics_cannula = MetricsCannula(
@@ -48,7 +52,7 @@ class BaseCollect(object):
             organization=self.organization,
             inst_name=self.inst_name,
             task_id=self.task_id,
-            collect_plugin=self.COLLECT_PLUGIN,
+            collect_plugin=collect_plugin,
             manual=bool(self.task.input_method),
             default_metrics=self.default_metrics,
             filter_collect_task=self.filter_collect_task,

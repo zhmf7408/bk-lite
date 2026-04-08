@@ -4,7 +4,9 @@
 # @Author: windyzhao
 from apps.cmdb.collection.collect_plugin.base import CollectBase
 from apps.cmdb.collection.collect_util import timestamp_gt_one_day_ago
-from apps.cmdb.collection.constants import PROTOCOL_METRIC_MAP
+from apps.cmdb.collection.plugins import get_collection_plugin
+from apps.cmdb.collection.plugins.base import bind_collection_mapping
+from apps.cmdb.constants.constants import CollectPluginTypes
 import json
 import codecs
 
@@ -14,8 +16,8 @@ class ProtocolCollectMetrics(CollectBase):
 
     @property
     def _metrics(self):
-        data = PROTOCOL_METRIC_MAP[self.model_id]
-        return data
+        plugin_cls = get_collection_plugin(CollectPluginTypes.PROTOCOL, self.model_id)
+        return list(getattr(plugin_cls, "metric_names", ()))
 
 
 
@@ -24,64 +26,8 @@ class ProtocolCollectMetrics(CollectBase):
 
     @property
     def model_field_mapping(self):
-        mapping = {
-            "mysql": {
-                "ip_addr": "ip_addr",
-                "port": "port",
-                "version": "version",
-                "enable_binlog": "enable_binlog",
-                "sync_binlog": "sync_binlog",
-                "max_conn": "max_conn",
-                "max_mem": "max_mem",
-                "basedir": "basedir",
-                "datadir": "datadir",
-                "socket": "socket",
-                "bind_address": "bind_address",
-                "slow_query_log": "slow_query_log",
-                "slow_query_log_file": "slow_query_log_file",
-                "log_error": "log_error",
-                "wait_timeout": "wait_timeout",
-                "inst_name": self.get_inst_name
-            },
-            "postgresql": {
-                "inst_name": self.get_inst_name,
-                "ip_addr": "ip_addr",
-                "port": "port",
-                "version": "version",
-                "config": "conf_path",
-                "data_path": "data_path",
-                "max_connect": "max_conn",
-                "shared_buffer": "cache_memory_mb",
-                "log_directory": "log_path",
-            },
-            "oracle": {
-                "version": "version",
-                "max_mem": "max_mem",
-                "max_conn": "max_conn",
-                "db_name": "db_name",
-                "database_role": "database_role",
-                "sid": "sid",
-                "ip_addr": "ip_addr",
-                "port": "port",
-                "service_name": "service_name",
-                "inst_name": lambda data: f"{data['ip_addr']}-oracle",
-            },
-            "mssql": {
-                "inst_name": self.get_inst_name,
-                "ip_addr": "ip_addr",
-                "port": "port",
-                "version": "version",
-                "db_name": "db_name",
-                "max_conn": "max_conn",
-                "max_mem": "max_mem",
-                "order_rule": "order_rule",
-                "fill_factor": "fill_factor",
-                "boot_account": "boot_account",
-            },
-
-        }
-
-        return mapping
+        plugin_cls = get_collection_plugin(CollectPluginTypes.PROTOCOL, self.model_id)
+        return {self.model_id: bind_collection_mapping(self, getattr(plugin_cls, "field_mapping", {}))}
 
     def format_data(self, data):
         """格式化数据"""

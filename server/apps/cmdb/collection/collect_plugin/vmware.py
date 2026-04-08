@@ -6,7 +6,9 @@ import json
 
 from apps.cmdb.collection.collect_plugin.base import CollectBase
 from apps.cmdb.collection.collect_util import timestamp_gt_one_day_ago
-from apps.cmdb.collection.constants import VMWARE_CLUSTER, VMWARE_COLLECT_MAP
+from apps.cmdb.collection.constants import VMWARE_COLLECT_MAP
+from apps.cmdb.collection.plugins import get_collection_plugin
+from apps.cmdb.constants.constants import CollectPluginTypes
 from apps.core.logger import cmdb_logger as logger
 
 class CollectVmwareMetrics(CollectBase):
@@ -19,7 +21,8 @@ class CollectVmwareMetrics(CollectBase):
 
     @property
     def _metrics(self):
-        return VMWARE_CLUSTER
+        plugin_cls = get_collection_plugin(CollectPluginTypes.VM, self.model_id)
+        return plugin_cls._metrics.fget(self)
 
     def get_esxi_asso(self, data, *args, **kwargs):
         vmware_ds = data.get("vmware_ds", "")
@@ -99,57 +102,8 @@ class CollectVmwareMetrics(CollectBase):
 
     @property
     def model_field_mapping(self):
-        mapping = {
-            "vmware_vc": {
-                "vc_version": "vc_version",
-                "inst_name": self.set_vc_inst_name
-            },
-            "vmware_vm": {
-                "inst_name": "inst_name",
-                "ip_addr": "ip_addr",
-                "self_vc": self.set_vc_inst_name,
-                "resource_id": "resource_id",
-                "os_name": "os_name",
-                "vcpus": (int, "vcpus"),
-                "memory": (int, "memory"),
-                "annotation": "annotation",
-                "uptime_seconds": (int, "uptime_seconds"),
-                "tools_version": "tools_version",
-                "tools_status": "tools_status",
-                "tools_running_status": "tools_running_status",
-                "last_boot": "last_boot",
-                "creation_date": "creation_date",
-                "last_backup": "last_backup",
-                "backup_policy": "backup_policy",
-                "data_disks": self.set_data_disks,
-                "self_esxi": self.get_vm_esxi_name,
-                self.asso: self.get_vm_asso
-            },
-            "vmware_esxi": {
-                "inst_name": "inst_name",
-                "ip_addr": "ip_addr",
-                "self_vc": self.set_vc_inst_name,
-                "resource_id": "resource_id",
-                "cpu_cores": (int, "cpu_cores"),
-                "vcpus": (int, "vcpus"),
-                "memory": (int, "memory"),
-                "esxi_version": "esxi_version",
-                self.asso: self.get_esxi_asso
-
-            },
-            "vmware_ds": {
-                "inst_name": "inst_name",
-                "self_vc": self.set_vc_inst_name,
-                "system_type": "system_type",
-                "resource_id": "resource_id",
-                "storage": (int, "storage"),
-                "url": "ds_url",
-                # self.asso: self.get_ds_asso
-            }
-
-        }
-
-        return mapping
+        plugin_cls = get_collection_plugin(CollectPluginTypes.VM, self.model_id)
+        return plugin_cls.model_field_mapping.fget(self)
 
     def format_data(self, data):
         """格式化数据"""

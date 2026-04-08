@@ -72,6 +72,10 @@ export interface AttrFieldType {
   isEdit?: boolean;
   children?: AttrFieldType[];
   user_prompt?: string;
+  enum_rule_type?: EnumRuleType;
+  public_library_id?: string | null;
+  enum_select_mode?: 'single' | 'multiple';
+  default_value?: string[];
   [key: string]: unknown;
 }
 
@@ -266,6 +270,7 @@ export interface FieldConfig {
   title: string;
   model_id: string;
   list: Array<any>;
+  source?: 'create' | 'copy' | 'edit' | 'batchEdit';
 }
 
 export interface FieldModalRef {
@@ -337,6 +342,10 @@ export interface FullInfoAttrItem {
   is_required: boolean;
   is_pre: boolean;
   user_prompt?: string;
+  enum_rule_type?: EnumRuleType;
+  public_library_id?: string | null;
+  enum_select_mode?: 'single' | 'multiple';
+  default_value?: string[];
   [key: string]: unknown;
 }
 

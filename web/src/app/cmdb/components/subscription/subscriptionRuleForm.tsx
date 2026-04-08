@@ -452,4 +452,6 @@ const SubscriptionRuleForm = forwardRef<SubscriptionRuleFormRef, SubscriptionRul
   );
 });
 
+SubscriptionRuleForm.displayName = 'SubscriptionRuleForm';
+
 export default SubscriptionRuleForm;

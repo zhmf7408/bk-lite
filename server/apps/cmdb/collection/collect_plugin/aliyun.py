@@ -4,7 +4,8 @@
 # @Author: windyzhao
 from apps.cmdb.collection.collect_plugin.base import CollectBase
 from apps.cmdb.collection.collect_util import timestamp_gt_one_day_ago
-from apps.cmdb.collection.constants import ALIYUN_COLLECT_CLUSTER
+from apps.cmdb.collection.plugins import get_collection_plugin
+from apps.cmdb.constants.constants import CollectPluginTypes
 
 
 class AliyunCollectMetrics(CollectBase):
@@ -16,7 +17,8 @@ class AliyunCollectMetrics(CollectBase):
 
     @property
     def _metrics(self):
-        return ALIYUN_COLLECT_CLUSTER
+        plugin_cls = get_collection_plugin(CollectPluginTypes.CLOUD, self.model_id)
+        return plugin_cls._metrics.fget(self)
 
 
 
@@ -46,166 +48,8 @@ class AliyunCollectMetrics(CollectBase):
 
     @property
     def model_field_mapping(self):
-        mapping = {
-            "aliyun_ecs": {
-                "inst_name": self.set_instance_inst_name,
-                "resource_name": "resource_name",
-                "resource_id": "resource_id",
-                "ip_addr": "ip_addr",
-                "public_ip": "public_ip",
-                "region": "region",
-                "zone": "zone",
-                "vpc": "vpc",
-                "status": "status",
-                "instance_type": "instance_type",
-                "os_name": "os_name",
-                "vcpus": (int, "vcpus"),
-                "memory_mb": (int, "memory"),
-                "charge_type": "charge_type",
-                "create_time": (self.convert_datetime_format, "create_time"),
-                "expired_time": (self.convert_datetime_format, "expired_time"),
-                self.asso: self.set_asso_instances
-            },
-            "aliyun_bucket": {
-                "inst_name": self.set_instance_inst_name,
-                "resource_name": "resource_name",
-                "resource_id": "resource_id",
-                "location": "location",
-                "extranet_endpoint": "extranet_endpoint",
-                "intranet_endpoint": "intranet_endpoint",
-                "storage_class": "storage_class",
-                "cross_region_replication": "cross_region_replication",
-                "block_public_access": "block_public_access",
-                "creation_date": (self.convert_datetime_format, "creation_date"),
-                self.asso: self.set_asso_instances
-
-            },
-            "aliyun_mysql": {
-                "inst_name": self.set_instance_inst_name,
-                "resource_name": "resource_name",
-                "resource_id": "resource_id",
-                "region": "region",
-                "zone": "zone",
-                "zone_slave": "zone_slave",
-                "engine": "engine",
-                "version": "version",
-                "type": "type",
-                "status": "status",
-                "class": "class",
-                "storage_type": "storage_type",
-                "network_type": "network_type",
-                "net_type": "net_type",
-                "connection_mode": "connection_mode",
-                "lock_mode": "lock_mode",
-                "cpu": (int, "cpu"),
-                "memory_mb": (int, "memory_mb"),
-                "charge_type": "charge_type",
-                "expire_time": (self.convert_datetime_format, "expire_time"),
-                self.asso: self.set_asso_instances
-
-            },
-            "aliyun_pgsql": {
-                "inst_name": self.set_instance_inst_name,
-                "resource_name": "resource_name",
-                "resource_id": "resource_id",
-                "region": "region",
-                "zone": "zone",
-                "zone_slave": "zone_slave",
-                "engine": "engine",
-                "version": "version",
-                "type": "type",
-                "status": "status",
-                "class": "class",
-                "storage_type": "storage_type",
-                "network_type": "network_type",
-                "net_type": "net_type",
-                "connection_mode": "connection_mode",
-                "lock_mode": "lock_mode",
-                "cpu": (int, "cpu"),
-                "memory_mb": (int, "memory_mb"),
-                "charge_type": "charge_type",
-                "expire_time": (self.convert_datetime_format, "expire_time"),
-                self.asso: self.set_asso_instances
-
-            },
-            "aliyun_mongodb": {
-                "inst_name": self.set_instance_inst_name,
-                "resource_name": "resource_name",
-                "resource_id": "resource_id",
-                "region": "region",
-                "zone": "zone",
-                "zone_slave": "zone_slave",
-                "engine": "engine",
-                "version": "version",
-                "type": "type",
-                "status": "status",
-                "class": "class",
-                "storage_type": "storage_type",
-                "storage_gb": (int, "storage_gb"),
-                "lock_mode": "lock_mode",
-                "charge_type": "charge_type",
-                "expire_time": (self.convert_datetime_format, "expire_time"),
-                self.asso: self.set_asso_instances
-            },
-            "aliyun_redis": {
-                "inst_name": self.set_instance_inst_name,
-                "resource_name": "resource_name",
-                "resource_id": "resource_id",
-                "region": "region",
-                "zone": "zone",
-                "engine_version": "engine_version",
-                "architecture_type": "architecture_type",
-                "capacity": "capacity",
-                "network_type": "network_type",
-                "connection_domain": "connection_domain",
-                "port": (int, "port"),
-                "bandwidth": (int, "bandwidth"),
-                "qps": (int, "qps"),
-                "shard_count": "shard_count",
-                "instance_class": "instance_class",
-                "package_type": "package_type",
-                "charge_type": "charge_type",
-                "end_time": (self.convert_datetime_format, "end_time"),
-                "create_time": (self.convert_datetime_format, "create_time"),
-                self.asso: self.set_asso_instances
-            },
-            "aliyun_clb": {
-                "inst_name": self.set_instance_inst_name,
-                "resource_name": "resource_name",
-                "resource_id": "resource_id",
-                "region": "region",
-                "zone": "zone",
-                "zone_slave": "zone_slave",
-                "vpc": "vpc",
-                "ip_addr": "ip_addr",
-                "status": "status",
-                "class": "class",
-                "charge_type": "charge_type",
-                "create_time": (self.convert_datetime_format, "create_time"),
-                self.asso: self.set_asso_instances
-            },
-            "aliyun_kafka_inst": {
-                "inst_name": self.set_instance_inst_name,
-                "resource_name": "resource_name",
-                "resource_id": "resource_id",
-                "region": "region",
-                "zone": "zone",
-                "vpc": "vpc",
-                "status": "status",
-                "class": "class",
-                "storage_gb": (int, "storage_gb"),
-                "storage_type": "storage_type",
-                "msg_retain": (int, "msg_retain"),
-                "topoc_num": (int, "topoc_num"),
-                "io_max_read": (int, "io_max_read"),
-                "io_max_write": (int, "io_max_write"),
-                "charge_type": "charge_type",
-                "create_time": (self.convert_datetime_format, "create_time"),
-                self.asso: self.set_asso_instances
-            }
-        }
-
-        return mapping
+        plugin_cls = get_collection_plugin(CollectPluginTypes.CLOUD, self.model_id)
+        return plugin_cls.model_field_mapping.fget(self)
 
     def format_data(self, data):
         """格式化数据"""

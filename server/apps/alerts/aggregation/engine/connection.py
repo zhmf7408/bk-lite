@@ -27,12 +27,12 @@ class DuckDBConnection:
     def load_events_to_memory(self, events_queryset):
         """
         将 Event QuerySet 加载到 DuckDB 内存表中供聚合查询使用
-        
+
         每个策略的事件范围不同（基于 window_size），所以需要每次重新加载
-        
+
         Args:
             events_queryset: Django QuerySet，已过滤的事件集合（必须非空）
-            
+
         Note:
             调用此方法前应确保 events_queryset 有数据，否则说明上游业务逻辑有误
         """
@@ -54,6 +54,7 @@ class DuckDBConnection:
                 "received_at",
                 "action",
                 "source_id",
+                "push_source_id",
                 "labels",
                 "service",
                 "location",
@@ -64,9 +65,7 @@ class DuckDBConnection:
 
         # 2. 防御性检查：理论上不应该出现空数据（上游已过滤）
         if not events_data:
-            logger.warning(
-                "load_events_to_memory 收到空数据，策略调节筛选event为空"
-            )
+            logger.warning("load_events_to_memory 收到空数据，策略调节筛选event为空")
             return
 
         # 3. 序列化 JSON 字段（DuckDB 要求字符串格式）

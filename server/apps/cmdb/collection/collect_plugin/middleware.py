@@ -4,7 +4,9 @@
 # @Author: windyzhao
 from apps.cmdb.collection.collect_plugin.base import CollectBase
 from apps.cmdb.collection.collect_util import timestamp_gt_one_day_ago
-from apps.cmdb.collection.constants import MIDDLEWARE_METRIC_MAP
+from apps.cmdb.collection.plugins import get_collection_plugin
+from apps.cmdb.collection.plugins.base import bind_collection_mapping
+from apps.cmdb.constants.constants import CollectPluginTypes
 import codecs
 import json
 from apps.core.logger import cmdb_logger as logger
@@ -12,8 +14,8 @@ from apps.core.logger import cmdb_logger as logger
 class MiddlewareCollectMetrics(CollectBase):
     @property
     def _metrics(self):
-        assert self.model_id in MIDDLEWARE_METRIC_MAP, f"{self.model_id} needs to be defined in MIDDLEWARE_METRIC_MAP"
-        return MIDDLEWARE_METRIC_MAP[self.model_id]
+        plugin_cls = get_collection_plugin(CollectPluginTypes.MIDDLEWARE, self.model_id)
+        return list(getattr(plugin_cls, "metric_names", ()))
 
     def format_data(self, data):
         for index_data in data["result"]:
@@ -118,204 +120,8 @@ class MiddlewareCollectMetrics(CollectBase):
 
     @property
     def model_field_mapping(self):
-        mapping = {
-            "nginx": {
-                "ip_addr": "ip_addr",
-                # "port": lambda data: data["listen_port"].split("&"), # Multiple ports are separated by &
-                "port": "port",
-                "bin_path": "bin_path",
-                "version": "version",
-                "log_path": "log_path",
-                "conf_path": "conf_path",
-                "server_name": "server_name",
-                "include": "include",
-                "ssl_version": "ssl_version",
-                "inst_name": self.get_inst_name,
-                self.asso: self.get__host_assos,
-            },
-            "zookeeper": {
-                "inst_name": self.get_inst_name,
-                "ip_addr": "ip_addr",
-                "port": "port",
-                "version": "version",
-                "install_path": "install_path",  # bin路径
-                "log_path": "log_path",  # 运行日志路径
-                "conf_path": "conf_path",  # 配置文件路径
-                "java_path": "java_path",
-                "java_version": "java_version",
-                "data_dir": "data_dir",
-                "tick_time": "tick_time",
-                "init_limit": "init_limit",
-                "sync_limit": "sync_limit",
-                "server": "server",
-                self.asso: self.get__host_assos,
-            },
-            "kafka": {
-                "inst_name": self.get_inst_name,
-                "ip_addr": "ip_addr",
-                "port": "port",
-                "version": "version",
-                "install_path": "install_path",  # bin路径
-                "conf_path": "conf_path",  # 配置文件路径
-                "log_path": "log_path",  # 运行日志路径
-                "java_path": "java_path",
-                "java_version": "java_version",
-                "xms": "xms",  # 初始堆内存大小
-                "xmx": "xmx",  # 最大堆内存大小
-                "broker_id": "broker_id",  # broker id
-                "io_threads": "io_threads",
-                "network_threads": "network_threads",
-                "socket_receive_buffer_bytes": "socket_receive_buffer_bytes",  # 接收缓冲区大小
-                "socket_request_max_bytes": "socket_request_max_bytes",  # 单个请求套接字最大字节数
-                "socket_send_buffer_bytes": "socket_send_buffer_bytes",  # 发送缓冲区大小
-                self.asso: self.get__host_assos,
-            },
-            "etcd": {
-                "inst_name": self.get_inst_name,
-                "ip_addr": "ip_addr",
-                "port": "port",
-                "version": "version",
-                "data_dir": "data_dir",  # 快照文件路径
-                "conf_file_path": "conf_file_path",
-                "peer_port": "peer_port",  # 集群通讯端口
-                "install_path": "install_path",
-                self.asso: self.get__host_assos,
-            },
-            "rabbitmq": {
-                "inst_name": self.get_inst_name,
-                "ip_addr": "ip_addr",
-                "port": "port",
-                "allport": "allport",
-                "node_name": "node_name",
-                "log_path": "log_path",
-                "conf_path": "conf_path",
-                "version": "version",
-                "enabled_plugin_file": "enabled_plugin_file",
-                "erlang_version": "erlang_version",
-                self.asso: self.get__host_assos,
-            },
-            "tomcat": {
-                "inst_name": self.get_inst_name,
-                "ip_addr": "ip_addr",
-                "port": "port",
-                "catalina_path": "catalina_path",
-                "version": "version",
-                "xms": "xms",
-                "xmx": "xmx",
-                "max_perm_size": "max_perm_size",
-                "permsize": "permsize",
-                "log_path": "log_path",
-                "java_version": "java_version",
-                self.asso: self.get__host_assos,
-            },
-            "apache":{
-                "inst_name": self.get_inst_name,
-                "ip_addr":"ip_addr",
-                "port":"port",
-                "version":"version",
-                "httpd_path":"httpd_path",
-                "httpd_conf_path":"httpd_conf_path",
-                "doc_root":"doc_root",
-                "error_log":"error_log",
-                "custom_Log":"custom_Log",
-                "include":"include",
-                self.asso: self.get__host_assos,
-            },
-            "consul": {
-                "inst_name": self.get_inst_name,
-                "ip_addr": "ip_addr",
-                "port": "port",
-                "install_path": "install_path",
-                "version": "version",
-                "data_dir": "data_dir",
-                "conf_path": "conf_path",
-                "role": "role",
-                self.asso: self.get__host_assos,
-            },
-            "activemq":{
-                "inst_name": self.get_inst_name,
-                "ip_addr":"ip_addr",
-                "port":"port",
-                "version":"version",
-                "install_path":"install_path",
-                "conf_path":"conf_path",
-                "java_path":"java_path",
-                "java_version":"java_version",
-                "xms":"xms",
-                "xmx":"xmx",
-                self.asso: self.get__host_assos,
-            },
-            "weblogic": {
-                "inst_name": self.get_inst_name,
-                "bk_obj_id": "bk_obj_id",
-                "ip_addr": "ip_addr",
-                "port": "port",
-                "wlst_path": "wlst_path",
-                "java_version": "java_version",
-                "domain_version": "domain_version",
-                "admin_server_name": "admin_server_name",
-                "name": "name",
-                self.asso: self.get__host_assos,
-            },
-            "keepalived": {
-                "inst_name": self.get_keepalived_inst_name,
-                "ip_addr": "ip_addr",
-                "bk_obj_id": "bk_obj_id",
-                "version": "version",
-                "priority": "priority",
-                "state": "state",
-                "virtual_router_id": "virtual_router_id",
-                "user_name": "user_name",
-                "install_path": "install_path",
-                "config_file": "config_file",
-                self.asso: self.get__host_assos,
-            },
-            "tongweb": {
-                "inst_name": self.get_inst_name,
-                "ip_addr": "ip_addr",
-                "port": "port",
-                "version": "version",
-                "bin_path": "bin_path",
-                "log_path": "log_path",
-                "java_version": "java_version",
-                "xms": "xms",
-                "xmx": "xmx",
-                "metaspace_size": "metaspace_size",
-                "max_metaspace_size": "max_metaspace_size",
-                self.asso: self.get__host_assos,
-            },
-            "jetty": {
-                "inst_name": self.get_inst_name,
-                "ip_addr": "ip_addr",
-                "port": "port",
-                "version": "version",
-                "jetty_home": "jetty_home",
-                "java_version": "java_version",
-                "monitored_dir": "monitored_dir",
-                "bin_path": "bin_path",
-                "java_vendor": "java_vendor",
-                "war_name": "war_name",
-                "jvm_para": "jvm_para",
-                "max_threads": "max_threads",
-                self.asso: self.get__host_assos,
-            },
-            "docker": {
-                "inst_name": self.get_docker_inst_name,
-                "ip_addr": self.get_ip_addr,
-                "port": lambda data: data.get("port") or self._extract_primary_port(data),
-                "container_id": "container_id",
-                "status": "status",
-                "command": "command",
-                "created": "created",
-                "image": "image",
-                "networks": lambda data: self.format_json_field(data.get("networks")),
-                "ports": "ports",
-                "mounts": lambda data: self.format_json_field(data.get("mounts")),
-                self.asso: self.get__host_assos,
-            },
-        }
-
-        return mapping
+        plugin_cls = get_collection_plugin(CollectPluginTypes.MIDDLEWARE, self.model_id)
+        return {self.model_id: bind_collection_mapping(self, getattr(plugin_cls, "field_mapping", {}))}
 
     @staticmethod
     def extract_nested_value(data, parent_key, child_key, default=""):

@@ -2,178 +2,28 @@
 # @File: databases.py
 # @Time: 2025/11/12 14:18
 # @Author: windyzhao
-from apps.cmdb.collection.collect_plugin.base import CollectBase
-from apps.cmdb.collection.collect_util import timestamp_gt_one_day_ago
-from apps.cmdb.collection.constants import DB_COLLECT_METRIC_MAP
-import codecs
-import json
-from apps.core.logger import cmdb_logger as logger
-class DBCollectCollectMetrics(CollectBase):
-    """数据库 采集指标"""
+from apps.cmdb.collection.plugins import get_collection_plugin
+from apps.cmdb.collection.plugins.base import bind_collection_mapping
+from apps.cmdb.collection.plugins.community.db.base import BaseDBCollectionPlugin
+from apps.cmdb.constants.constants import CollectPluginTypes
+
+
+class DBCollectCollectMetrics(BaseDBCollectionPlugin):
+    """兼容旧入口，实际定义统一走 DB 插件注册中心。"""
+
+    def get_delegate_plugin(self):
+        return get_collection_plugin(CollectPluginTypes.DB, self.model_id)
 
     @property
     def _metrics(self):
-        assert self.model_id in DB_COLLECT_METRIC_MAP, f"{self.model_id} needs to be defined in DB_COLLECT_METRIC_MAP"
-        return DB_COLLECT_METRIC_MAP[self.model_id]
-
-    def format_data(self, data):
-        for index_data in data["result"]:
-            metric_name = index_data["metric"]["__name__"]
-            value = index_data["value"]
-            _time, value = value[0], value[1]
-            if not self.timestamp_gt:
-                if timestamp_gt_one_day_ago(_time):
-                    break
-                else:
-                    self.timestamp_gt = True
-            # 原始版本没有result，2025.11.27修改stargazer格式，将采集数据放到result中
-            result_data = {}
-            index_dict = dict(
-                index_key=metric_name,
-                index_value=value,
-                **index_data["metric"],
-                **result_data,  # 将解析后的JSON数据合并到index_dict中
-            )
-
-            self.collection_metrics_dict[metric_name].append(index_dict)
-
-    def get_inst_name(self, data):
-        return f"{data['ip_addr']}-{self.model_id}-{data['port']}"
+        plugin_cls = self.get_delegate_plugin()
+        metric_names = getattr(plugin_cls, "metric_names", ())
+        if not metric_names:
+            raise AssertionError(f"{plugin_cls.__name__} needs metric_names")
+        return list(metric_names)
 
     @property
     def model_field_mapping(self):
-
-        mapping = {
-            "es": {
-                "inst_name": self.get_inst_name,
-                "ip_addr": "ip_addr",
-                "port": "port",
-                "version": "version",
-                "log_path": "log_path",
-                "data_path": "data_path",
-                "is_master": "is_master",
-                "node_name": "node_name",
-                "cluster_name": "cluster_name",
-                "java_version": "java_version",
-                "java_path": "java_path",
-                "conf_path": "conf_path",
-                "install_path": "install_path",
-            },
-            "redis": {
-                "inst_name": self.get_inst_name,
-                "ip_addr": "ip_addr",
-                "port": "port",
-                "version": "version",
-                "install_path": "install_path",
-                "max_conn": "max_conn",
-                "max_mem": "max_mem",
-                "database_role": "database_role",
-                "topo_mode": "topo_mode",
-                "cluster_uuid": "cluster_uuid",
-                "slaves": "slaves",
-                "master": "master",
-            },
-            "mongodb": {
-                "inst_name": self.get_inst_name,
-                "ip_addr": "ip_addr",
-                "port": "port",
-                "version": "version",
-                "mongo_path": "mongo_path",
-                "bin_path": "bin_path",
-                "config": "config",
-                "fork": "fork",
-                "system_log": "system_log",
-                "db_path": "db_path",
-                "max_incoming_conn": "max_incoming_conn",
-                "database_role": "database_role",
-            },
-            "postgresql": {
-                "inst_name": lambda x: f"{x['ip_addr']}-pg-{x['port']}",
-                "ip_addr": "ip_addr",
-                "port": "port",
-                "version": "version",
-                "conf": "conf_path",
-                "data_path": "data_path",
-                "max_conn": "max_conn",
-                "shared_buffer": "cache_memory_mb",
-                "log_directory": "log_path",
-            },
-            "dameng": {
-                "inst_name": self.get_inst_name,
-                "ip_addr": "ip_addr",
-                "port": "port",
-                "user": "user",
-                "version": "version",
-                "bin_path": "bin_path",
-                "dm_db_name": "dm_db_name",
-            },
-            "db2": {
-                "inst_name": lambda data: f"{data['ip_addr']}-db2",
-                "version": "version",
-                "db_patch": "db_patch",
-                "db_name": "db_name",
-                "db_instance_name": "db_instance_name",
-                "ip_addr": "ip_addr",
-                "port": "port",
-                "db_character_set": "db_character_set",
-                "ha_mode": "ha_mode",
-                "replication_managerole": "replication_managerole",
-                "replication_role": "replication_role",
-                "data_protect_mode": "data_protect_mode",
-            },
-            "tidb": {
-                "inst_name": self.get_inst_name,
-                "ip_addr": "ip_addr",
-                "port": "port",
-                "version": "version",
-                "dm_db_name": "dm_db_name",
-                "dm_install_path": "dm_install_path",
-                "dm_conf_path": "dm_conf_path",
-                "dm_log_file": "dm_log_file",
-                "dm_home_bash": "dm_home_bash",
-                "dm_db_max_sessions": "dm_db_max_sessions",
-                "dm_redo_log": "dm_redo_log",
-                "dm_datafile": "dm_datafile",
-                "dm_mode": "dm_mode",
-            },
-            "hbase": {
-                "inst_name": self.get_inst_name,
-                "ip_addr": "ip_addr",
-                "port": "port",
-                "version": "version",
-                "install_path": "install_path",
-                "log_path": "log_path",
-                "config_file": "config_file",
-                "tmp_dir": "tmp_dir",
-                "cluster_distributed": "cluster_distributed",
-                "unsafe_stream_capability_enforce": "unsafe_stream_capability_enforce",
-                "java_path": "java_path",
-            }
-        }
-        return mapping
-
-    def format_metrics(self):
-        for metric_key, metrics in self.collection_metrics_dict.items():
-            result = []
-            mapping = self.model_field_mapping.get(self.model_id, {})
-            for index_data in metrics:
-                data = {}
-                for field, key_or_func in mapping.items():
-                    if isinstance(key_or_func, tuple):
-                        try:
-                            data[field] = key_or_func[0](index_data[key_or_func[1]])
-                        except Exception as e:
-                            logger.error(f"数据转换失败 field:{field}, value:{index_data[key_or_func[1]]}, error:{e}")
-                    elif callable(key_or_func):
-                        try:
-                            data[field] = key_or_func(index_data)
-                        except Exception as e:
-                            logger.error(f"数据处理转换失败 field:{field}, error:{e}")
-                    else:
-                        data[field] = index_data.get(key_or_func, "")
-                if data:
-                    if data.get('inst_name'):
-                        result.append(data)
-            self.result[self.model_id] = result
-
-
+        plugin_cls = self.get_delegate_plugin()
+        field_mapping = bind_collection_mapping(self, getattr(plugin_cls, "field_mapping", {}))
+        return {self.model_id: field_mapping}

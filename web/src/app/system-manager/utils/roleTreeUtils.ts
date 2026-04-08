@@ -2,14 +2,19 @@ import React from 'react';
 import type { DataNode as TreeDataNode } from 'antd/lib/tree';
 
 export interface FlattenedRole {
-  key: number;
+  key: React.Key;
   title: string;
 }
+
+const hasKey = (keys: React.Key[], targetKey: React.Key): boolean => {
+  const normalizedTargetKey = String(targetKey);
+  return keys.some((key) => String(key) === normalizedTargetKey);
+};
 
 export function flattenRoleData(nodes: TreeDataNode[]): FlattenedRole[] {
   return nodes?.reduce<FlattenedRole[]>((acc, node) => {
     if (node.selectable) {
-      acc.push({ key: node.key as number, title: node.title as string });
+      acc.push({ key: node.key, title: extractTextFromTitle(node.title) });
     }
     if (node.children) {
       acc = acc.concat(flattenRoleData(node.children));
@@ -18,7 +23,7 @@ export function flattenRoleData(nodes: TreeDataNode[]): FlattenedRole[] {
   }, []);
 }
 
-export function filterTreeData(nodes: TreeDataNode[], selectedKeys: number[]): TreeDataNode[] {
+export function filterTreeData(nodes: TreeDataNode[], selectedKeys: React.Key[]): TreeDataNode[] {
   return nodes.reduce<TreeDataNode[]>((acc, node) => {
     const newNode = { ...node };
     if (node.children) {
@@ -26,18 +31,18 @@ export function filterTreeData(nodes: TreeDataNode[], selectedKeys: number[]): T
       if (filtered.length > 0) {
         newNode.children = filtered;
         acc.push(newNode);
-      } else if (selectedKeys.includes(node.key as number)) {
+      } else if (hasKey(selectedKeys, node.key)) {
         acc.push(newNode);
       }
-    } else if (selectedKeys.includes(node.key as number)) {
+    } else if (hasKey(selectedKeys, node.key)) {
       acc.push(newNode);
     }
     return acc;
   }, []);
 }
 
-export function getSubtreeKeys(node: TreeDataNode): number[] {
-  const keys = [node.key as number];
+export function getSubtreeKeys(node: TreeDataNode): React.Key[] {
+  const keys: React.Key[] = [node.key];
   if (node.children && node.children.length > 0) {
     node.children.forEach(child => {
       keys.push(...getSubtreeKeys(child));
@@ -46,11 +51,11 @@ export function getSubtreeKeys(node: TreeDataNode): number[] {
   return keys;
 }
 
-export function getDeletableSubtreeKeys(node: TreeDataNode, organizationRoleIds: number[]): number[] {
-  const keys: number[] = [];
+export function getDeletableSubtreeKeys(node: TreeDataNode, organizationRoleIds: React.Key[]): React.Key[] {
+  const keys: React.Key[] = [];
 
-  if (!organizationRoleIds.includes(node.key as number)) {
-    keys.push(node.key as number);
+  if (!hasKey(organizationRoleIds, node.key)) {
+    keys.push(node.key);
   }
 
   if (node.children && node.children.length > 0) {
@@ -63,16 +68,16 @@ export function getDeletableSubtreeKeys(node: TreeDataNode, organizationRoleIds:
 }
 
 export function cleanSelectedKeys(
-  selected: number[],
+  selected: React.Key[],
   nodes: TreeDataNode[]
-): number[] {
+): React.Key[] {
   let result = [...selected];
   nodes.forEach(node => {
     if (!node.selectable && node.children) {
-      const childSelectable = flattenRoleData(node.children).map(item => Number(item.key));
-      if (result.includes(node.key as number)) {
-        if (!childSelectable.every(childKey => result.includes(childKey))) {
-          result = result.filter(key => key !== node.key);
+      const childSelectable = flattenRoleData(node.children).map(item => item.key);
+      if (hasKey(result, node.key)) {
+        if (!childSelectable.every(childKey => hasKey(result, childKey))) {
+          result = result.filter(key => String(key) !== String(node.key));
         }
       }
       result = cleanSelectedKeys(result, node.children);
@@ -81,16 +86,16 @@ export function cleanSelectedKeys(
   return result;
 }
 
-export function isFullySelected(node: TreeDataNode, selectedKeys: number[]): boolean {
+export function isFullySelected(node: TreeDataNode, selectedKeys: React.Key[]): boolean {
   if (node.children && node.children.length > 0) {
     return node.children.every(child => isFullySelected(child, selectedKeys));
   }
-  return selectedKeys.includes(node.key as number);
+  return hasKey(selectedKeys, node.key);
 }
 
-export function getAllKeys(nodes: TreeDataNode[]): number[] {
-  return nodes.reduce<number[]>((acc, node) => {
-    acc.push(node.key as number);
+export function getAllKeys(nodes: TreeDataNode[]): React.Key[] {
+  return nodes.reduce<React.Key[]>((acc, node) => {
+    acc.push(node.key);
     if (node.children) {
       acc.push(...getAllKeys(node.children));
     }
@@ -180,18 +185,17 @@ export function getSearchExpandedKeys(nodes: TreeDataNode[], searchValue: string
   return keys;
 }
 
-export function processLeftTreeData(nodes: TreeDataNode[], organizationRoleIds: number[]): TreeDataNode[] {
+export function processLeftTreeData(nodes: TreeDataNode[]): TreeDataNode[] {
   return nodes.map(node => ({
     ...node,
-    disabled: node.disabled || organizationRoleIds.includes(node.key as number),
-    children: node.children ? processLeftTreeData(node.children, organizationRoleIds) : undefined
+    children: node.children ? processLeftTreeData(node.children) : undefined
   }));
 }
 
 export function getAllLeafNodes(nodes: TreeDataNode[]): FlattenedRole[] {
   return nodes.reduce<FlattenedRole[]>((acc, node) => {
     if (!node.children || node.children.length === 0) {
-      acc.push({ key: node.key as number, title: node.title as string });
+      acc.push({ key: node.key, title: extractTextFromTitle(node.title) });
     } else {
       acc = acc.concat(getAllLeafNodes(node.children));
     }

@@ -292,9 +292,12 @@ class CollectDriverTypes(object):
     CHOICE = ((PROTOCOL, "协议采集"), (JOB, "脚本采集"))
 
 
-# 采集对象树
+# 采集对象树基线骨架
 """
-encrypted_fields: 需要加密的字段列表 新增采集对象后需要配置加密字段到encrypted_fields
+encrypted_fields: 需要加密的字段列表。
+
+当前 COLLECT_OBJ_TREE 作为社区版对象树基线骨架使用。
+运行时对象树会在此基础上，叠加 enterprise 中定义的额外 children。
 """
 COLLECT_OBJ_TREE = [
     {

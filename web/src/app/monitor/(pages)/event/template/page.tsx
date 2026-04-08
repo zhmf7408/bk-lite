@@ -6,6 +6,7 @@ import useEventApi from '@/app/monitor/api/event';
 import templateStyle from './index.module.scss';
 import { TreeItem, TableDataItem, ObjectItem } from '@/app/monitor/types';
 import { findLabelById, getIconByObjectName } from '@/app/monitor/utils/common';
+import { OBJECT_DEFAULT_ICON } from '@/app/monitor/constants';
 import { useRouter, useSearchParams } from 'next/navigation';
 import TreeSelector from '@/app/monitor/components/treeSelector';
 import EntityList from '@/components/entity-list';
@@ -63,17 +64,17 @@ const Template: React.FC = () => {
       setTableLoading(true);
       const monitorName = findLabelById(treeData, objectId as string);
       const params = {
-        monitor_object_name: monitorName,
+        monitor_object_name: monitorName
       };
       const data = await getPolicyTemplate(params, {
-        signal: abortController.signal,
+        signal: abortController.signal
       });
       if (currentRequestId !== templateRequestIdRef.current) return;
       const list = data.map((item: TableDataItem, index: number) => ({
         ...item,
         id: index,
         description: item.description || '--',
-        icon: getIconByObjectName(monitorName as string, objects),
+        icon: getIconByObjectName(monitorName as string, objects)
       }));
       setTableData(list);
     } finally {
@@ -102,22 +103,25 @@ const Template: React.FC = () => {
   };
 
   const getTreeData = (data: ObjectItem[]): TreeItem[] => {
-    const groupedData = data.reduce((acc, item) => {
-      if (!acc[item.type]) {
-        acc[item.type] = {
-          title: item.display_type || '--',
-          key: item.type,
-          children: [],
-        };
-      }
-      acc[item.type].children.push({
-        title: item.display_name || '--',
-        label: item.name || '--',
-        key: item.id,
-        children: [],
-      });
-      return acc;
-    }, {} as Record<string, TreeItem>);
+    const groupedData = data.reduce(
+      (acc, item) => {
+        if (!acc[item.type]) {
+          acc[item.type] = {
+            title: item.display_type || '--',
+            key: item.type,
+            children: []
+          };
+        }
+        acc[item.type].children.push({
+          title: item.display_name || '--',
+          label: item.name || '--',
+          key: item.id,
+          children: []
+        });
+        return acc;
+      },
+      {} as Record<string, TreeItem>
+    );
     return Object.values(groupedData);
   };
 
@@ -128,7 +132,7 @@ const Template: React.FC = () => {
       monitorObjId,
       monitorName,
       type,
-      name: row?.name || '',
+      name: row?.name || ''
     });
     sessionStorage.setItem('strategyInfo', JSON.stringify(row));
     const targetUrl = `/monitor/event/strategy/detail?${params.toString()}`;
@@ -151,6 +155,19 @@ const Template: React.FC = () => {
           searchSize="middle"
           loading={tableLoading}
           data={tableData}
+          iconRender={(icon) => (
+            <div className="w-10 h-10 min-w-[40px] rounded-lg flex items-center justify-center bg-[var(--color-fill-1)]">
+              <img
+                src={`/app/assets/assetModelIcon/${icon}.svg`}
+                alt={icon}
+                className="w-8 h-8 object-contain"
+                onError={(e) => {
+                  (e.target as HTMLImageElement).src =
+                    `/app/assets/assetModelIcon/${OBJECT_DEFAULT_ICON}.svg`;
+                }}
+              />
+            </div>
+          )}
           onCardClick={(item) => {
             handleCardClick('builtIn', item);
           }}

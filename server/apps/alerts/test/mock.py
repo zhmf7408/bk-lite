@@ -20,12 +20,8 @@ def generate_mock_events(num_events=100):
         "level": "0",
         "start_time": "1747277570",
         "end_time": "1747277574",
-        "labels": {
-            "instance": "server1"
-        },
-        "annotations": {
-            "alertname": "HighCPUUsage"
-        },
+        "labels": {"instance": "server1"},
+        "annotations": {"alertname": "HighCPUUsage"},
         "external_id": "sasasa",
         "status": "firing",
         "resource_id": 1,
@@ -38,6 +34,7 @@ def generate_mock_events(num_events=100):
         "location": "us-east-1",
         "action": "created",
         "rule_id": "cpu_threshold_rule",
+        "push_source_id": "default",
         "event_id": "",  # 将在循环中生成唯一ID
         "assignee": [],
     }
@@ -82,15 +79,8 @@ def generate_mock_events(num_events=100):
         event["level"] = level
         event["start_time"] = str(start_time)
         event["end_time"] = str(end_time)
-        event["labels"] = {
-            "instance": f"host-{server_num}",
-            "region": region
-        }
-        event["annotations"] = {
-            "alertname": "HighCPUUsage",
-            "summary": f"High CPU usage detected on {server_type}-{server_num}",
-            "severity": level
-        }
+        event["labels"] = {"instance": f"host-{server_num}", "region": region}
+        event["annotations"] = {"alertname": "HighCPUUsage", "summary": f"High CPU usage detected on {server_type}-{server_num}", "severity": level}
         event["external_id"] = str(uuid.uuid4())
         event["status"] = random.choice(statuses)
         event["value"] = float(cpu_usage)
@@ -106,17 +96,14 @@ def generate_mock_events(num_events=100):
         # event["action"] = "created" if event["status"] == "firing" else "resolved"
         event["action"] = "created"
         event["rule_id"] = "cpu_threshold_rule"
+        event["push_source_id"] = random.choice([ "prometheus", "zabbix", "lite-monitor"])
         event["event_id"] = f"EVENT-{uuid.uuid4().hex}"
         event["assignee"] = []
 
         events.append(event)
 
     # 构建最终数据结构
-    result = {
-        "source_type": "restful",
-        "source_id": "restful",
-        "events": events
-    }
+    result = {"source_type": "restful", "source_id": "restful", "events": events}
 
     return result
 
@@ -133,13 +120,8 @@ def generate_jenkins_failure_events(num_pipelines=5):
         "level": "0",
         "start_time": "",
         "end_time": "",
-        "labels": {
-            "pipeline": "",
-            "build_number": ""
-        },
-        "annotations": {
-            "alertname": "JenkinsBuildFailure"
-        },
+        "labels": {"pipeline": "", "build_number": ""},
+        "annotations": {"alertname": "JenkinsBuildFailure"},
         "external_id": "",
         "status": 0,
         "resource_id": 1,
@@ -156,13 +138,7 @@ def generate_jenkins_failure_events(num_pipelines=5):
         "assignee": [],
     }
 
-    pipeline_names = [
-        "frontend-deploy",
-        "backend-api",
-        "data-processing",
-        "mobile-app",
-        "microservice-auth"
-    ]
+    pipeline_names = ["frontend-deploy", "backend-api", "data-processing", "mobile-app", "microservice-auth"]
 
     events = []
     current_time = int(time.time())
@@ -272,11 +248,7 @@ def generate_jenkins_failure_events(num_pipelines=5):
     events.sort(key=lambda x: int(x["start_time"]))
 
     # 构建最终数据结构
-    result = {
-        "source_type": "restful",
-        "source_id": "restful",
-        "events": events
-    }
+    result = {"source_type": "restful", "source_id": "restful", "events": events}
 
     return result
 
@@ -291,12 +263,8 @@ def generate_website_monitoring_events(num_websites=3):
         "level": "1",
         "start_time": "",
         "end_time": "",
-        "labels": {
-            "url": ""
-        },
-        "annotations": {
-            "alertname": "WebsiteMonitoring"
-        },
+        "labels": {"url": ""},
+        "annotations": {"alertname": "WebsiteMonitoring"},
         "external_id": "",
         "status": "firing",
         "resource_id": 1,
@@ -316,7 +284,7 @@ def generate_website_monitoring_events(num_websites=3):
     websites = [
         {"name": "主站", "url": "https://www.example.com"},
         {"name": "API服务", "url": "https://api.example.com"},
-        {"name": "管理后台", "url": "https://admin.example.com"}
+        {"name": "管理后台", "url": "https://admin.example.com"},
     ]
 
     events = []
@@ -378,11 +346,7 @@ def generate_website_monitoring_events(num_websites=3):
 
         events.append(normal_event)
 
-    return {
-        "source_type": "restful",
-        "source_id": "restful",
-        "events": events
-    }
+    return {"source_type": "restful", "source_id": "restful", "events": events}
 
 
 if __name__ == "__main__":

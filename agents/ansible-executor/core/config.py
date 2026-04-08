@@ -1,9 +1,16 @@
+import logging
 import os
 import re
 from dataclasses import dataclass
 from pathlib import Path
 
 import yaml
+
+logging.basicConfig(
+    level=os.getenv("LOG_LEVEL", "INFO").upper(),
+    format="%(asctime)s %(levelname)s [ansible-executor] %(message)s",
+)
+logger = logging.getLogger(__name__)
 
 
 @dataclass
@@ -68,9 +75,7 @@ def _parse_string_list(value) -> list[str]:
         return []
     if isinstance(value, list):
         return [str(item).strip() for item in value if str(item).strip()]
-    return [
-        item.strip() for item in _render_env_vars(str(value)).split(",") if item.strip()
-    ]
+    return [item.strip() for item in _render_env_vars(str(value)).split(",") if item.strip()]
 
 
 def _parse_int_list(value) -> list[int]:
@@ -111,9 +116,7 @@ def load_config(path: str | None = None) -> ServiceConfig:
     js_ack_wait_fallback = os.getenv("ANSIBLE_JS_ACK_WAIT", "300")
     js_backoff_fallback = os.getenv("ANSIBLE_JS_BACKOFF", "5,15,30,60")
     dlq_subject_fallback = os.getenv("ANSIBLE_DLQ_SUBJECT", "ansible.tasks.dlq")
-    state_db_path_fallback = os.getenv(
-        "ANSIBLE_STATE_DB_PATH", "/tmp/ansible-executor/task_state.db"
-    )
+    state_db_path_fallback = os.getenv("ANSIBLE_STATE_DB_PATH", "/tmp/ansible-executor/task_state.db")
     callback_timeout_fallback = os.getenv("ANSIBLE_CALLBACK_TIMEOUT", "10")
     ansible_work_dir_fallback = os.getenv("ANSIBLE_WORK_DIR", "/tmp/ansible-executor")
 
@@ -252,9 +255,7 @@ def load_config(path: str | None = None) -> ServiceConfig:
         or "bk.ans_exec"
     )
     default_subject_prefix = f"{js_namespace}.tasks"
-    default_stream = f"{js_namespace}.tasks.{nats_instance_id}".replace(
-        ".", "_"
-    ).upper()
+    default_stream = f"{js_namespace}.tasks.{nats_instance_id}".replace(".", "_").upper()
     default_durable = f"ansible-executor-{nats_instance_id}"
 
     js_subject_prefix = (

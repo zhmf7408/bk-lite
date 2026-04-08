@@ -12,8 +12,8 @@ export interface GroupRules {
 
 export interface TreeSelectNode {
   title: string;
-  value: number;
-  key: number;
+  value: React.Key;
+  key: React.Key;
   children: TreeSelectNode[];
 }
 
@@ -23,7 +23,7 @@ export interface UserFormPayload {
   lastName?: string;
   locale?: string;
   timezone?: string;
-  groups?: number[];
+  groups?: React.Key[];
   roles: number[];
   rules?: number[];
   is_superuser: boolean;
@@ -36,7 +36,7 @@ export interface UserDetailResponse {
   timezone?: string;
   locale?: string;
   is_superuser?: boolean;
-  groups?: Array<{ id: number; rules?: { [key: string]: number } }>;
+  groups?: Array<{ id: React.Key; rules?: { [key: string]: number } }>;
   roles?: Array<{ role_id: number }>;
 }
 
@@ -47,8 +47,8 @@ export interface UserDetailResponse {
 export function transformTreeDataForSelect(data: TreeDataNode[]): TreeSelectNode[] {
   return data.map((node: TreeDataNode) => ({
     title: (node.title as string) || 'Unknown',
-    value: node.key as number,
-    key: node.key as number,
+    value: node.key,
+    key: node.key,
     children: node.children ? transformTreeDataForSelect(node.children as TreeDataNode[]) : [],
   }));
 }
@@ -58,8 +58,7 @@ export function transformTreeDataForSelect(data: TreeDataNode[]): TreeSelectNode
  * Marks roles that come from organization as disabled
  */
 export function processRoleTreeData(
-  roleData: Array<{ id: number; name: string; children: Array<{ id: number; name: string }> }>,
-  orgRoleIds: number[]
+  roleData: Array<{ id: number; name: string; children: Array<{ id: number; name: string }> }>
 ): TreeDataNode[] {
   return roleData.map((item) => ({
     key: item.id,
@@ -69,7 +68,6 @@ export function processRoleTreeData(
       key: child.id,
       title: child.name,
       selectable: true,
-      disabled: orgRoleIds.includes(child.id),
     })),
   }));
 }
@@ -77,7 +75,7 @@ export function processRoleTreeData(
 /**
  * Extract group IDs from user detail response
  */
-export function extractGroupIds(userDetail: UserDetailResponse): number[] {
+export function extractGroupIds(userDetail: UserDetailResponse): React.Key[] {
   return userDetail.groups?.map((group) => group.id) || [];
 }
 
@@ -101,7 +99,7 @@ export function extractOrgRoleIds(groupRoleData: GroupRole[]): number[] {
 export function buildGroupRulesFromUserDetail(userDetail: UserDetailResponse): GroupRules {
   return (
     userDetail.groups?.reduce((acc: GroupRules, group) => {
-      acc[group.id] = group.rules || {};
+      acc[String(group.id)] = group.rules || {};
       return acc;
     }, {}) || {}
   );
@@ -113,7 +111,7 @@ export function buildGroupRulesFromUserDetail(userDetail: UserDetailResponse): G
 export function buildFormValuesFromUserDetail(
   userDetail: UserDetailResponse,
   allRoles: number[],
-  groupIds: number[]
+  groupIds: React.Key[]
 ): Record<string, unknown> {
   return {
     ...userDetail,
@@ -131,7 +129,7 @@ export function buildFormValuesFromUserDetail(
  */
 export function buildUserPayload(
   formData: Record<string, unknown>,
-  organizationRoleIds: number[],
+  personalRoleIds: number[],
   groupRules: GroupRules,
   isSuperuser: boolean
 ): UserFormPayload {
@@ -146,10 +144,6 @@ export function buildUserPayload(
     } as UserFormPayload;
   }
 
-  const personalRoles = ((formData.roles as number[]) || []).filter(
-    (roleId: number) => !organizationRoleIds.includes(roleId)
-  );
-
   const rules = Object.values(groupRules)
     .filter((group) => group && typeof group === 'object' && Object.keys(group).length > 0)
     .flatMap((group) => Object.values(group))
@@ -157,18 +151,11 @@ export function buildUserPayload(
 
   return {
     ...restData,
-    roles: personalRoles,
+    roles: personalRoleIds,
     rules,
     timezone: zoneinfo as string,
     is_superuser: false,
   } as UserFormPayload;
-}
-
-/**
- * Filter personal roles from selected roles by excluding organization roles
- */
-export function filterPersonalRoles(selectedRoles: number[], orgRoleIds: number[]): number[] {
-  return selectedRoles.filter((roleId) => !orgRoleIds.includes(roleId));
 }
 
 /**

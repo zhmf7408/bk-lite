@@ -31,6 +31,7 @@ from apps.cmdb.display_field import ExcludeFieldsCache
 from apps.cmdb.graph.drivers.graph_client import GraphClient
 from apps.cmdb.models.field_group import FieldGroup
 from apps.cmdb.models.public_enum_library import PublicEnumLibrary
+from apps.cmdb.services.model import ModelManage
 from apps.cmdb.services.public_enum_library import enqueue_library_snapshot_refresh
 from apps.cmdb.utils.base import get_default_group_id
 from apps.cmdb.validators import IdentifierValidator
@@ -138,6 +139,20 @@ class ModelMigrate:
             attr["enum_rule_type"] = enum_meta["enum_rule_type"]
             attr["public_library_id"] = enum_meta["public_library_id"]
             attr["enum_select_mode"] = enum_meta["enum_select_mode"]
+
+        if attr_type == "enum":
+            raw_default_value = attr.get("default_value", [])
+            if raw_default_value not in (None, ""):
+                parsed_default_value = self._parse_json_like_value(raw_default_value, "default_value", f"属性 {attr_id}")
+                if not isinstance(parsed_default_value, list):
+                    raise BaseAppException(f"属性 {attr_id} 的 default_value 必须是数组")
+                attr["default_value"] = parsed_default_value
+            else:
+                attr["default_value"] = []
+        else:
+            attr["default_value"] = []
+
+        attr = ModelManage.sanitize_attr_default_value(attr, log_context="model_config_import")
 
         user_prompt = attr.get("prompt", "") or attr.get("user_prompt", "")
         attr["user_prompt"] = str(user_prompt) if user_prompt else ""
@@ -294,8 +309,10 @@ class ModelMigrate:
 
     def _normalize_public_enum_options(self, options_value, context: str) -> list[dict]:
         options = self._parse_json_like_value(options_value, "options", context)
-        if not isinstance(options, list) or not options:
-            raise BaseAppException(f"{context} 的 options 必须是非空数组")
+        if not isinstance(options, list):
+            raise BaseAppException(f"{context} 的 options 必须是数组")
+        if not options:
+            return []
 
         normalized = []
         seen_ids = set()
@@ -599,11 +616,7 @@ class ModelMigrate:
         for model_id in target_model_ids:
             existing_model = existing_model_map[model_id]
             existing_attrs = self._parse_model_attrs(existing_model.get("attrs", "[]"))
-            existing_attr_map = {
-                attr.get("attr_id"): attr
-                for attr in existing_attrs
-                if isinstance(attr, dict) and attr.get("attr_id")
-            }
+            existing_attr_map = {attr.get("attr_id"): attr for attr in existing_attrs if isinstance(attr, dict) and attr.get("attr_id")}
             existing_attr_ids = {attr.get("attr_id") for attr in existing_attrs if isinstance(attr, dict) and attr.get("attr_id")}
 
             added_attrs = []

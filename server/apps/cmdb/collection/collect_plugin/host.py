@@ -6,7 +6,9 @@ import json
 import re
 from apps.cmdb.collection.collect_plugin.base import CollectBase
 from apps.cmdb.collection.collect_util import timestamp_gt_one_day_ago
-from apps.cmdb.collection.constants import HOST_COLLECT_METRIC
+from apps.cmdb.collection.plugins import get_collection_plugin
+from apps.cmdb.collection.plugins.base import bind_collection_mapping
+from apps.cmdb.constants.constants import CollectPluginTypes
 from apps.core.logger import cmdb_logger as logger
 
 class HostCollectMetrics(CollectBase):
@@ -32,80 +34,16 @@ class HostCollectMetrics(CollectBase):
 
     @property
     def _metrics(self):
-        assert self.model_id in HOST_COLLECT_METRIC, f"{self.model_id} needs to be defined in HOST_COLLECT_METRIC"
-        return HOST_COLLECT_METRIC[self.model_id]
+        plugin_cls = get_collection_plugin(CollectPluginTypes.HOST, self.model_id)
+        return list(getattr(plugin_cls, "metric_names", ()))
 
     @property
     def model_field_mapping(self):
-        mapping = {
-            "host": {
-                "inst_name": self.set_inst_name,
-                "ip_addr": self.set_inst_name,
-                "hostname": "hostname",
-                "os_type": self.set_os_type,
-                "os_name": "os_name",
-                "os_version": "os_version",
-                "os_bit": "os_bits",
-                "cpu_model": "cpu_model",
-                "cpu_core": (self.transform_int, "cpu_cores"),
-                "memory": (self.transform_int, "memory_gb"),
-                "disk": (self.transform_int, "disk_gb"),
-                "cpu_arch": self.set_cpu_arch,
-                "inner_mac": (self.format_mac, "mac_address"),
-                "proc": self.get_host_proc,
-            },
-         "physcial_server": {
-                "inst_name": self.set_inst_name,
-                "serial_number": "serial_number",
-                "cpu_vendor": "cpu_vendor",
-                "cpu_model": "cpu_model",
-                "cpu_core": (self.transform_int, "cpu_cores"),
-                "cpu_threads": (self.transform_int, "cpu_threads"),
-                "cpu_arch": self.set_serverarch_type,
-                "board_vendor": "board_vendor",
-                "board_model": "board_model",
-                "board_serial": "board_serial",
-            },
-            "memory": {
-                "inst_name": self.set_component_inst_name,
-                "self_device": "self_device",
-                "mem_locator": "mem_locator",
-                "mem_part_number": "mem_part_number",
-                "mem_type": "mem_type",
-                "mem_size": (self.transform_unit_int, "mem_size"),
-                "mem_sn": "mem_sn",
-                self.asso: self.set_asso_instances
-            },
-            "gpu": {
-                "inst_name": self.set_component_inst_name,
-                "self_device": "self_device",
-                "gpu_name": "gpu_name",
-                "gpu_type": "gpu_type",
-                "gpu_desc": "gpu_desc",
-                self.asso: self.set_asso_instances
-            },
-            "disk": {
-                "inst_name": self.set_component_inst_name,
-                "self_device": "self_device",
-                "disk_vendor": "disk_vendor",
-                "disk": (self.transform_unit_int, "disk"),
-                "disk_type": "disk_type",
-                "disk_sn": "disk_sn",
-                self.asso: self.set_asso_instances
-            },
-            "nic": {
-                "inst_name": self.set_component_inst_name,
-                "self_device": "self_device",
-                "nic_pci_addr": "nic_pci_addr",
-                "nic_type": "nic_type",
-                "nic_vendor": "nic_vendor",
-                "nic_model": "nic_model",
-                "nic_iface": "nic_iface",
-                "nic_mac": "nic_mac",
-                self.asso: self.set_asso_instances
-            }
-        }
-        return mapping
+        plugin_cls = get_collection_plugin(CollectPluginTypes.HOST, self.model_id)
+        mappings = {self.model_id: bind_collection_mapping(self, getattr(plugin_cls, "field_mapping", {}))}
+        for model_id, mapping in getattr(plugin_cls, "related_field_mappings", {}).items():
+            mappings[model_id] = bind_collection_mapping(self, mapping)
+        return mappings
 
     def set_asso_instances(self, data, *args, **kwargs):
         model_id = kwargs["model_id"]

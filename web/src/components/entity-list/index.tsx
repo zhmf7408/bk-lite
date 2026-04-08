@@ -26,6 +26,7 @@ const EntityList = <T,>({
   changeFilter,
   infoText,
   nameField = 'name',
+  iconRender,
   descSlot,
 }: EntityListProps<T>) => {
   const { t } = useTranslation();
@@ -109,7 +110,7 @@ const EntityList = <T,>({
         }
         <div className="flex items-center">
           <div className="rounded-full">
-            <Icon type={icon} className="text-4xl" />
+            {iconRender ? iconRender(icon) : <Icon type={icon} className="text-4xl" />}
           </div>
           <div className="ml-2">
             <h3 className="font-semibold truncate text-sm" title={name}>

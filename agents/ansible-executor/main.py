@@ -6,11 +6,16 @@ from dotenv import load_dotenv
 
 from core.config import load_config
 from service.embedded_ansible import run_embedded_ansible
-from service.runtime import find_config_path, find_dotenv_path
+from service.runtime import (
+    configure_ansible_environment,
+    find_config_path,
+    find_dotenv_path,
+)
 from service.nats_service import AnsibleNATSService
 
 
 def main() -> None:
+    configure_ansible_environment()
     dotenv_path = find_dotenv_path()
     if dotenv_path:
         load_dotenv(dotenv_path)

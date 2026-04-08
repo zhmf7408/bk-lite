@@ -13,6 +13,7 @@ from rest_framework.decorators import action
 
 from apps.cmdb.node_configs.config_factory import NodeParamsFactory
 from apps.cmdb.permissions.inst_task_permission import InstanceTaskPermission
+from apps.cmdb.services.collect_object_tree import get_collect_obj_tree
 from apps.cmdb.utils.base import get_current_team_from_request
 from apps.system_mgmt.utils.group_utils import GroupUtils
 from apps.core.utils.permission_utils import get_permission_rules
@@ -22,7 +23,7 @@ from apps.rpc.node_mgmt import NodeMgmt
 from config.drf.viewsets import ModelViewSet
 from config.drf.pagination import CustomPageNumberPagination
 from apps.core.utils.web_utils import WebUtils
-from apps.cmdb.constants.constants import COLLECT_OBJ_TREE, CollectRunStatusType, CollectPluginTypes, PERMISSION_TASK
+from apps.cmdb.constants.constants import CollectRunStatusType, CollectPluginTypes, PERMISSION_TASK
 from apps.cmdb.filters.collect_filters import CollectModelFilter, OidModelFilter
 from apps.cmdb.models.collect_model import CollectModels, OidMapping
 from apps.cmdb.serializers.collect_serializer import CollectModelSerializer, CollectModelLIstSerializer, \
@@ -55,7 +56,7 @@ class CollectModelViewSet(AuthViewSet):
     @HasPermission("auto_collection-View")
     @action(methods=["get"], detail=False, url_path="collect_model_tree")
     def tree(self, request, *args, **kwargs):
-        data = COLLECT_OBJ_TREE
+        data = get_collect_obj_tree()
         return WebUtils.response_success(data)
 
     @HasPermission("auto_collection-View")
@@ -66,13 +67,14 @@ class CollectModelViewSet(AuthViewSet):
         # Given 页面受组织与实例权限控制，When 查询任务名，Then 先应用对象权限过滤。
         queryset = self.get_queryset_by_permission(request, queryset)
         task_list = queryset.values("id", "name", "model_id")
+        collect_obj_tree = get_collect_obj_tree()
         plugin_meta_map = {
             str(child.get("id")): {
                 "category": str(item.get("id")),
                 "category_name": item.get("name"),
                 "plugin_name": child.get("name"),
             }
-            for item in COLLECT_OBJ_TREE
+            for item in collect_obj_tree
             for child in item.get("children", [])
             if child.get("id")
         }

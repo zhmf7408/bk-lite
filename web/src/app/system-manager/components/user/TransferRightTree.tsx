@@ -1,5 +1,5 @@
 import React from 'react';
-import { Tree, Input, Tag } from 'antd';
+import { Tree, Input, Tag, Tooltip } from 'antd';
 import { DeleteOutlined, SettingOutlined, SearchOutlined } from '@ant-design/icons';
 import type { DataNode as TreeDataNode } from 'antd/lib/tree';
 import {
@@ -11,14 +11,17 @@ import {
 
 interface NodeHandlers {
   onPermissionSetting: (node: TreeDataNode, e: React.MouseEvent) => void;
-  onRemove: (newKeys: number[]) => void;
+  onRemove: (newKeys: React.Key[]) => void;
 }
 
 interface TransferRightTreeProps {
   treeData: TreeDataNode[];
   filteredRightData: TreeDataNode[];
-  selectedKeys: number[];
-  organizationRoleIds: number[];
+  selectedKeys: React.Key[];
+  personalRoleIds: React.Key[];
+  organizationRoleIds: React.Key[];
+  inheritedRoleIds: React.Key[];
+  inheritedRoleSourceMap: Record<string, string>;
   rightSearchValue: string;
   rightExpandedKeys: React.Key[];
   disabled: boolean;
@@ -28,18 +31,18 @@ interface TransferRightTreeProps {
   t: (key: string) => string;
   onSearchChange: (value: string) => void;
   onExpandedKeysChange: (keys: React.Key[]) => void;
-  onChange: (keys: number[]) => void;
+  onChange: (keys: React.Key[]) => void;
   onPermissionSetting?: (node: TreeDataNode, e: React.MouseEvent) => void;
 }
 
 function transformRightTreeGroup(
   nodes: TreeDataNode[],
   treeData: TreeDataNode[],
-  selectedKeys: number[],
+  selectedKeys: React.Key[],
   handlers: NodeHandlers
 ): TreeDataNode[] {
   return nodes.reduce<TreeDataNode[]>((acc, node) => {
-    const isNodeSelected = selectedKeys.includes(node.key as number);
+    const isNodeSelected = selectedKeys.some((key) => String(key) === String(node.key));
 
     if (node.children && node.children.length > 0) {
       const transformedChildren = transformRightTreeGroup(node.children, treeData, selectedKeys, handlers);
@@ -52,11 +55,11 @@ function transformRightTreeGroup(
               <span>{typeof node.title === 'function' ? node.title(node) : node.title}</span>
               <div>
                 <SettingOutlined
-                  className="cursor-pointer text-[var(--color-text-4)] mr-2"
+                  className="mr-2 cursor-pointer text-(--color-text-4)"
                   onClick={(e) => handlers.onPermissionSetting(node, e)}
                 />
                 <DeleteOutlined
-                  className="cursor-pointer text-[var(--color-text-4)]"
+                  className="cursor-pointer text-(--color-text-4)"
                   onClick={e => {
                     e.stopPropagation();
                     const keysToRemove = getSubtreeKeys(node);
@@ -86,11 +89,11 @@ function transformRightTreeGroup(
               <span>{typeof node.title === 'function' ? node.title(node) : node.title}</span>
               <div>
                 <SettingOutlined
-                  className="cursor-pointer text-[var(--color-text-4)] mr-2"
+                  className="mr-2 cursor-pointer text-(--color-text-4)"
                   onClick={(e) => handlers.onPermissionSetting(node, e)}
                 />
                 <DeleteOutlined
-                  className="cursor-pointer text-[var(--color-text-4)]"
+                  className="cursor-pointer text-(--color-text-4)"
                   onClick={e => {
                     e.stopPropagation();
                     const keysToRemove = getSubtreeKeys(node);
@@ -112,17 +115,25 @@ function transformRightTreeGroup(
 function transformRightTreeRole(
   nodes: TreeDataNode[],
   treeData: TreeDataNode[],
-  selectedKeys: number[],
-  organizationRoleIds: number[],
+  selectedKeys: React.Key[],
+  personalRoleIds: React.Key[],
+  organizationRoleIds: React.Key[],
+  inheritedRoleIds: React.Key[],
+  inheritedRoleSourceMap: Record<string, string>,
   forceOrganizationRole: boolean,
   t: (key: string) => string,
-  onRemove: (newKeys: number[]) => void
+  onRemove: (newKeys: React.Key[]) => void
 ): TreeDataNode[] {
   return nodes.map(node => {
     const isDisabled = isNodeDisabled(node);
-    const isOrgRole = forceOrganizationRole || isDisabled || organizationRoleIds.includes(node.key as number);
+    const nodeKey = node.key;
+    const isInherited = inheritedRoleIds.some((key) => String(key) === String(nodeKey));
+    const inheritedRoleSource = inheritedRoleSourceMap[String(nodeKey)] || '';
+    const isExplicitlySelected = selectedKeys.some((key) => String(key) === String(nodeKey));
+    const isPersonalRole = personalRoleIds.some((key) => String(key) === String(nodeKey));
+    const isOrgRole = isExplicitlySelected && (forceOrganizationRole || isDisabled || organizationRoleIds.some((key) => String(key) === String(nodeKey)));
     const isLeafNode = !node.children || node.children.length === 0;
-    const canDelete = !isOrgRole;
+    const canDelete = forceOrganizationRole ? isExplicitlySelected : isPersonalRole;
 
     return {
       ...node,
@@ -130,12 +141,19 @@ function transformRightTreeRole(
         <div className="flex justify-between items-center w-full">
           <div className="flex items-center gap-2">
             <span>{typeof node.title === 'function' ? node.title(node) : node.title}</span>
+            {isLeafNode && isInherited && (
+              <Tooltip title={`${t('system.role.inheritedFrom')}：${inheritedRoleSource}`}>
+                <Tag className='font-mini' color="green">
+                  {t('system.role.inheritedRole')}
+                </Tag>
+              </Tooltip>
+            )}
             {isLeafNode && isOrgRole && (
               <Tag className='font-mini' color="orange">
                 {t('system.role.organizationRole')}
               </Tag>
             )}
-            {isLeafNode && !isOrgRole && (
+            {isLeafNode && isPersonalRole && (
               <Tag className='font-mini' color="blue">
                 {t('system.role.personalRole')}
               </Tag>
@@ -143,13 +161,22 @@ function transformRightTreeRole(
           </div>
           {canDelete && (
             <DeleteOutlined
-              className="cursor-pointer text-[var(--color-text-4)]"
+              className="cursor-pointer text-(--color-text-4)"
               onClick={e => {
                 e.stopPropagation();
-                const keysToRemove = getDeletableSubtreeKeys(node, organizationRoleIds);
-                let updated = selectedKeys.filter(key => !keysToRemove.includes(key));
-                updated = cleanSelectedKeys(updated, treeData);
-                onRemove(updated);
+                if (forceOrganizationRole) {
+                  const keysToRemove = getDeletableSubtreeKeys(node, organizationRoleIds);
+                  let updated = selectedKeys.filter(key => !keysToRemove.includes(key));
+                  updated = cleanSelectedKeys(updated, treeData);
+                  onRemove(updated);
+                  return;
+                }
+
+                const keysToRemove = getSubtreeKeys(node);
+                const updatedPersonalRoleIds = personalRoleIds.filter(
+                  (key) => !keysToRemove.some((removeKey) => String(removeKey) === String(key))
+                );
+                onRemove(updatedPersonalRoleIds);
               }}
             />
           )}
@@ -159,7 +186,10 @@ function transformRightTreeRole(
         node.children,
         treeData,
         selectedKeys,
+        personalRoleIds,
         organizationRoleIds,
+        inheritedRoleIds,
+        inheritedRoleSourceMap,
         forceOrganizationRole,
         t,
         onRemove
@@ -172,7 +202,10 @@ const TransferRightTree: React.FC<TransferRightTreeProps> = ({
   treeData,
   filteredRightData,
   selectedKeys,
+  personalRoleIds,
   organizationRoleIds,
+  inheritedRoleIds,
+  inheritedRoleSourceMap,
   rightSearchValue,
   rightExpandedKeys,
   disabled,
@@ -197,12 +230,15 @@ const TransferRightTree: React.FC<TransferRightTreeProps> = ({
       filteredRightData,
       treeData,
       selectedKeys,
+      personalRoleIds,
       organizationRoleIds,
+      inheritedRoleIds,
+      inheritedRoleSourceMap,
       forceOrganizationRole,
       t,
       onChange
     );
-  }, [filteredRightData, treeData, selectedKeys, onChange, organizationRoleIds, mode, onPermissionSetting, forceOrganizationRole, t]);
+  }, [filteredRightData, treeData, selectedKeys, personalRoleIds, onChange, organizationRoleIds, inheritedRoleIds, inheritedRoleSourceMap, mode, onPermissionSetting, forceOrganizationRole, t]);
 
   return (
     <div className="flex flex-col w-full">
@@ -215,7 +251,7 @@ const TransferRightTree: React.FC<TransferRightTreeProps> = ({
           allowClear
         />
       </div>
-      <div className="w-full p-1 max-h-[250px] overflow-auto">
+      <div className="max-h-62.5 w-full overflow-auto p-1">
         <Tree
           blockNode
           selectable={false}

@@ -70,16 +70,16 @@ export function useTreeData(t: (key: string) => string): UseTreeDataResult {
         group_id: undefined,
       });
     } else {
-      const selectedNode = findNodeByKey(filteredTreeData, selectedKeys[0] as number);
+      const selectedNode = findNodeByKey(filteredTreeData, selectedKeys[0]);
       if (selectedNode && selectedNode.hasAuth === false) {
         return;
       }
-      setSelectedTreeKeys(selectedKeys.map(Number));
+      setSelectedTreeKeys(selectedKeys);
       fetchUsersCallback({
         search: searchValue,
         page: 1,
         page_size: pageSize,
-        group_id: selectedKeys[0] as number,
+        group_id: selectedKeys[0],
       });
     }
   }, [filteredTreeData]);

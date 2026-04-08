@@ -5,7 +5,7 @@ const APPOINT_METRIC_IDS: string[] = [
   'cluster_node_count'
 ];
 
-const OBJECT_DEFAULT_ICON: string = 'ziyuan';
+const OBJECT_DEFAULT_ICON: string = 'cc-default_默认';
 
 const LEVEL_MAP: LevelMap = {
   critical: '#F43B2C',

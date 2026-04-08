@@ -8,6 +8,35 @@ import pkgutil
 from pathlib import Path
 
 
+def _import_modules_in_package(package_name: str, package_paths):
+    for _, module_name, _ in pkgutil.walk_packages(package_paths, prefix=f"{package_name}."):
+        base_name = module_name.split('.')[-1]
+        if base_name.startswith('_'):
+            continue
+
+        try:
+            importlib.import_module(module_name)
+        except Exception:  # noqa: BLE001 - 模块导入失败不应阻塞其他模块注册
+            # 忽略导入失败的模块,避免阻塞其他模块注册
+            # 实际使用时如需调试可记录日志
+            pass
+
+
+def _auto_register_from_package(package_name: str):
+    try:
+        package = importlib.import_module(package_name)
+    except ModuleNotFoundError:
+        return
+    except Exception:  # noqa: BLE001 - 扩展包失败不应阻塞主流程
+        return
+
+    package_paths = getattr(package, "__path__", None)
+    if not package_paths:
+        return
+
+    _import_modules_in_package(package_name, package_paths)
+
+
 def _auto_register_node_params():
     """
     自动发现并导入当前包下所有子模块中的 NodeParams 类，
@@ -16,23 +45,10 @@ def _auto_register_node_params():
     current_dir = Path(__file__).parent
     package_name = __name__
 
-    # 递归遍历当前包及所有子包
-    for importer, module_name, is_pkg in pkgutil.walk_packages(
-        [str(current_dir)], 
-        prefix=f"{package_name}."
-    ):
-        # 跳过私有模块、__init__ 和 base 模块
-        base_name = module_name.split('.')[-1]
-        if base_name.startswith('_'):
-            continue
+    _import_modules_in_package(package_name, [str(current_dir)])
 
-        try:
-            # 动态导入模块以触发类定义和 __init_subclass__
-            importlib.import_module(module_name)
-        except Exception:  # noqa: BLE001 - 模块导入失败不应阻塞其他模块注册
-            # 忽略导入失败的模块,避免阻塞其他模块注册
-            # 实际使用时如需调试可记录日志
-            pass
+    # enterprise 允许将 NodeParams 直接定义在扩展模块里，这里显式补齐注册链路。
+    _auto_register_from_package("apps.cmdb.enterprise")
 
 
 # 执行自动注册

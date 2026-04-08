@@ -1,7 +1,10 @@
 import importlib
 import inspect
-from typing import Dict, Any
+from typing import Any, Dict, Optional
+
 from sanic.log import logger
+
+from core.plugin_source_resolver import PluginResolution
 from core.yaml_reader import ExecutorConfig
 
 
@@ -12,10 +15,21 @@ class PluginExecutor:
     无论是 Job 还是 Protocol，都通过加载采集器类并调用 list_all_resources 方法来执行
     """
 
-    def __init__(self, model: str, executor_config: ExecutorConfig, params: Dict[str, Any]):
+    def __init__(
+        self,
+        model: str,
+        executor_config: ExecutorConfig,
+        params: Dict[str, Any],
+        plugin_resolution: Optional[PluginResolution] = None,
+        fallback_executor_config: Optional[ExecutorConfig] = None,
+        strict_enterprise: bool = False
+    ):
         self.model = model
         self.params = params
         self.executor_config = executor_config
+        self.plugin_resolution = plugin_resolution
+        self.fallback_executor_config = fallback_executor_config
+        self.strict_enterprise = strict_enterprise
 
     async def execute(self) -> Dict[str, Any]:
         """
@@ -24,14 +38,17 @@ class PluginExecutor:
         Returns:
             采集结果
         """
-        logger.info(f"Executing plugin: model_id={self.model}, executor={self.executor_config.executor_type}")
+        source = self.plugin_resolution.source if self.plugin_resolution else 'oss'
+        logger.info(
+            f'Executing plugin: model_id={self.model}, executor={self.executor_config.executor_type}, source={source}'
+        )
 
         # 1. 获取采集器信息
         collector_info = self.executor_config.get_collector_info()
         logger.info(f" Loading collector: {collector_info['module']}.{collector_info['class']}")
 
         # 2. 动态加载采集器
-        collector_class = self._load_collector(collector_info['module'], collector_info['class'])
+        collector_class = self._load_collector_with_fallback(collector_info)
 
         # 3. 为 Job 类型添加脚本路径参数 linux和win的脚本路径不一样
         if self.executor_config.is_job:
@@ -96,3 +113,32 @@ class PluginExecutor:
         except Exception as e:
             logger.error(f"❌ Failed to load collector: {e}")
             raise
+
+    def _load_collector_with_fallback(self, collector_info: Dict[str, str]):
+        try:
+            return self._load_collector(collector_info['module'], collector_info['class'])
+        except Exception as exc:
+            if not self.plugin_resolution or self.plugin_resolution.source != 'enterprise':
+                raise
+
+            if self.strict_enterprise:
+                logger.error(
+                    f'Strict enterprise mode enabled: model_id={self.model}, selected_source=enterprise, '
+                    f'strict=true, failure_reason={exc}'
+                )
+                raise
+
+            if not self.plugin_resolution.has_oss_fallback or not self.fallback_executor_config:
+                raise
+
+            logger.warning(
+                f'Plugin fallback triggered: model_id={self.model}, failed_source=enterprise, '
+                f'fallback_source=oss, failure_reason={exc}'
+            )
+
+            self.executor_config = self.fallback_executor_config
+            fallback_collector_info = self.executor_config.get_collector_info()
+            logger.info(
+                f"Retry loading fallback collector: {fallback_collector_info['module']}.{fallback_collector_info['class']}"
+            )
+            return self._load_collector(fallback_collector_info['module'], fallback_collector_info['class'])
