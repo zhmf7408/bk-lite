@@ -315,7 +315,7 @@ class AnsibleNATSService:
             task.task_id, "running", {"started_at": started_at}, self._now_iso()
         )
         logger.info(
-            "server config: "
+            "server config1: "
             "nats_servers=%r "
             "nats_protocol=%s "
             "nats_conn_timeout=%s "
@@ -481,6 +481,12 @@ class AnsibleNATSService:
                     _build_error(instance_id, "", f"task not found: {task_id}")
                 )
                 return
+            logger.info(
+                "task_query returning snapshot: task_id=%s status=%s instance_id=%s",
+                task_id,
+                task.get("status"),
+                instance_id,
+            )
             await msg.respond(
                 json.dumps(
                     {
