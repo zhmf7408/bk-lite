@@ -158,12 +158,12 @@ const Template: React.FC = () => {
           iconRender={(icon) => (
             <div className="w-10 h-10 min-w-[40px] rounded-lg flex items-center justify-center bg-[var(--color-fill-1)]">
               <img
-                src={`/app/assets/assetModelIcon/${icon}.svg`}
+                src={`/assets/icons/${icon}.svg`}
                 alt={icon}
                 className="w-8 h-8 object-contain"
                 onError={(e) => {
                   (e.target as HTMLImageElement).src =
-                    `/app/assets/assetModelIcon/${OBJECT_DEFAULT_ICON}.svg`;
+                    `/assets/icons/${OBJECT_DEFAULT_ICON}.svg`;
                 }}
               />
             </div>

@@ -210,7 +210,7 @@ const ObjectModal = forwardRef<ModalRef, ModalProps>(
             title={icon.split('_')[1] || icon}
           >
             <img
-              src={`/app/assets/assetModelIcon/${icon}.svg`}
+              src={`/assets/icons/${icon}.svg`}
               alt={icon}
               className="w-6 h-6"
               onError={(e) => {
@@ -282,12 +282,12 @@ const ObjectModal = forwardRef<ModalRef, ModalProps>(
               <div className="flex items-center gap-3">
                 <div className="w-12 h-12 flex items-center justify-center rounded-lg bg-[var(--color-fill-2)]">
                   <img
-                    src={`/app/assets/assetModelIcon/${selectedIcon}.svg`}
+                    src={`/assets/icons/${selectedIcon}.svg`}
                     alt={selectedIcon}
                     className="w-8 h-8"
                     onError={(e) => {
                       (e.target as HTMLImageElement).src =
-                        '/app/assets/assetModelIcon/cc-default_默认.svg';
+                        '/assets/icons/cc-default_默认.svg';
                     }}
                   />
                 </div>

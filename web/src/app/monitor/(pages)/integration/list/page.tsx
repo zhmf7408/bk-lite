@@ -417,12 +417,12 @@ const Integration = () => {
                       <div className="flex items-center space-x-4 my-2">
                         <div className="w-14 h-14 min-w-[56px] rounded-lg flex items-center justify-center bg-[var(--color-fill-1)]">
                           <img
-                            src={`/app/assets/assetModelIcon/${getIconByObjectName(objectName, objects)}.svg`}
+                            src={`/assets/icons/${getIconByObjectName(objectName, objects)}.svg`}
                             alt={objectName}
                             className="w-12 h-12"
                             onError={(e) => {
                               (e.target as HTMLImageElement).src =
-                                '/app/assets/assetModelIcon/cc-default_默认.svg';
+                                '/assets/icons/cc-default_默认.svg';
                             }}
                           />
                         </div>
