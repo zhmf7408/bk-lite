@@ -1,21 +1,29 @@
 # -*- mode: python ; coding: utf-8 -*-
 
+import importlib.util
 from pathlib import Path
 
 from PyInstaller.building.datastruct import Tree
 from PyInstaller.utils.hooks import collect_all, copy_metadata
 
 
-COLLECTIONS_ROOT = Path("build/pyinstaller-collections").resolve()
-ANSIBLE_WINDOWS_ROOT = (
-    COLLECTIONS_ROOT / "ansible_collections" / "ansible" / "windows"
-)
+SPEC_PATH = Path(globals().get("SPEC", "ansible-executor.spec")).resolve()
+SPEC_DIR = SPEC_PATH.parent
 
-if not ANSIBLE_WINDOWS_ROOT.exists():
-    raise SystemExit(
-        "Missing ansible.windows collection under build/pyinstaller-collections. "
-        "Run 'make package' so the collection is installed before PyInstaller builds the binary."
-    )
+BUILD_SUPPORT_SPEC = importlib.util.spec_from_file_location(
+    "build_support",
+    SPEC_DIR / "build_support.py",
+)
+if BUILD_SUPPORT_SPEC is None or BUILD_SUPPORT_SPEC.loader is None:
+    raise SystemExit(f"Unable to load build helper from {SPEC_DIR / 'build_support.py'}")
+BUILD_SUPPORT_MODULE = importlib.util.module_from_spec(BUILD_SUPPORT_SPEC)
+BUILD_SUPPORT_SPEC.loader.exec_module(BUILD_SUPPORT_MODULE)
+
+COLLECTIONS_ROOT = SPEC_DIR / "build" / "pyinstaller-collections"
+ANSIBLE_WINDOWS_ROOT = BUILD_SUPPORT_MODULE.ensure_ansible_windows_collection(
+    COLLECTIONS_ROOT,
+    cwd=SPEC_DIR,
+)
 
 ansible_datas, ansible_binaries, ansible_hiddenimports = collect_all("ansible")
 ansible_windows_datas = Tree(
