@@ -11,7 +11,7 @@ interface TriggerTypeConfigProps {
   onChange: (types: TriggerType[], config: TriggerConfig) => void;
   modelFields: { id: string; name: string; type: string }[];
   relatedModels: { id: string; name: string }[];
-  relationFields: { id: string; name: string; type: string }[];
+  relationFieldsByModel: Record<string, { id: string; name: string; type: string }[]>;
   dateFields: { id: string; name: string }[];
   triggerConfig: TriggerConfig;
   errors?: Record<string, string>;
@@ -88,7 +88,7 @@ const TriggerTypeConfigComp: React.FC<TriggerTypeConfigProps> = ({
   onChange,
   modelFields,
   relatedModels,
-  relationFields,
+  relationFieldsByModel,
   dateFields,
   triggerConfig,
   errors = {},
@@ -104,10 +104,25 @@ const TriggerTypeConfigComp: React.FC<TriggerTypeConfigProps> = ({
     () => modelFields.map((field) => field.id),
     [modelFields]
   );
-  const relationChangeAllFields = useMemo(
-    () => relationFields.map((field) => field.id),
-    [relationFields]
-  );
+  const normalizeRelationChangeModels = useMemo(() => {
+    const relationChange = triggerConfig.relation_change;
+    const byNewShape = relationChange?.related_models;
+    if (Array.isArray(byNewShape) && byNewShape.length > 0) {
+      return byNewShape
+        .filter((item) => !!item?.related_model)
+        .map((item) => ({
+          related_model: item.related_model,
+          fields: Array.isArray(item.fields) ? item.fields : [],
+        }));
+    }
+    if (relationChange?.related_model) {
+      return [{
+        related_model: relationChange.related_model,
+        fields: Array.isArray(relationChange.fields) ? relationChange.fields : [],
+      }];
+    }
+    return [];
+  }, [triggerConfig.relation_change]);
 
   const titleMap = {
     attribute_change: t('subscription.triggerTypeAttributeChange'),
@@ -130,7 +145,7 @@ const TriggerTypeConfigComp: React.FC<TriggerTypeConfigProps> = ({
         nextConfig.attribute_change = { fields: attributeChangeDefaultFields };
       }
       if (type === 'relation_change' && !nextConfig.relation_change) {
-        nextConfig.relation_change = { related_model: '', fields: [] };
+        nextConfig.relation_change = { related_models: [] };
       }
       if (type === 'expiration' && !nextConfig.expiration) {
         nextConfig.expiration = { time_field: '', days_before: 1 };
@@ -193,12 +208,8 @@ const TriggerTypeConfigComp: React.FC<TriggerTypeConfigProps> = ({
     }
 
     if (type === 'relation_change') {
-      const hasModelError = !!errors['relation_change.related_model'];
-      const hasFieldsError = !!errors['relation_change.fields'];
-      const selectedFields = triggerConfig.relation_change?.fields || [];
-      const allSelected = relationChangeAllFields.length > 0
-        && selectedFields.length === relationChangeAllFields.length;
-      const noneSelected = selectedFields.length === 0;
+      const hasModelError = !!errors['relation_change.related_models'];
+      const selectedModelIds = normalizeRelationChangeModels.map((item) => item.related_model);
 
       return (
         <div>
@@ -206,75 +217,124 @@ const TriggerTypeConfigComp: React.FC<TriggerTypeConfigProps> = ({
             <label style={labelStyle}>{t('subscription.relatedModel')}</label>
             <div style={fieldStyle}>
               <Select
+                mode="multiple"
                 style={{ width: '100%' }}
                 status={hasModelError ? 'error' : undefined}
                 placeholder={t('common.selectMsg')}
-                value={triggerConfig.relation_change?.related_model || undefined}
-                onChange={(related_model) =>
+                value={selectedModelIds}
+                onChange={(related_model_ids: string[]) => {
+                  const existingMap = new Map(
+                    normalizeRelationChangeModels.map((item) => [item.related_model, item.fields])
+                  );
+                  const nextRelatedModels = related_model_ids.map((related_model) => ({
+                    related_model,
+                    fields: existingMap.get(related_model) || [],
+                  }));
                   updateConfig({
                     relation_change: {
-                      related_model,
-                      fields: triggerConfig.relation_change?.fields || [],
+                      related_models: nextRelatedModels,
+                      related_model: nextRelatedModels[0]?.related_model,
+                      fields: nextRelatedModels[0]?.fields || [],
                     },
-                  })
-                }
+                  });
+                }}
                 options={relatedModels.map((i) => ({ label: i.name, value: i.id }))}
+                maxTagCount="responsive"
               />
               {hasModelError && (
                 <div style={{ color: '#ff4d4f', fontSize: 12, marginTop: 4 }}>
-                  {errors['relation_change.related_model']}
+                  {errors['relation_change.related_models']}
                 </div>
               )}
             </div>
           </div>
-          <div style={{ ...rowStyle, marginBottom: 0 }}>
-            <label style={labelStyle}>{t('subscription.relatedFields')}</label>
-            <div style={fieldStyle}>
-              <Select
-                mode="multiple"
-                style={{ width: '100%' }}
-                status={hasFieldsError ? 'error' : undefined}
-                placeholder={t('common.selectMsg')}
-                value={selectedFields}
-                onChange={(fields) =>
-                  updateConfig({
-                    relation_change: {
-                      related_model: triggerConfig.relation_change?.related_model || '',
-                      fields,
-                    },
-                  })
-                }
-                options={relationFields.map((i) => ({ label: i.name, value: i.id }))}
-                maxTagCount="responsive"
-                dropdownRender={(menu) => (
-                  <SelectAllDropdown
-                    menu={menu}
-                    allSelected={allSelected}
-                    noneSelected={noneSelected}
-                    onSelectAll={() => updateConfig({
-                      relation_change: {
-                        related_model: triggerConfig.relation_change?.related_model || '',
-                        fields: relationChangeAllFields,
-                      },
-                    })}
-                    onDeselectAll={() => updateConfig({
-                      relation_change: {
-                        related_model: triggerConfig.relation_change?.related_model || '',
-                        fields: [],
-                      },
-                    })}
-                    selectAllText={t('common.selectAll')}
-                    deselectAllText={t('common.deselectAll')}
-                  />
-                )}
-              />
-              {hasFieldsError && (
-                <div style={{ color: '#ff4d4f', fontSize: 12, marginTop: 4 }}>
-                  {errors['relation_change.fields']}
+          {normalizeRelationChangeModels.map((item) => {
+            const relationFields = relationFieldsByModel[item.related_model] || [];
+            const relationChangeAllFields = relationFields.map((field) => field.id);
+            const selectedFields = item.fields || [];
+            const allSelected = relationChangeAllFields.length > 0
+              && selectedFields.length === relationChangeAllFields.length;
+            const noneSelected = selectedFields.length === 0;
+            const modelFieldsError = errors[`relation_change.related_models.${item.related_model}.fields`];
+
+            return (
+              <div key={item.related_model} style={{ marginBottom: 12 }}>
+                <div style={{ fontSize: 12, color: '#666', marginBottom: 8 }}>
+                  {relatedModels.find((m) => m.id === item.related_model)?.name || item.related_model}
                 </div>
-              )}
-            </div>
-          </div>
+                <div style={{ ...rowStyle, marginBottom: 0 }}>
+                  <label style={labelStyle}>{t('subscription.relatedFields')}</label>
+                  <div style={fieldStyle}>
+                    <Select
+                      mode="multiple"
+                      style={{ width: '100%' }}
+                      status={modelFieldsError ? 'error' : undefined}
+                      placeholder={t('common.selectMsg')}
+                      value={selectedFields}
+                      onChange={(fields) => {
+                        const nextRelatedModels = normalizeRelationChangeModels.map((current) => (
+                          current.related_model === item.related_model
+                            ? { ...current, fields }
+                            : current
+                        ));
+                        updateConfig({
+                          relation_change: {
+                            related_models: nextRelatedModels,
+                            related_model: nextRelatedModels[0]?.related_model,
+                            fields: nextRelatedModels[0]?.fields || [],
+                          },
+                        });
+                      }}
+                      options={relationFields.map((field) => ({ label: field.name, value: field.id }))}
+                      maxTagCount="responsive"
+                      dropdownRender={(menu) => (
+                        <SelectAllDropdown
+                          menu={menu}
+                          allSelected={allSelected}
+                          noneSelected={noneSelected}
+                          onSelectAll={() => {
+                            const nextRelatedModels = normalizeRelationChangeModels.map((current) => (
+                              current.related_model === item.related_model
+                                ? { ...current, fields: relationChangeAllFields }
+                                : current
+                            ));
+                            updateConfig({
+                              relation_change: {
+                                related_models: nextRelatedModels,
+                                related_model: nextRelatedModels[0]?.related_model,
+                                fields: nextRelatedModels[0]?.fields || [],
+                              },
+                            });
+                          }}
+                          onDeselectAll={() => {
+                            const nextRelatedModels = normalizeRelationChangeModels.map((current) => (
+                              current.related_model === item.related_model
+                                ? { ...current, fields: [] }
+                                : current
+                            ));
+                            updateConfig({
+                              relation_change: {
+                                related_models: nextRelatedModels,
+                                related_model: nextRelatedModels[0]?.related_model,
+                                fields: nextRelatedModels[0]?.fields || [],
+                              },
+                            });
+                          }}
+                          selectAllText={t('common.selectAll')}
+                          deselectAllText={t('common.deselectAll')}
+                        />
+                      )}
+                    />
+                    {modelFieldsError && (
+                      <div style={{ color: '#ff4d4f', fontSize: 12, marginTop: 4 }}>
+                        {modelFieldsError}
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </div>
+            );
+          })}
         </div>
       );
     }

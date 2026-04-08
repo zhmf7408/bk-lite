@@ -83,6 +83,49 @@ class SubscriptionTriggerService:
         self.model_name = self.model_info.get("model_name") or rule.model_id
         self.attribute_merge_mode = self.ATTRIBUTE_MERGE_MODE
 
+    @staticmethod
+    def _normalize_relation_change_models(
+        relation_config: dict[str, Any] | None,
+    ) -> list[dict[str, Any]]:
+        relation_config = relation_config or {}
+        related_models = relation_config.get("related_models")
+        normalized: list[dict[str, Any]] = []
+        if isinstance(related_models, list):
+            for item in related_models:
+                if not isinstance(item, dict):
+                    continue
+                related_model = item.get("related_model")
+                if not related_model:
+                    continue
+                fields = item.get("fields", [])
+                normalized.append(
+                    {
+                        "related_model": related_model,
+                        "fields": fields if isinstance(fields, list) else [],
+                    }
+                )
+        if normalized:
+            deduplicated: list[dict[str, Any]] = []
+            seen: set[str] = set()
+            for item in normalized:
+                model_id = item["related_model"]
+                if model_id in seen:
+                    continue
+                seen.add(model_id)
+                deduplicated.append(item)
+            return deduplicated
+
+        related_model = relation_config.get("related_model")
+        if related_model:
+            fields = relation_config.get("fields", [])
+            return [
+                {
+                    "related_model": related_model,
+                    "fields": fields if isinstance(fields, list) else [],
+                }
+            ]
+        return []
+
     def process(self) -> list[TriggerEvent]:
         # 固定检查上界，确保查询窗口稳定在 (last_check_time, checkpoint]。
         checkpoint = timezone.now()
@@ -109,15 +152,20 @@ class SubscriptionTriggerService:
         instance_ids = [
             int(i.get("_id")) for i in instances if i.get("_id") is not None
         ]
-        relation_map: dict[int, list[int]] = {}
+        relation_maps_by_model: dict[str, dict[int, list[int]]] = {}
         if TriggerType.RELATION_CHANGE.value in self.rule.trigger_types:
-            related_model = (
-                self.rule.trigger_config.get("relation_change", {}) or {}
-            ).get("related_model")
-            if related_model:
-                relation_map = self._get_relation_instances(instance_ids, related_model)
+            relation_models = self._normalize_relation_change_models(
+                self.rule.trigger_config.get("relation_change", {})
+            )
+            for relation_model in relation_models:
+                related_model = relation_model.get("related_model")
+                if not related_model:
+                    continue
+                relation_maps_by_model[related_model] = self._get_relation_instances(
+                    instance_ids, related_model
+                )
 
-        current_snapshot = self._build_current_snapshot(instances, relation_map)
+        current_snapshot = self._build_current_snapshot(instances, relation_maps_by_model)
 
         if TriggerType.ATTRIBUTE_CHANGE.value in self.rule.trigger_types:
             self.events.extend(self._check_attribute_change(instances, checkpoint))
@@ -206,17 +254,25 @@ class SubscriptionTriggerService:
         return relation_map
 
     def _build_current_snapshot(
-        self, instances: list[dict[str, Any]], relations: dict[int, list[int]]
+        self,
+        instances: list[dict[str, Any]],
+        relations_by_model: dict[str, dict[int, list[int]]],
     ) -> dict[str, Any]:
-        related_model = (self.rule.trigger_config.get("relation_change", {}) or {}).get(
-            "related_model", ""
+        relation_models = self._normalize_relation_change_models(
+            self.rule.trigger_config.get("relation_change", {})
         )
         snapshot_relations: dict[str, dict[str, list[int]]] = {}
         for inst in instances:
             inst_id = int(inst.get("_id"))
-            snapshot_relations[str(inst_id)] = (
-                {related_model: relations.get(inst_id, [])} if related_model else {}
-            )
+            inst_relations: dict[str, list[int]] = {}
+            for relation_model in relation_models:
+                related_model = relation_model.get("related_model")
+                if not related_model:
+                    continue
+                inst_relations[related_model] = (
+                    relations_by_model.get(related_model, {}).get(inst_id, [])
+                )
+            snapshot_relations[str(inst_id)] = inst_relations
         return {
             "instances": [
                 int(i.get("_id")) for i in instances if i.get("_id") is not None
@@ -541,16 +597,15 @@ class SubscriptionTriggerService:
     ) -> list[TriggerEvent]:
         # 关联变化关注两类事件：关联实例新增/删除，及已关联实例的属性变化。
         relation_config = self.rule.trigger_config.get("relation_change", {}) or {}
-        related_model = relation_config.get("related_model", "")
-        watch_fields = set(relation_config.get("fields", []) or [])
-        if not related_model:
+        relation_models = self._normalize_relation_change_models(relation_config)
+        if not relation_models:
             logger.info(f"[Subscription] 未配置关联模型，跳过 rule_id={self.rule.id}")
             return []
 
         previous_relations = (self.rule.snapshot_data or {}).get("relations", {})
         current_relations = current_snapshot.get("relations", {})
-        all_instance_ids = set(previous_relations.keys()) | set(
-            current_relations.keys()
+        all_instance_ids = sorted(
+            set(previous_relations.keys()) | set(current_relations.keys())
         )
         inst_name_map = {
             str(int(inst.get("_id"))): (
@@ -561,70 +616,78 @@ class SubscriptionTriggerService:
         }
         now_str = timezone.now().isoformat()
         events: list[TriggerEvent] = []
-        related_change_map, related_record_count = self._build_related_change_map(
-            related_model=related_model,
-            watch_fields=watch_fields,
-            checkpoint=checkpoint,
-        )
-        related_inst_name_map = self._build_related_inst_name_map(
-            related_model=related_model,
-            previous_relations=previous_relations,
-            current_relations=current_relations,
-        )
+        total_related_record_count = 0
 
-        for inst_id_str in all_instance_ids:
-            prev_related = set(
-                (previous_relations.get(inst_id_str, {}) or {}).get(related_model, [])
-            )
-            curr_related = set(
-                (current_relations.get(inst_id_str, {}) or {}).get(related_model, [])
-            )
-            added = sorted(list(curr_related - prev_related))
-            removed = sorted(list(prev_related - curr_related))
-            stable_related = sorted(list(prev_related & curr_related))
-
-            summary_parts = []
-            if added:
-                summary_parts.append(f"新增关联: {added}")
-            if removed:
-                summary_parts.append(f"删除关联: {removed}")
-
-            changed_related_parts = []
-            for related_inst_id in stable_related:
-                change_summaries = related_change_map.get(related_inst_id, [])
-                if not change_summaries:
-                    continue
-                merged_summary = " | ".join(change_summaries)
-                related_inst_name = related_inst_name_map.get(
-                    related_inst_id, str(related_inst_id)
-                )
-                changed_related_parts.append(
-                    f"关联实例[{related_inst_name}]属性变化: {merged_summary}"
-                )
-            if changed_related_parts:
-                summary_parts.extend(changed_related_parts)
-
-            if not summary_parts:
+        for relation_model in relation_models:
+            related_model = relation_model.get("related_model")
+            if not related_model:
                 continue
-
-            events.append(
-                TriggerEvent(
-                    rule_id=self.rule.id,
-                    rule_name=self.rule.name,
-                    model_id=self.rule.model_id,
-                    model_name=self.model_name,
-                    trigger_type=TriggerType.RELATION_CHANGE.value,
-                    inst_id=int(inst_id_str),
-                    inst_name=inst_name_map.get(inst_id_str, inst_id_str),
-                    change_summary=f"关联模型[{related_model}]变化: {'; '.join(summary_parts)}",
-                    triggered_at=now_str,
-                )
+            watch_fields = set(relation_model.get("fields", []) or [])
+            related_change_map, related_record_count = self._build_related_change_map(
+                related_model=related_model,
+                watch_fields=watch_fields,
+                checkpoint=checkpoint,
             )
+            total_related_record_count += related_record_count
+            related_inst_name_map = self._build_related_inst_name_map(
+                related_model=related_model,
+                previous_relations=previous_relations,
+                current_relations=current_relations,
+            )
+
+            for inst_id_str in all_instance_ids:
+                prev_related = set(
+                    (previous_relations.get(inst_id_str, {}) or {}).get(related_model, [])
+                )
+                curr_related = set(
+                    (current_relations.get(inst_id_str, {}) or {}).get(related_model, [])
+                )
+                added = sorted(list(curr_related - prev_related))
+                removed = sorted(list(prev_related - curr_related))
+                stable_related = sorted(list(prev_related & curr_related))
+
+                summary_parts = []
+                if added:
+                    summary_parts.append(f"新增关联: {added}")
+                if removed:
+                    summary_parts.append(f"删除关联: {removed}")
+
+                changed_related_parts = []
+                for related_inst_id in stable_related:
+                    change_summaries = related_change_map.get(related_inst_id, [])
+                    if not change_summaries:
+                        continue
+                    merged_summary = " | ".join(change_summaries)
+                    related_inst_name = related_inst_name_map.get(
+                        related_inst_id, str(related_inst_id)
+                    )
+                    changed_related_parts.append(
+                        f"关联实例[{related_inst_name}]属性变化: {merged_summary}"
+                    )
+                if changed_related_parts:
+                    summary_parts.extend(changed_related_parts)
+
+                if not summary_parts:
+                    continue
+
+                events.append(
+                    TriggerEvent(
+                        rule_id=self.rule.id,
+                        rule_name=self.rule.name,
+                        model_id=self.rule.model_id,
+                        model_name=self.model_name,
+                        trigger_type=TriggerType.RELATION_CHANGE.value,
+                        inst_id=int(inst_id_str),
+                        inst_name=inst_name_map.get(inst_id_str, inst_id_str),
+                        change_summary=f"关联模型[{related_model}]变化: {'; '.join(summary_parts)}",
+                        triggered_at=now_str,
+                    )
+                )
         logger.info(
             "[Subscription] 关联变化检测完成 "
-            f"rule_id={self.rule.id}, related_model={related_model}, "
-            f"instances_compared={len(all_instance_ids)}, related_record_count={related_record_count}, "
-            f"watch_fields={sorted(list(watch_fields)) if watch_fields else []}, events_count={len(events)}"
+            f"rule_id={self.rule.id}, relation_models_count={len(relation_models)}, "
+            f"instances_compared={len(all_instance_ids)}, related_record_count={total_related_record_count}, "
+            f"events_count={len(events)}"
         )
         return events
 
