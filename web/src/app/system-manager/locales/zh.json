@@ -356,6 +356,7 @@
       "rename": "重命名",
       "renameSuccess": "重命名成功",
       "organizationRoles": "组织角色",
+      "allowInheritRoles": "允许子组织继承角色",
       "form": {
         "name": "名称"
       },
@@ -373,6 +374,8 @@
       "name": "名称",
       "personalRole": "个人角色",
       "organizationRole": "组织角色",
+      "inheritedRole": "继承角色",
+      "inheritedFrom": "继承自",
       "users": "用户",
       "organizations": "组织",
       "title": "角色",

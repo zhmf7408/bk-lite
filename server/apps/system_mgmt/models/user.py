@@ -64,6 +64,7 @@ class Group(models.Model):
     external_id = models.CharField(max_length=100, null=True, blank=True)
     roles = models.ManyToManyField("Role", blank=True, verbose_name="角色列表")
     is_virtual = models.BooleanField(default=False, verbose_name="是否虚拟组")
+    allow_inherit_roles = models.BooleanField(default=False, verbose_name="允许子组织继承角色")
 
     class Meta:
         unique_together = ("name", "parent_id")
@@ -77,4 +78,5 @@ class Group(models.Model):
             "parent_id",
             "external_id",
             "is_virtual",
+            "allow_inherit_roles",
         ]

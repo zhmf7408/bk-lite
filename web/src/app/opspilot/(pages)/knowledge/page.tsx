@@ -67,6 +67,7 @@ const KnowledgePage = () => {
         setCurrentPage(pageToFetch + 1);
       }
     } catch (error) {
+      setHasMore(false);
       if (!isSilentRequestError(error) && !isSessionExpiredState()) {
         message.error(t('common.fetchFailed'));
       }

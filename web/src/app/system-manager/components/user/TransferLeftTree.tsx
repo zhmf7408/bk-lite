@@ -8,10 +8,45 @@ import {
   isNodeDisabled
 } from '@/app/system-manager/utils/roleTreeUtils';
 
+const hasKey = (keys: React.Key[], targetKey: React.Key) =>
+  keys.some((key) => String(key) === String(targetKey));
+
+const getLeafRoleKeys = (node: TreeDataNode): React.Key[] => {
+  if (!node.children || node.children.length === 0) {
+    return [node.key];
+  }
+
+  return node.children.flatMap((child) => getLeafRoleKeys(child));
+};
+
+const getRoleNodeCheckState = (
+  node: TreeDataNode,
+  personalRoleIds: React.Key[],
+  organizationRoleIds: React.Key[]
+) => {
+  const leafKeys = getLeafRoleKeys(node);
+  const selectedLeafKeys = leafKeys.filter(
+    (key) => hasKey(personalRoleIds, key) || hasKey(organizationRoleIds, key)
+  );
+
+  const checked = leafKeys.length > 0 && selectedLeafKeys.length === leafKeys.length;
+  const indeterminate = selectedLeafKeys.length > 0 && selectedLeafKeys.length < leafKeys.length;
+
+  if (!node.children || node.children.length === 0) {
+    return {
+      checked: hasKey(personalRoleIds, node.key),
+      indeterminate: !hasKey(personalRoleIds, node.key) && hasKey(organizationRoleIds, node.key),
+    };
+  }
+
+  return { checked, indeterminate };
+};
+
 interface TransferLeftTreeProps {
   treeData: TreeDataNode[];
-  selectedKeys: number[];
-  organizationRoleIds: number[];
+  selectedKeys: React.Key[];
+  personalRoleIds: React.Key[];
+  organizationRoleIds: React.Key[];
   leftSearchValue: string;
   leftExpandedKeys: React.Key[];
   disabled: boolean;
@@ -21,13 +56,13 @@ interface TransferLeftTreeProps {
   t: (key: string) => string;
   onSearchChange: (value: string) => void;
   onExpandedKeysChange: (keys: React.Key[]) => void;
-  onChange: (keys: number[]) => void;
+  onChange: (keys: React.Key[]) => void;
   onSubGroupToggle: (node: TreeDataNode, includeAll: boolean) => void;
 }
 
 function renderTreeNodeTitle(
   node: TreeDataNode,
-  selectedKeys: number[],
+  selectedKeys: React.Key[],
   enableSubGroupSelect: boolean,
   onSubGroupToggle: (node: TreeDataNode, includeAll: boolean) => void,
   t: (key: string) => string
@@ -60,30 +95,76 @@ function renderTreeNodeTitle(
 
 function transformLeftTreeData(
   nodes: TreeDataNode[],
-  selectedKeys: number[],
+  selectedKeys: React.Key[],
   enableSubGroupSelect: boolean,
   onSubGroupToggle: (node: TreeDataNode, includeAll: boolean) => void,
-  t: (key: string) => string,
-  organizationRoleIds: number[]
+  t: (key: string) => string
 ): TreeDataNode[] {
   return nodes.map(node => ({
     ...node,
     title: renderTreeNodeTitle(node, selectedKeys, enableSubGroupSelect, onSubGroupToggle, t),
-    disabled: node.disabled || organizationRoleIds.includes(node.key as number),
     children: node.children ? transformLeftTreeData(
       node.children,
       selectedKeys,
       enableSubGroupSelect,
       onSubGroupToggle,
-      t,
-      organizationRoleIds
+      t
     ) : undefined
   }));
+}
+
+function transformRoleTreeData(
+  nodes: TreeDataNode[],
+  personalRoleIds: React.Key[],
+  organizationRoleIds: React.Key[],
+  disabled: boolean,
+  loading: boolean,
+  onChange: (keys: React.Key[]) => void
+): TreeDataNode[] {
+  return nodes.map((node) => {
+    const { checked, indeterminate } = getRoleNodeCheckState(node, personalRoleIds, organizationRoleIds);
+    const leafKeys = getLeafRoleKeys(node);
+    const toggleNode = (nextChecked: boolean) => {
+      if (disabled || loading) {
+        return;
+      }
+
+      const nextPersonalRoleIds = nextChecked
+        ? [...new Map([...personalRoleIds, ...leafKeys].map((key) => [String(key), key])).values()]
+        : personalRoleIds.filter((key) => !leafKeys.some((leafKey) => String(leafKey) === String(key)));
+
+      onChange(nextPersonalRoleIds);
+    };
+
+    return {
+      ...node,
+      disableCheckbox: true,
+      title: (
+        <div className="flex items-center gap-2" onClick={(event) => event.stopPropagation()}>
+          <Checkbox
+            checked={checked}
+            indeterminate={indeterminate}
+            onChange={(event) => {
+              event.stopPropagation();
+              toggleNode(event.target.checked);
+            }}
+            onClick={(event) => event.stopPropagation()}
+            disabled={disabled || loading}
+          />
+          <span>{typeof node.title === 'function' ? node.title(node) : node.title}</span>
+        </div>
+      ),
+      children: node.children
+        ? transformRoleTreeData(node.children, personalRoleIds, organizationRoleIds, disabled, loading, onChange)
+        : undefined,
+    };
+  });
 }
 
 const TransferLeftTree: React.FC<TransferLeftTreeProps> = ({
   treeData,
   selectedKeys,
+  personalRoleIds,
   organizationRoleIds,
   leftSearchValue,
   leftExpandedKeys,
@@ -104,26 +185,32 @@ const TransferLeftTree: React.FC<TransferLeftTreeProps> = ({
         selectedKeys,
         enableSubGroupSelect,
         onSubGroupToggle,
-        t,
-        organizationRoleIds
+        t
       );
     }
-    return processLeftTreeData(treeData, organizationRoleIds);
-  }, [treeData, selectedKeys, enableSubGroupSelect, onSubGroupToggle, t, mode, organizationRoleIds]);
+
+    if (mode === 'role') {
+      return transformRoleTreeData(
+        treeData,
+        personalRoleIds,
+        organizationRoleIds,
+        disabled,
+        loading,
+        onChange
+      );
+    }
+
+    return processLeftTreeData(treeData);
+  }, [treeData, selectedKeys, enableSubGroupSelect, onSubGroupToggle, t, mode, personalRoleIds, organizationRoleIds, disabled, loading, onChange]);
 
   const handleCheck = React.useCallback((checkedKeys: React.Key[] | { checked: React.Key[]; halfChecked: React.Key[] }, info: { checkedNodes: TreeDataNode[] }) => {
     if (disabled || loading) return;
 
-    const validCheckedNodes = info.checkedNodes.filter((node) =>
-      !isNodeDisabled(node) && !organizationRoleIds.includes(node.key as number)
-    );
-    const newKeys = validCheckedNodes.map((node) => node.key as number);
+    const validCheckedNodes = info.checkedNodes.filter((node) => !isNodeDisabled(node));
+    const newKeys = validCheckedNodes.map((node) => node.key);
 
-    const existingOrgRoles = selectedKeys.filter(key => organizationRoleIds.includes(key));
-    const finalKeys = [...new Set([...newKeys, ...existingOrgRoles])];
-
-    onChange(finalKeys);
-  }, [disabled, loading, organizationRoleIds, selectedKeys, onChange]);
+    onChange(newKeys);
+  }, [disabled, loading, onChange]);
 
   return (
     <div className="flex flex-col">
@@ -136,18 +223,18 @@ const TransferLeftTree: React.FC<TransferLeftTreeProps> = ({
           allowClear
         />
       </div>
-      <div className="p-1 max-h-[250px] overflow-auto">
+      <div className="overflow-auto p-1" style={{ maxHeight: 250 }}>
         <Tree
           blockNode
-          checkable
+          checkable={mode === 'group'}
           selectable={false}
           checkStrictly={mode === 'group'}
           expandedKeys={leftExpandedKeys}
           onExpand={(keys) => onExpandedKeysChange(keys)}
-          checkedKeys={mode === 'group' ? { checked: selectedKeys, halfChecked: [] } : selectedKeys}
+          checkedKeys={mode === 'group' ? { checked: selectedKeys, halfChecked: [] } : undefined}
           treeData={processedTreeData}
           disabled={disabled || loading}
-          onCheck={handleCheck}
+          onCheck={mode === 'group' ? handleCheck : undefined}
         />
       </div>
     </div>

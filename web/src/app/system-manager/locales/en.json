@@ -359,7 +359,8 @@
       "form": {
         "name": "Organization Name"
       },
-      "organizationRolesTooltip": "Configure unified role permissions for all users under this organization level"
+      "organizationRolesTooltip": "Configure unified role permissions for all users under this organization level",
+      "allowInheritRoles": "Allow child groups to inherit roles"
     },
     "role": {
       "organizationTip": "Note: When selecting organization nodes, only the current level is effective. Multiple organizations can be selected for batch authorization.",
@@ -373,6 +374,8 @@
       "name": "Name",
       "personalRole": "Personal Role",
       "organizationRole": "Organization Role",
+      "inheritedRole": "Inherited Role",
+      "inheritedFrom": "Inherited from",
       "users": "Users",
       "organizations": "Organizations",
       "title": "Role",

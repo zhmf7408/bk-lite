@@ -8,7 +8,7 @@ export const useGroupApi = () => {
     const data = await post('/system_mgmt/group/create_group/', params);
     return data;
   }
-  async function updateGroup(params: { group_id: string | number; group_name: string; role_ids: number[] }) {
+  async function updateGroup(params: { group_id: string | number; group_name: string; role_ids: number[]; allow_inherit_roles?: boolean }) {
     return await post('/system_mgmt/group/update_group/', params);
   }
 
@@ -20,11 +20,23 @@ export const useGroupApi = () => {
     return await post('/system_mgmt/role/get_groups_roles/', params);
   }
 
+  async function getGroupDetailWithRoles(params: { group_id: number | string }): Promise<{
+    group_id: number;
+    allow_inherit_roles: boolean;
+    own_role_ids: number[];
+    inherited_role_ids: number[];
+    inherited_role_source: string;
+    inherited_role_source_map: Record<string, string>;
+  }> {
+    return await post('/system_mgmt/group/get_group_detail_with_roles/', params);
+  }
+
   return {
     getTeamData,
     addTeamData,
     updateGroup,
     deleteTeam,
-    getGroupRoles
+    getGroupRoles,
+    getGroupDetailWithRoles,
   };
 };

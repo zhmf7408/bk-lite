@@ -35,7 +35,7 @@ export function convertGroupsToTreeData(groups: OriginalGroup[]): ExtendedTreeDa
  */
 export function nodeExistsInTree(tree: ExtendedTreeDataNode[], key: React.Key): boolean {
   for (const node of tree) {
-    if (node.key === key) return true;
+    if (String(node.key) === String(key)) return true;
     if (node.children && node.children.length > 0) {
       if (nodeExistsInTree(node.children, key)) return true;
     }
@@ -46,9 +46,9 @@ export function nodeExistsInTree(tree: ExtendedTreeDataNode[], key: React.Key): 
 /**
  * Find a node by key in the tree
  */
-export function findNodeByKey(tree: ExtendedTreeDataNode[], key: number): ExtendedTreeDataNode | undefined {
+export function findNodeByKey(tree: ExtendedTreeDataNode[], key: React.Key): ExtendedTreeDataNode | undefined {
   for (const node of tree) {
-    if (node.key === key) return node;
+    if (String(node.key) === String(key)) return node;
     if (node.children) {
       const found = findNodeByKey(node.children, key);
       if (found) return found;
@@ -62,7 +62,7 @@ export function findNodeByKey(tree: ExtendedTreeDataNode[], key: number): Extend
  */
 export function filterTreeBySearch(data: ExtendedTreeDataNode[], searchQuery: string): ExtendedTreeDataNode[] {
   if (!searchQuery) return data;
-  
+
   return data.reduce<ExtendedTreeDataNode[]>((acc, item) => {
     const children = item.children ? filterTreeBySearch(item.children, searchQuery) : [];
     if ((item.title as string).toLowerCase().includes(searchQuery.toLowerCase()) || children.length) {
