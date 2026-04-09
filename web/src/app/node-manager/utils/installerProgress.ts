@@ -155,6 +155,19 @@ export const normalizeControllerInstallRows = (
 };
 
 export const INSTALLER_STEP_LABEL_KEYS: InstallerStepLabelMap = {
+  credential_check: 'node-manager.cloudregion.node.stepCredentialCheck',
+  run: 'node-manager.cloudregion.node.stepRunInstaller',
+  connectivity_check: 'node-manager.cloudregion.node.stepWaitForNodeConnection',
+  stop_run: 'node-manager.cloudregion.node.stepStopControllerService',
+  delete_dir: 'node-manager.cloudregion.node.stepRemoveInstallationDirectory',
+  delete_node: 'node-manager.cloudregion.node.stepRemoveNodeRecord',
+  unzip: 'node-manager.cloudregion.node.stepExtractCollectorPackage',
+  set_executable: 'node-manager.cloudregion.node.stepSetExecutablePermissions',
+  prepare: 'node-manager.cloudregion.node.stepPreparePackage',
+  dispatch_command: 'node-manager.cloudregion.node.stepSubmitCollectorAction',
+  consume_ack: 'node-manager.cloudregion.node.stepWaitForSidecarAck',
+  execute_command: 'node-manager.cloudregion.node.stepExecuteCollectorAction',
+  callback_or_timeout: 'node-manager.cloudregion.node.stepAwaitCollectorResult',
   fetch_session: 'node-manager.cloudregion.node.installerStepFetchSession',
   prepare_dirs: 'node-manager.cloudregion.node.installerStepPrepareDirs',
   prepare_directories:

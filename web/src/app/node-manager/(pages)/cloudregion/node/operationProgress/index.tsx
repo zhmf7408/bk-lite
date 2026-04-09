@@ -98,6 +98,11 @@ const renderInstallerProgressSummary = (
   );
 };
 
+const DEFAULT_POLL_INTERVAL = 5000;
+const CONTROLLER_INSTALL_ACTIVE_POLL_INTERVAL = 2000;
+const CONTROLLER_INSTALL_CONNECTIVITY_POLL_INTERVAL = 3000;
+const AUTO_ADVANCE_DELAY = 5000;
+
 const OperationProgress: React.FC<OperationProgressProps> = ({
   operationType,
   taskIds,
@@ -524,27 +529,59 @@ const OperationProgress: React.FC<OperationProgressProps> = ({
   useEffect(() => {
     if (taskIds && !isLoading) {
       getNodeList('refresh');
-      timerRef.current = setInterval(() => {
-        getNodeList('timer');
-      }, 5000);
+      schedulePolling();
       return () => {
         clearTimer();
       };
     }
-  }, [taskIds, isLoading]);
+  }, [taskIds, isLoading, isInstallController, installMethod]);
 
   const clearTimer = () => {
     if (timerRef.current) clearInterval(timerRef.current);
     timerRef.current = null;
   };
 
-  // 重新启动轮询（重试成功后调用）
-  const restartPolling = () => {
+  const getPollingInterval = (rows?: ControllerInstallProgressRow[]) => {
+    if (!isInstallController || installMethod !== 'remoteInstall') {
+      return DEFAULT_POLL_INTERVAL;
+    }
+
+    const currentRows = rows ?? tableData;
+    const runningRows = currentRows.filter((item) => item.status === 'running');
+
+    if (runningRows.length === 0) {
+      return DEFAULT_POLL_INTERVAL;
+    }
+
+    const hasActiveInstallerStep = runningRows.some((item) => {
+      const normalizedResult = normalizeControllerInstallResult(item.result);
+      const installerProgress = normalizedResult?.installer_progress;
+
+      if (installerProgress?.current_status === 'running') {
+        return true;
+      }
+
+      const steps = normalizedResult?.steps || [];
+      const runningStep = [...steps].reverse().find((step) => step.status === 'running');
+      return !!runningStep && runningStep.action !== 'connectivity_check';
+    });
+
+    return hasActiveInstallerStep
+      ? CONTROLLER_INSTALL_ACTIVE_POLL_INTERVAL
+      : CONTROLLER_INSTALL_CONNECTIVITY_POLL_INTERVAL;
+  };
+
+  const schedulePolling = (rows?: ControllerInstallProgressRow[]) => {
     clearTimer();
-    getNodeList('refresh');
     timerRef.current = setInterval(() => {
       getNodeList('timer');
-    }, 5000);
+    }, getPollingInterval(rows));
+  };
+
+  // 重新启动轮询（重试成功后调用）
+  const restartPolling = () => {
+    getNodeList('refresh');
+    schedulePolling();
   };
 
   const checkDetail = (type: string, row: ControllerInstallProgressRow) => {
@@ -625,6 +662,10 @@ const OperationProgress: React.FC<OperationProgressProps> = ({
       );
       setTableData(newTableData);
 
+      if (refreshType === 'timer' || refreshType === 'refresh') {
+        schedulePolling(newTableData);
+      }
+
       // 如果弹窗正在查看某个节点的日志,实时更新该节点的日志（仅远程安装模式）
       // 使用 ref 获取最新值，避免闭包问题
       const viewingNode = currentViewingNodeRef.current;
@@ -661,10 +702,10 @@ const OperationProgress: React.FC<OperationProgressProps> = ({
         );
         if (allSuccess && newTableData.length > 0) {
           clearTimer();
-          // 延迟2秒再跳转
+          // 延迟5秒再跳转
           setTimeout(() => {
             onNext();
-          }, 2000);
+          }, AUTO_ADVANCE_DELAY);
         }
       } else {
         // 组件操作：根据返回的 status 和 summary 判断
@@ -677,10 +718,10 @@ const OperationProgress: React.FC<OperationProgressProps> = ({
             taskSummary.total === taskSummary.success &&
             taskSummary.total > 0
           ) {
-            // 延迟2秒再跳转
+            // 延迟5秒再跳转
             setTimeout(() => {
               onNext();
-            }, 2000);
+            }, AUTO_ADVANCE_DELAY);
           }
         }
       }

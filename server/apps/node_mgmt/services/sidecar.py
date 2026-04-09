@@ -320,26 +320,26 @@ class Sidecar:
                                 build_step(
                                     "consume_ack",
                                     "success",
-                                    "Action delivered to sidecar",
+                                    "Sidecar acknowledged action",
                                     timestamp=now_iso(),
                                     details=normalize_task_details(
                                         {
                                             "delivered": True,
                                             "collector_id": action_item.get("collector_id"),
                                         },
-                                        message="Action delivered to sidecar",
+                                        message="Sidecar acknowledged action",
                                     ),
                                 ),
                                 build_step(
                                     "execute_command",
                                     "running",
-                                    "Collector command is being executed by sidecar",
+                                    "Execute collector action",
                                     timestamp=now_iso(),
                                 ),
                             ],
                         },
                         overall_status="running",
-                        final_message="Collector action consumed by sidecar",
+                        final_message="Collector action acknowledged by sidecar",
                     )
                     task_node.save(update_fields=["status", "result"])
 
@@ -355,13 +355,13 @@ class Sidecar:
                             result,
                             "consume_ack",
                             "success",
-                            "Action delivered to sidecar",
+                            "Sidecar acknowledged action",
                             details=normalize_task_details(
                                 {
                                     "delivered": True,
                                     "collector_id": action_item.get("collector_id"),
                                 },
-                                message="Action delivered to sidecar",
+                                message="Sidecar acknowledged action",
                             ),
                             timestamp=now_iso(),
                         )
@@ -375,7 +375,7 @@ class Sidecar:
                             build_step(
                                 "execute_command",
                                 "running",
-                                "Collector command is being executed by sidecar",
+                                "Execute collector action",
                                 timestamp=now_iso(),
                             )
                         )
@@ -384,7 +384,7 @@ class Sidecar:
                     task_node.result = apply_result_envelope(
                         result,
                         overall_status="running",
-                        final_message="Collector action consumed by sidecar",
+                        final_message="Collector action acknowledged by sidecar",
                     )
                     task_node.save(update_fields=["result"])
 

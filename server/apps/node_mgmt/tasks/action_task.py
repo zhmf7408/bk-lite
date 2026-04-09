@@ -188,9 +188,7 @@ def converge_collector_action_task_for_node(node_id):
 
         expected_node_status = _is_expected_status(task_obj.action, collector_status)
         if expected_node_status in ["success", "error"]:
-            step_message = (
-                "Collector command execution finished" if expected_node_status == "success" else (collector_message or "Collector action failed")
-            )
+            step_message = "Collector action completed" if expected_node_status == "success" else (collector_message or "Collector action failed")
             final_message = "Collector action completed" if expected_node_status == "success" else (collector_message or "Collector action failed")
             _update_last_running_step(
                 task_node,
@@ -233,27 +231,27 @@ def timeout_collector_action_task(task_id):
         _update_last_running_step(
             task_node,
             "timeout",
-            "Collector command execution timeout",
+            "Collector action timed out",
             details=normalize_task_details(
                 {"error_type": "timeout"},
-                message="Collector command execution timeout",
+                message="Collector action timed out",
             ),
         )
         _add_step(
             task_node,
             "callback_or_timeout",
             "timeout",
-            "Action task timeout",
+            "Collector action timeout",
             details=normalize_task_details(
                 {"error_type": "timeout"},
-                message="Action task timeout",
+                message="Collector action timeout",
             ),
         )
         _save_node_result(
             task_node,
             "error",
             "timeout",
-            "Collector action timeout",
+            "Collector action timed out",
         )
 
     _reconcile_collector_action_tasks({task_id})

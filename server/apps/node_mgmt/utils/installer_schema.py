@@ -9,6 +9,17 @@ from apps.node_mgmt.utils.step_tracker import now_iso
 """Canonical write-path schema helpers for installer task results."""
 
 
+INSTALLER_ACTION_MESSAGES = {
+    "bootstrap_running": "Start installation",
+    "download": "Download installer files",
+    "write_config": "Write configuration",
+    "install": "Install controller",
+    "install_complete": "Finalize installation",
+    "configure_runtime": "Configure runtime",
+    "installer": "Run installer",
+}
+
+
 def _coerce_number(value: Any) -> float | None:
     if value is None or isinstance(value, bool):
         return None
@@ -47,6 +58,8 @@ def normalize_installer_action(raw_step: Any) -> str:
 
 
 def default_installer_message(action: str) -> str:
+    if action in INSTALLER_ACTION_MESSAGES:
+        return INSTALLER_ACTION_MESSAGES[action]
     return (action or "installer").replace("_", " ").title()
 
 

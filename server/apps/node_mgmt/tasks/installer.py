@@ -291,6 +291,36 @@ def _refresh_installer_progress(node_obj):
     node_obj.save(update_fields=["result"])
 
 
+def _finalize_non_connectivity_running_steps(node_obj, message="Installer bootstrap completed"):
+    result = node_obj.result or {}
+    steps = result.get("steps", [])
+    if not isinstance(steps, list) or not steps:
+        return False
+
+    updated = False
+    timestamp = now_iso()
+    for step in steps:
+        if not isinstance(step, dict):
+            continue
+        if step.get("status") != InstallerConstants.STEP_STATUS_RUNNING:
+            continue
+        if step.get("action") == "connectivity_check":
+            continue
+        step["status"] = InstallerConstants.STEP_STATUS_SUCCESS
+        step["message"] = message if step.get("action") == "run" else (step.get("message") or message)
+        step["timestamp"] = timestamp
+        updated = True
+
+    if not updated:
+        return False
+
+    result["steps"] = steps
+    result["installer_progress"] = summarize_installer_progress(result)
+    node_obj.result = result
+    node_obj.save(update_fields=["result"])
+    return True
+
+
 def _dispatch_or_finalize_controller_task(task_id: int):
     dispatch_items = []
 
@@ -429,9 +459,9 @@ def install_controller_on_nodes(task_obj, nodes, package_obj):
                 _build_step(
                     "credential_check",
                     "success",
-                    f"Credential validation passed (using {auth_method})",
+                    f"Validate credentials ({auth_method})",
                 ),
-                _build_step("run", "running", "Starting unified installer bootstrap"),
+                _build_step("run", "running", "Run installer"),
             ],
         )
 
@@ -516,15 +546,16 @@ def install_controller_on_nodes(task_obj, nodes, package_obj):
                 installer_output = str(exec_result)
 
             _apply_installer_events_to_node(node_obj, installer_output)
+            _finalize_non_connectivity_running_steps(node_obj)
             _advance_step(
                 node_obj,
                 "success",
-                "Unified installer bootstrap executed successfully",
+                "Installer bootstrap completed",
                 next_steps=[
                     _build_step(
                         "connectivity_check",
                         "running",
-                        "Waiting for sidecar callback to confirm connectivity",
+                        "Wait for node connection",
                     )
                 ],
             )
@@ -626,6 +657,7 @@ def converge_controller_install_connectivity_for_node(node_id):
             "success",
             "Sidecar connectivity confirmed",
         )
+        _finalize_non_connectivity_running_steps(task_node)
         _save_node_result(task_node, "success", "All steps completed successfully")
         affected_task_ids.add(task_node.task_id)
 
@@ -676,6 +708,7 @@ def timeout_controller_install_task(task_id):
                 ),
             },
         )
+        _finalize_non_connectivity_running_steps(task_node)
         _save_node_result(task_node, "error", "Connectivity check timeout")
 
     _dispatch_or_finalize_controller_task(task_id)
@@ -772,9 +805,9 @@ def uninstall_controller(task_id):
                 _build_step(
                     "credential_check",
                     "success",
-                    f"Credential validation passed (using {auth_method})",
+                    f"Validate credentials ({auth_method})",
                 ),
-                _build_step("stop_run", "running", "Stopping controller service"),
+                _build_step("stop_run", "running", "Stop controller service"),
             ],
         )
 
@@ -805,12 +838,12 @@ def uninstall_controller(task_id):
             _advance_step(
                 node_obj,
                 "success",
-                "Controller service stopped successfully",
+                "Controller service stopped",
                 next_steps=[
                     _build_step(
                         "delete_dir",
                         "running",
-                        "Removing controller installation directory",
+                        "Remove installation directory",
                     )
                 ],
             )
@@ -827,17 +860,17 @@ def uninstall_controller(task_id):
             _advance_step(
                 node_obj,
                 "success",
-                "Installation directory removed successfully",
-                next_steps=[_build_step("delete_node", "running", "Removing node from database")],
+                "Installation directory removed",
+                next_steps=[_build_step("delete_node", "running", "Remove node record")],
             )
             Node.objects.filter(cloud_region_id=task_obj.cloud_region_id, ip=node_obj.ip).delete()
-            _update_step_status(node_obj, "success", "Node removed from database successfully")
+            _update_step_status(node_obj, "success", "Node record removed")
 
         except Exception as e:
             _handle_step_exception(node_obj, str(e), e)
             overall_status = "error"
 
-        final_message = "All steps completed successfully" if overall_status == "success" else "Uninstallation failed"
+        final_message = "Controller uninstallation completed" if overall_status == "success" else "Controller uninstallation failed"
         _save_node_result(node_obj, overall_status, final_message)
 
     task_obj.status = "finished"
@@ -870,7 +903,7 @@ def install_collector(task_id):
                 node_obj,
                 "download",
                 "running",
-                f"Starting file download to node {node_obj.node_id}",
+                "Download collector package",
             )
             download_to_local(
                 node_obj.node_id,
@@ -883,8 +916,8 @@ def install_collector(task_id):
                 _advance_step(
                     node_obj,
                     "success",
-                    "File download completed successfully",
-                    next_steps=[_build_step("unzip", "running", "Extracting collector package")],
+                    "Collector package downloaded",
+                    next_steps=[_build_step("unzip", "running", "Extract collector package")],
                 )
                 unzip_name = unzip_file(
                     node_obj.node_id,
@@ -896,12 +929,12 @@ def install_collector(task_id):
                     _advance_step(
                         node_obj,
                         "success",
-                        f"Package extracted successfully: {unzip_name}",
+                        "Collector package extracted",
                         next_steps=[
                             _build_step(
                                 "set_executable",
                                 "running",
-                                "Setting execution permissions",
+                                "Set executable permissions",
                             )
                         ],
                     )
@@ -909,7 +942,7 @@ def install_collector(task_id):
                     _update_step_status(
                         node_obj,
                         "success",
-                        f"Package extracted successfully: {unzip_name}",
+                        "Collector package extracted",
                     )
             else:
                 executable_name = package_obj.name
@@ -917,7 +950,7 @@ def install_collector(task_id):
                     _build_step(
                         "prepare",
                         "success",
-                        "Package ready (no extraction required)",
+                        "Package ready",
                     )
                 ]
                 if package_obj.os in NodeConstants.LINUX_OS:
@@ -925,13 +958,13 @@ def install_collector(task_id):
                         _build_step(
                             "set_executable",
                             "running",
-                            "Setting execution permissions",
+                            "Set executable permissions",
                         )
                     )
                 _advance_step(
                     node_obj,
                     "success",
-                    "File download completed successfully",
+                    "Collector package downloaded",
                     next_steps=next_steps,
                 )
 
@@ -941,13 +974,13 @@ def install_collector(task_id):
                     node_obj.node_id,
                     f"if [ -d '{executable_path}' ]; then find '{executable_path}' -type f -exec chmod +x {{}} \\; ; else chmod +x '{executable_path}'; fi",
                 )
-                _update_step_status(node_obj, "success", "Execution permissions set successfully")
+                _update_step_status(node_obj, "success", "Executable permissions updated")
 
         except Exception as e:
             _handle_step_exception(node_obj, str(e), e)
             overall_status = "error"
 
-        final_message = "All steps completed successfully" if overall_status == "success" else "Collector installation failed"
+        final_message = "Collector installation completed" if overall_status == "success" else "Collector installation failed"
         _save_node_result(node_obj, overall_status, final_message)
 
         collector_obj = Collector.objects.filter(node_operating_system=package_obj.os, name=package_obj.object).first()

@@ -58,9 +58,7 @@ class NodeService:
             else:
                 status = 10
 
-            node_install_map.setdefault(obj.node_id, []).append(
-                dict(collector_id=obj.collector_id, status=status, message=obj.result)
-            )
+            node_install_map.setdefault(obj.node_id, []).append(dict(collector_id=obj.collector_id, status=status, message=obj.result))
 
         # 处理节点数据
         for node in node_data:
@@ -69,9 +67,7 @@ class NodeService:
                 # 为 collectors_install 中的每个项添加 collector_name
                 for install_item in node_collector_install:
                     collector_obj = collector_dict.get(install_item["collector_id"])
-                    install_item["collector_name"] = (
-                        collector_obj.name if collector_obj else None
-                    )
+                    install_item["collector_name"] = collector_obj.name if collector_obj else None
 
                 node["status"]["collectors_install"] = node_collector_install
 
@@ -81,16 +77,10 @@ class NodeService:
             # 处理采集器状态：忽略不支持空跑的采集器的特定错误，将其状态改为正常
             for collector in node["status"]["collectors"]:
                 collector_obj = collector_dict.get(collector["collector_id"])
-                collector["collector_name"] = (
-                    collector_obj.name if collector_obj else None
-                )
+                collector["collector_name"] = collector_obj.name if collector_obj else None
 
-                configuration_obj = configuration_dict.get(
-                    collector["configuration_id"]
-                )
-                collector["configuration_name"] = (
-                    configuration_obj.name if configuration_obj else None
-                )
+                configuration_obj = configuration_dict.get(collector["configuration_id"])
+                collector["configuration_name"] = configuration_obj.name if configuration_obj else None
 
                 # 判断是否应该将错误状态改为正常
                 if collector["status"] == 2 and collector_obj:  # status=2 表示失败
@@ -98,10 +88,7 @@ class NodeService:
                     if collector_obj.name in CollectorConstants.IGNORE_ERROR_COLLECTORS:
                         # 检查错误信息是否匹配需要忽略的消息
                         verbose_msg = collector.get("verbose_message", "")
-                        if (
-                            verbose_msg
-                            in CollectorConstants.IGNORE_ERROR_COLLECTORS_MESSAGES
-                        ):
+                        if verbose_msg in CollectorConstants.IGNORE_ERROR_COLLECTORS_MESSAGES:
                             # 将状态从失败改为正常
                             collector["status"] = 0
                             collector["message"] = "Running"
@@ -114,9 +101,7 @@ class NodeService:
         for node in node_data:
             now_timestamp = int(datetime.now(timezone.utc).timestamp())
             # 解析成 datetime 对象
-            updated_at_timestamp = int(
-                datetime.strptime(node["updated_at"], "%Y-%m-%dT%H:%M:%S%z").timestamp()
-            )
+            updated_at_timestamp = int(datetime.strptime(node["updated_at"], "%Y-%m-%dT%H:%M:%S%z").timestamp())
             # 计算时间差
             time_diff = now_timestamp - updated_at_timestamp
             # 判断是否活跃
@@ -130,19 +115,13 @@ class NodeService:
     def batch_binding_node_configuration(node_ids, collector_configuration_id):
         """批量绑定配置到多个节点"""
         try:
-            collector_configuration = CollectorConfiguration.objects.select_related(
-                "collector"
-            ).get(id=collector_configuration_id)
+            collector_configuration = CollectorConfiguration.objects.select_related("collector").get(id=collector_configuration_id)
             collector = collector_configuration.collector
 
-            nodes = Node.objects.filter(id__in=node_ids).prefetch_related(
-                "collectorconfiguration_set"
-            )
+            nodes = Node.objects.filter(id__in=node_ids).prefetch_related("collectorconfiguration_set")
             for node in nodes:
                 # 检查节点采集器是否已经存在配置文件
-                existing_configurations = node.collectorconfiguration_set.filter(
-                    collector=collector
-                )
+                existing_configurations = node.collectorconfiguration_set.filter(collector=collector)
                 if existing_configurations.exists():
                     # 覆盖现有配置文件
                     for config in existing_configurations:
@@ -203,10 +182,7 @@ class NodeService:
         )
 
         task_nodes = {
-            item.node_id: item
-            for item in CollectorActionTaskNode.objects.filter(
-                task_id=task_obj.id, node_id__in=[node.id for node in nodes]
-            )
+            item.node_id: item for item in CollectorActionTaskNode.objects.filter(task_id=task_obj.id, node_id__in=[node.id for node in nodes])
         }
 
         # 如果是 start 或 restart 操作，需要检查并创建默认配置
@@ -215,9 +191,7 @@ class NodeService:
                 collector = Collector.objects.get(id=collector_id)
 
                 # 批量查询已有配置的节点，避免N+1查询
-                nodes_with_config = CollectorConfiguration.objects.filter(
-                    collector=collector, nodes__in=nodes
-                ).values_list("nodes__id", flat=True)
+                nodes_with_config = CollectorConfiguration.objects.filter(collector=collector, nodes__in=nodes).values_list("nodes__id", flat=True)
 
                 nodes_with_config_set = set(nodes_with_config)
 
@@ -229,9 +203,7 @@ class NodeService:
             except Collector.DoesNotExist:
                 logger.error(f"Collector {collector_id} does not exist")
             except Exception as e:
-                logger.error(
-                    f"Error checking/creating default config for collector {collector_id}: {e}"
-                )
+                logger.error(f"Error checking/creating default config for collector {collector_id}: {e}")
 
         # 执行原有的操作逻辑
         for node in nodes:
@@ -249,12 +221,12 @@ class NodeService:
                 task_node.status = "running"
                 task_node.result = {
                     "overall_status": "running",
-                    "final_message": "Collector action dispatched",
+                    "final_message": "Collector action submitted",
                     "steps": [
                         {
                             "action": "dispatch_command",
                             "status": "success",
-                            "message": "Collector action command dispatched to sidecar queue",
+                            "message": "Submit collector action",
                             "timestamp": dj_timezone.now().isoformat(),
                             "details": {
                                 "collector_id": collector_id,
@@ -264,7 +236,7 @@ class NodeService:
                         {
                             "action": "consume_ack",
                             "status": "running",
-                            "message": "Waiting for sidecar to consume action",
+                            "message": "Wait for sidecar acknowledgment",
                             "timestamp": dj_timezone.now().isoformat(),
                         },
                     ],
@@ -284,9 +256,7 @@ class NodeService:
         try:
             # 检查采集器是否有默认配置
             if not collector.default_config:
-                logger.info(
-                    f"Collector {collector.name} has no default_config, skipping"
-                )
+                logger.info(f"Collector {collector.name} has no default_config, skipping")
                 return
 
             # 获取云区域环境变量
@@ -296,22 +266,16 @@ class NodeService:
             # 获取默认配置模板
             config_template = collector.default_config.get(default_sidecar_mode, None)
             if not config_template:
-                logger.info(
-                    f"Collector {collector.name} has no config template for mode {default_sidecar_mode}, skipping"
-                )
+                logger.info(f"Collector {collector.name} has no config template for mode {default_sidecar_mode}, skipping")
                 return
 
             # 检查是否为容器节点
-            is_container_node = (
-                node.node_type == ControllerConstants.NODE_TYPE_CONTAINER
-            )
+            is_container_node = node.node_type == ControllerConstants.NODE_TYPE_CONTAINER
             if is_container_node:
                 add_config = collector.default_config.get("add_config", "")
                 if add_config:
                     config_template = config_template + "\n" + add_config
-                    logger.info(
-                        f"Node {node.id} is a container node, appending add_config for {collector.name}"
-                    )
+                    logger.info(f"Node {node.id} is a container node, appending add_config for {collector.name}")
 
             # 渲染模板
             tpl = JinjaTemplate(config_template)
@@ -326,14 +290,10 @@ class NodeService:
                 cloud_region=node.cloud_region,
             )
             configuration.nodes.add(node)
-            logger.info(
-                f"Created default configuration for node {node.id} and collector {collector.name}"
-            )
+            logger.info(f"Created default configuration for node {node.id} and collector {collector.name}")
 
         except Exception as e:
-            logger.error(
-                f"Failed to create default config for node {node.id} and collector {collector.name}: {e}"
-            )
+            logger.error(f"Failed to create default config for node {node.id} and collector {collector.name}: {e}")
 
     @staticmethod
     def get_node_list(
@@ -351,9 +311,7 @@ class NodeService:
     ):
         """获取节点列表"""
         if permission_data:
-            user_obj = User(
-                username=permission_data["username"], domain=permission_data["domain"]
-            )
+            user_obj = User(username=permission_data["username"], domain=permission_data["domain"])
             from apps.core.utils.permission_utils import permission_filter
 
             include_children = permission_data.get("include_children", False)
@@ -378,9 +336,7 @@ class NodeService:
         if cloud_region_id:
             qs = qs.filter(cloud_region_id=cloud_region_id)
         if organization_ids:
-            qs = qs.filter(
-                nodeorganization__organization__in=organization_ids
-            ).distinct()
+            qs = qs.filter(nodeorganization__organization__in=organization_ids).distinct()
         if name:
             qs = qs.filter(name__icontains=name)
         if ip:
