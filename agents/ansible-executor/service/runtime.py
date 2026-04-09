@@ -58,7 +58,7 @@ def current_entrypoint_command() -> list[str]:
 def configure_ansible_environment() -> None:
     if os.environ.get("ANSIBLE_COLLECTIONS_PATH"):
         logger.info(
-            "ansible collections path preset: application_root=%s collections_path=%s",
+            "ansible collections path preset2: application_root=%s collections_path=%s",
             application_root(),
             os.environ.get("ANSIBLE_COLLECTIONS_PATH"),
         )
@@ -73,7 +73,7 @@ def configure_ansible_environment() -> None:
         if collections_dir.exists() and collections_dir.is_dir():
             os.environ["ANSIBLE_COLLECTIONS_PATH"] = str(collections_dir)
             logger.info(
-                "ansible collections path configured: application_root=%s collections_path=%s",
+                "ansible collections path configured1: application_root=%s collections_path=%s",
                 root,
                 collections_dir,
             )

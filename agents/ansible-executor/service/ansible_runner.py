@@ -19,6 +19,12 @@ from service.runtime import current_entrypoint_command
 
 BASE_TASK_DIR = Path(os.getenv("ANSIBLE_WORK_DIR", "/tmp/ansible-executor"))
 
+_SENSITIVE_INVENTORY_PATTERNS = (
+    "ansible_password",
+    "ansible_ssh_passphrase",
+    "ansible_become_password",
+)
+
 
 @dataclass
 class AdhocRequest:
@@ -136,7 +142,7 @@ def to_playbook_request(payload: dict[str, Any]) -> PlaybookRequest:
         raise ValueError("file_distribution must be object")
 
     logger.info(
-        "to_playbook_request payload check4: "
+        "to_playbook_request payload check: "
         "task_id=%s "
         "playbook_path=%r "
         "playbook_content_is_none=%s "
@@ -162,7 +168,7 @@ def to_playbook_request(payload: dict[str, Any]) -> PlaybookRequest:
     no_file_distribution = not file_distribution
 
     logger.info(
-        "to_playbook_request validation booleans3: "
+        "to_playbook_request validation booleans: "
         "task_id=%s "
         "no_playbook_path=%s "
         "no_playbook_content=%s "
@@ -175,7 +181,7 @@ def to_playbook_request(payload: dict[str, Any]) -> PlaybookRequest:
 
     if no_playbook_path and no_playbook_content and no_file_distribution:
         logger.error(
-            "to_playbook_request validation failed2: "
+            "to_playbook_request validation failed: "
             "missing playbook_path/playbook_content/file_distribution "
             "task_id=%s "
             "raw_file_distribution=%r "
@@ -239,7 +245,7 @@ async def download_object_to_workspace(
         raise ValueError("file name is required")
 
     logger.info(
-        "download_object_to_workspace config1: "
+        "download_object_to_workspace config: "
         "task_file=%s "
         "bucket_name=%s "
         "nats_servers=%r "
@@ -350,6 +356,13 @@ def _quote_inventory_value(value: Any) -> str:
     if any(ch.isspace() for ch in text):
         return f'"{escaped}"'
     return escaped
+
+
+def _mask_sensitive_inventory_content(content: str) -> str:
+    masked = str(content)
+    for key in _SENSITIVE_INVENTORY_PATTERNS:
+        masked = re.sub(rf"({key}=)(\S+)", rf"\1***", masked)
+    return masked
 
 
 def _get_password_auth_ssh_common_args(item: dict[str, Any]) -> str:
@@ -627,6 +640,12 @@ async def prepare_playbook_execution(
         playbook_file = workspace / "playbook.yml"
         playbook_file.write_text(playbook_content, encoding="utf-8")
         playbook_path = str(playbook_file)
+        logger.info(
+            "prepared playbook file: task_id=%s path=%s content=%s",
+            payload.task_id,
+            playbook_path,
+            playbook_content,
+        )
 
     inventory_value = payload.inventory
     if payload.inventory_content or payload.host_credentials:
@@ -644,6 +663,14 @@ async def prepare_playbook_execution(
             "\n".join([p for p in parts if p]) + "\n", encoding="utf-8"
         )
         inventory_value = str(inventory_file)
+        logger.info(
+            "prepared inventory file: task_id=%s path=%s content=%s",
+            payload.task_id,
+            inventory_value,
+            _mask_sensitive_inventory_content(
+                inventory_file.read_text(encoding="utf-8")
+            ),
+        )
 
     cmd = build_playbook_command(
         PlaybookRequest(
@@ -698,6 +725,7 @@ def build_playbook_command(payload: PlaybookRequest) -> list[str]:
         payload.playbook_path,
         "-i",
         payload.inventory,
+        "-vvv",
     ]
     if payload.extra_vars:
         cli_args.extend(
