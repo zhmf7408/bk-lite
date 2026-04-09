@@ -438,7 +438,9 @@ const Integration = () => {
                             {app.display_name || '--'}
                           </h2>
                           <Tag className="mt-[4px]">
-                            {app.collect_type || '--'}
+                            {parentObject?.display_name ||
+                              app.collect_type ||
+                              '--'}
                           </Tag>
                           {app.is_custom && (
                             <Tag className="mt-[4px] ml-[6px]">
