@@ -402,8 +402,8 @@ class ModelViewSet(CmdbPermissionMixin, viewsets.ViewSet):
         return WebUtils.response_success(result)
 
     @HasPermission("model_management-Edit Model")
-    @action(detail=False, methods=["put", "delete"], url_path="(?P<model_id>.+?)/auto_association_rules/(?P<model_asst_id>.+?)")
-    def model_auto_association_rule_detail(self, request, model_id: str, model_asst_id: str):
+    @action(detail=False, methods=["put", "delete"], url_path="(?P<model_id>.+?)/auto_association_rules/(?P<model_asst_id>.+?)/(?P<rule_id>.+?)")
+    def model_auto_association_rule_detail(self, request, model_id: str, model_asst_id: str, rule_id: str):
         model_info = ModelManage.search_model_info(model_id)
         if not model_info:
             return WebUtils.response_error("模型不存在", status_code=status.HTTP_404_NOT_FOUND)
@@ -431,14 +431,15 @@ class ModelViewSet(CmdbPermissionMixin, viewsets.ViewSet):
 
         try:
             if request.method == "PUT":
-                result = ModelManage.save_model_auto_relation_rule(
+                result = ModelManage.update_model_auto_relation_rule(
                     model_id,
                     model_asst_id,
+                    rule_id,
                     request.data,
                     username=request.user.username,
                 )
             else:
-                ModelManage.delete_model_auto_relation_rule(model_id, model_asst_id)
+                ModelManage.delete_model_auto_relation_rule(model_id, model_asst_id, rule_id)
                 result = True
         except BaseAppException as err:
             return WebUtils.response_error(error_message=err.message, status_code=status.HTTP_400_BAD_REQUEST)

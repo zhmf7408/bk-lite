@@ -59,16 +59,16 @@ export const useModelApi = () => {
     }>;
   }) => post(`/cmdb/api/model/${modelId}/auto_association_rules/`, params);
 
-  const updateModelAutoAssociationRule = (modelId: string, modelAsstId: string, params: {
+  const updateModelAutoAssociationRule = (modelId: string, modelAsstId: string, ruleId: string, params: {
     enabled: boolean;
     match_pairs: Array<{
       src_field_id: string;
       dst_field_id: string;
     }>;
-  }) => put(`/cmdb/api/model/${modelId}/auto_association_rules/${modelAsstId}/`, params);
+  }) => put(`/cmdb/api/model/${modelId}/auto_association_rules/${modelAsstId}/${ruleId}/`, params);
 
-  const deleteModelAutoAssociationRule = (modelId: string, modelAsstId: string) =>
-    del(`/cmdb/api/model/${modelId}/auto_association_rules/${modelAsstId}/`);
+  const deleteModelAutoAssociationRule = (modelId: string, modelAsstId: string, ruleId: string) =>
+    del(`/cmdb/api/model/${modelId}/auto_association_rules/${modelAsstId}/${ruleId}/`);
 
   // 获取模型关联列表
   const getModelAssociations = (modelId: string) =>

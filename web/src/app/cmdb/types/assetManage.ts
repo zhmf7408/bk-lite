@@ -342,18 +342,23 @@ export interface AutoAssociationRuleConfig {
   updated_at: string;
 }
 
-export interface ModelAutoAssociationRuleItem {
-  _id?: string | number;
+export interface AutoAssociationRuleAssociationItem {
   model_asst_id: string;
   src_model_id: string;
   dst_model_id: string;
   asst_id?: string;
+  asst_name?: string;
   mapping: string;
-  auto_relation_rule: AutoAssociationRuleConfig | null;
+}
+
+export interface ModelAutoAssociationRuleItem extends AutoAssociationRuleAssociationItem {
+  _id?: string | number;
+  rule_id: string;
+  auto_relation_rule: AutoAssociationRuleConfig;
   [key: string]: unknown;
 }
 
-export interface AutoAssociationRuleFormAssociationItem extends ModelAutoAssociationRuleItem {
+export interface AutoAssociationRuleFormAssociationItem extends AutoAssociationRuleAssociationItem {
   current_side: 'src' | 'dst';
   form_source_model_id: string;
   form_target_model_id: string;
@@ -361,6 +366,7 @@ export interface AutoAssociationRuleFormAssociationItem extends ModelAutoAssocia
 
 export interface AutoAssociationRulePayload {
   model_asst_id?: string;
+  rule_id?: string;
   enabled: boolean;
   match_pairs: AutoAssociationRuleMatchPair[];
 }
