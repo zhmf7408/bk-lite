@@ -32,6 +32,11 @@ export interface AuthSourceTypeConfig {
 export interface SystemSettings {
   enable_otp: string;
   login_expired_time: string;
+  portal_name?: string;
+  portal_logo_url?: string;
+  portal_favicon_url?: string;
+  watermark_enabled?: string;
+  watermark_text?: string;
   pwd_set_validity_period?: string;
   pwd_set_required_char_types?: string;
   pwd_set_min_length?: string;

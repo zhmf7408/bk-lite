@@ -11,9 +11,12 @@ from apps.core.utils.loader import LanguageLoader
 from apps.rpc.base import RpcClient
 from apps.rpc.system_mgmt import SystemMgmt
 from apps.system_mgmt.models import UserLoginLog
+from apps.system_mgmt.models.system_settings import SystemSettings
 from apps.system_mgmt.utils.login_log_utils import log_user_login_from_request
 
 logger = logging.getLogger(__name__)
+
+PORTAL_BRANDING_KEYS = ("portal_name", "portal_logo_url", "portal_favicon_url", "watermark_enabled", "watermark_text")
 
 
 def _get_loader(request=None) -> LanguageLoader:
@@ -27,6 +30,10 @@ def _get_loader(request=None) -> LanguageLoader:
 def _create_system_mgmt_client():
     """创建SystemMgmt客户端"""
     return SystemMgmt()
+
+
+def _get_portal_branding_settings():
+    return dict(SystemSettings.objects.filter(key__in=PORTAL_BRANDING_KEYS).values_list("key", "value"))
 
 
 def _parse_request_data(request):
@@ -221,6 +228,9 @@ def get_bk_settings(request):
     bk_token = request.COOKIES.get("bk_token", "")
     client = SystemMgmt()
     res = client.verify_bk_token(bk_token)
+    if isinstance(res, dict):
+        res.setdefault("data", {})
+        res["data"].update(_get_portal_branding_settings())
     return JsonResponse(res)
 
 

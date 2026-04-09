@@ -2,11 +2,11 @@
 import { ArrowLeftOutlined } from "@ant-design/icons";
 import { signIn } from "next-auth/react";
 import { useState, useEffect } from "react";
-import Image from "next/image";
 import { Select, Input } from "antd";
 import PasswordResetForm from "./PasswordResetForm";
 import OtpVerificationForm from "./OtpVerificationForm";
 import WechatQrLoginPanel from "./WechatQrLoginPanel";
+import { usePortalBranding } from "@/hooks/usePortalBranding";
 import { saveAuthToken } from "@/utils/crossDomainAuth";
 import { AUTH_POPUP_SUCCESS_MESSAGE, buildOauthCallbackBridgeUrl, buildPopupSigninUrl, buildThirdLoginCallbackUrl, buildWechatPopupUrl, resolveThirdLoginFlag } from "@/utils/authRedirect";
 
@@ -78,6 +78,7 @@ export default function SigninClient({
   const [loginData, setLoginData] = useState<LoginResponse>({});
   const [qrCodeUrl, setQrCodeUrl] = useState<string>("");
   const [wechatSettings, setWechatSettings] = useState<WeChatSettings | null>(null);
+  const { logoUrl } = usePortalBranding();
   const [loadingWechatSettings, setLoadingWechatSettings] = useState(true);
   const [bkSettings, setBkSettings] = useState<BkSettings | null>(null);
   const [loadingBkSettings, setLoadingBkSettings] = useState(true);
@@ -143,14 +144,13 @@ export default function SigninClient({
   };
 
   const openThirdPartyPopup = (targetProvider: 'wechat' | 'bk') => {
-    const currentUrl = typeof window !== 'undefined' ? window.location.href : callbackUrl || '/';
     const popupUrl = targetProvider === 'wechat'
       ? buildWechatPopupUrl({
-        callbackUrl: currentUrl,
+        callbackUrl: callbackUrl || '/',
         thirdLogin: true,
       })
       : buildPopupSigninUrl({
-        callbackUrl: currentUrl,
+        callbackUrl: callbackUrl || '/',
         thirdLogin: true,
         provider: targetProvider,
       });
@@ -433,7 +433,7 @@ export default function SigninClient({
         thirdLogin: true,
         provider: 'wechat',
       })
-      : buildOauthCallbackBridgeUrl(callbackUrl || "/", thirdLoginFlag);
+      : buildOauthCallbackBridgeUrl(callbackUrl || '/', thirdLoginFlag, 'wechat');
 
     console.log("Callback URL:", oauthCallbackUrl);
 
@@ -698,7 +698,7 @@ export default function SigninClient({
       {mode === 'page' && (
         <div className="text-center mb-10">
           <div className="flex justify-center mb-6">
-            <Image src="/logo-site.png" alt="Logo" width={60} height={60} className="h-14 w-auto" />
+            <img src={logoUrl} alt="Logo" className="h-14 w-auto object-contain" />
           </div>
           <h2 className="text-3xl font-bold text-(--color-text-1)">
             {authStep === 'login' && 'Sign In'}
@@ -745,7 +745,7 @@ export default function SigninClient({
             </div>
           </div>
           <WechatQrLoginPanel
-            callbackUrl={typeof window !== 'undefined' ? window.location.href : callbackUrl}
+            callbackUrl={callbackUrl}
             thirdLogin="true"
           />
         </div>

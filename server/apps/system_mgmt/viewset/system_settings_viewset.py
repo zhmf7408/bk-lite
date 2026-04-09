@@ -1,6 +1,7 @@
 from django.http import JsonResponse
 from rest_framework import viewsets
 from rest_framework.decorators import action
+from rest_framework.permissions import AllowAny
 
 from apps.system_mgmt.models.system_settings import SystemSettings
 from apps.system_mgmt.serializers.system_settings_serializer import SystemSettingsSerializer
@@ -12,22 +13,61 @@ class SystemSettingsViewSet(viewsets.ModelViewSet):
     queryset = SystemSettings.objects.all()
     serializer_class = SystemSettingsSerializer
 
+    PORTAL_BRANDING_KEYS = ("portal_name", "portal_logo_url", "portal_favicon_url")
+    PORTAL_SETTING_DEFAULTS = {
+        "portal_name": "BlueKing Lite",
+        "portal_logo_url": "",
+        "portal_favicon_url": "",
+        "watermark_enabled": "0",
+        "watermark_text": "BlueKing Lite · ${username} · ${date}",
+    }
+
+    def _ensure_portal_settings(self):
+        existing_keys = set(SystemSettings.objects.filter(key__in=self.PORTAL_SETTING_DEFAULTS.keys()).values_list("key", flat=True))
+        missing_settings = [
+            SystemSettings(key=key, value=value)
+            for key, value in self.PORTAL_SETTING_DEFAULTS.items()
+            if key not in existing_keys
+        ]
+
+        if missing_settings:
+            SystemSettings.objects.bulk_create(missing_settings, ignore_conflicts=True)
+
     @action(methods=["GET"], detail=False)
     def get_sys_set(self, request):
+        self._ensure_portal_settings()
         sys_settings = SystemSettings.objects.all().values_list("key", "value")
         return JsonResponse({"result": True, "data": dict(sys_settings)})
+
+    @action(methods=["GET"], detail=False, permission_classes=[AllowAny])
+    def public_portal_branding(self, request):
+        self._ensure_portal_settings()
+        branding_settings = SystemSettings.objects.filter(key__in=self.PORTAL_BRANDING_KEYS).values_list("key", "value")
+        return JsonResponse({"result": True, "data": dict(branding_settings)})
 
     @action(methods=["POST"], detail=False)
     def update_sys_set(self, request):
         kwargs = request.data
-        sys_set = list(SystemSettings.objects.filter(key__in=list(kwargs.keys())))
-        for i in sys_set:
-            i.value = kwargs.get(i.key, i.value)
-        SystemSettings.objects.bulk_update(sys_set, ["value"])
+        existing_settings = list(SystemSettings.objects.filter(key__in=list(kwargs.keys())))
+        existing_keys = {item.key for item in existing_settings}
+
+        for item in existing_settings:
+            item.value = kwargs.get(item.key, item.value)
+
+        if existing_settings:
+            SystemSettings.objects.bulk_update(existing_settings, ["value"])
+
+        missing_settings = [
+            SystemSettings(key=key, value=value)
+            for key, value in kwargs.items()
+            if key not in existing_keys
+        ]
+        if missing_settings:
+            SystemSettings.objects.bulk_create(missing_settings)
 
         # 记录操作日志
-        updated_keys = [i.key for i in sys_set]
-        log_operation(request, "update", "system_settings", f"编辑登录设置: {', '.join(updated_keys)}")
+        updated_keys = list(kwargs.keys())
+        log_operation(request, "update", "system_settings", f"编辑系统设置: {', '.join(updated_keys)}")
 
         return JsonResponse({"result": True})
 
