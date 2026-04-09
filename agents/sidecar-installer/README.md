@@ -7,14 +7,11 @@
 
 Default object storage layout:
 
-- Versioned path: `installer/<os>/<version>/<filename>`
-- Latest alias path: `installer/<os>/<filename>`
+- Latest path: `installer/<os>/<filename>`
 
 Examples:
 
-- `installer/windows/v1.2.3/bklite-controller-installer.exe`
 - `installer/windows/bklite-controller-installer.exe`
-- `installer/linux/v1.2.3/bklite-controller-installer`
 - `installer/linux/bklite-controller-installer`
 
 ## Build
@@ -22,27 +19,48 @@ Examples:
 From `agents/sidecar-installer/`:
 
 ```bash
+make install-deps
 make build
 ```
+
+`make install-deps` will try to install build dependencies for:
+
+- macOS: Homebrew
+- Linux: `apt-get`, `dnf`, `yum`, `apk`, `pacman`, `zypper`
+- Windows: `winget` or `choco`
+
+Installed dependencies include Go, Python 3, Pillow, and NSIS.
+
+To avoid Homebrew / PEP 668 system Python restrictions, Pillow is installed into a local virtualenv at `agents/sidecar-installer/.venv`, and subsequent build steps reuse that virtualenv automatically.
 
 Outputs:
 
 - Windows NSIS installer: `bklite-controller-installer.exe`
 - Linux installer binary: `bklite-controller-installer`
 
+Notes:
+
+- `setup-worker.exe` is an internal Windows build artifact produced before NSIS packaging.
+- The final distributable for Windows users is only `bklite-controller-installer.exe`.
+- `bklite-controller-installer.exe` already embeds `setup-worker.exe`, extracts it during installation, uses it to perform the actual install steps, and then cleans it up.
+- For release/upload, do not distribute `setup-worker.exe` separately.
+
 ## Upload
 
 From `server/`:
 
 ```bash
-python manage.py installer_init --os windows --file_path /path/to/bklite-controller-installer.exe --version v1.2.3
-python manage.py installer_init --os linux --file_path /path/to/bklite-controller-installer --version v1.2.3
+python manage.py installer_init --os windows --file_path /path/to/bklite-controller-installer.exe
+python manage.py installer_init --os linux --file_path /path/to/bklite-controller-installer
 ```
+
+`installer_init` now uploads only the latest path and no longer accepts a version argument.
 
 Upload behavior:
 
-1. Uploads to the versioned artifact path
-2. Refreshes the latest alias path
+1. Uploads only to the latest path
+2. Windows upload target: `installer/windows/bklite-controller-installer.exe`
+3. Linux upload target: `installer/linux/bklite-controller-installer`
 
 ## Runtime APIs
 

@@ -15,7 +15,7 @@ class InstallerSessionService:
         if os_name == NodeConstants.WINDOWS_OS:
             return {
                 "filename": InstallerConstants.WINDOWS_INSTALLER_FILENAME,
-                "object_key": InstallerConstants.build_versioned_installer_path("windows"),
+                "object_key": InstallerConstants.WINDOWS_INSTALLER_S3_PATH,
                 "download_url": "/api/proxy/node_mgmt/api/installer/windows/download/",
                 "alias_object_key": InstallerConstants.WINDOWS_INSTALLER_S3_PATH,
                 "version": InstallerConstants.DEFAULT_INSTALLER_VERSION,
@@ -23,7 +23,7 @@ class InstallerSessionService:
         if os_name == NodeConstants.LINUX_OS:
             return {
                 "filename": InstallerConstants.LINUX_INSTALLER_FILENAME,
-                "object_key": InstallerConstants.build_versioned_installer_path("linux"),
+                "object_key": InstallerConstants.LINUX_INSTALLER_S3_PATH,
                 "download_url": "/api/proxy/node_mgmt/api/installer/linux/download/",
                 "alias_object_key": InstallerConstants.LINUX_INSTALLER_S3_PATH,
                 "version": InstallerConstants.DEFAULT_INSTALLER_VERSION,

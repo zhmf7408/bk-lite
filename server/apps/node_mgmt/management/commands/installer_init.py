@@ -7,7 +7,7 @@ from apps.node_mgmt.utils.s3 import upload_file_to_s3
 
 
 class Command(BaseCommand):
-    help = "安装器初始化 - 上传安装器文件到 S3"
+    help = "安装器初始化 - 上传安装器文件到 latest 路径"
 
     def add_arguments(self, parser):
         parser.add_argument(
@@ -23,18 +23,10 @@ class Command(BaseCommand):
             help="安装器文件路径",
             required=True,
         )
-        parser.add_argument(
-            "--version",
-            type=str,
-            default=InstallerConstants.DEFAULT_INSTALLER_VERSION,
-            help="安装器版本号，默认上传到 latest 版本目录并刷新 alias",
-        )
 
     def handle(self, *args, **options):
         target_os = options["os"]
         file_path = options["file_path"]
-        version = options["version"]
-        versioned_path = InstallerConstants.build_versioned_installer_path(target_os, version)
         alias_path = InstallerConstants.build_latest_alias_path(target_os)
 
         logger.info(f"{target_os} 安装器初始化开始，文件路径: {file_path}")
@@ -44,14 +36,11 @@ class Command(BaseCommand):
                 data = file.read()
             from io import BytesIO
 
-            versioned_file = BytesIO(data)
-            versioned_file.name = file_path
             alias_file = BytesIO(data)
             alias_file.name = file_path
 
-            async_to_sync(upload_file_to_s3)(versioned_file, versioned_path)
             async_to_sync(upload_file_to_s3)(alias_file, alias_path)
-            logger.info(f"{target_os} 安装器上传成功，版本路径: {versioned_path}，alias 路径: {alias_path}")
+            logger.info(f"{target_os} 安装器上传成功，latest 路径: {alias_path}")
         except FileNotFoundError:
             logger.error(f"文件不存在: {file_path}")
             raise

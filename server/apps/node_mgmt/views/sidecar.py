@@ -8,12 +8,14 @@ from apps.core.exceptions.base_app_exception import BaseAppException
 from apps.node_mgmt.models import PackageVersion, SidecarEnv
 from apps.node_mgmt.services.install_token import InstallTokenService
 from apps.node_mgmt.services.installer_session import InstallerSessionService
+from apps.node_mgmt.services.installer import InstallerService
 from apps.node_mgmt.services.package import PackageService
 from apps.node_mgmt.services.sidecar import Sidecar
 from apps.node_mgmt.utils.token_auth import check_token_auth, generate_node_token
 from apps.node_mgmt.constants.node import NodeConstants
 from apps.node_mgmt.constants.controller import ControllerConstants
 from apps.node_mgmt.constants.cloudregion_service import CloudRegionServiceConstants
+from apps.node_mgmt.constants.installer import InstallerConstants
 
 
 class OpenSidecarViewSet(OpenAPIViewSet):
@@ -549,6 +551,19 @@ class OpenSidecarViewSet(OpenAPIViewSet):
         response["X-Token-Remaining-Usage"] = str(config["remaining_usage"])
         return response
 
+    @action(detail=False, methods=["GET"], url_path="installer/linux/download")
+    def linux_download_installer(self, request):
+        token = request.query_params.get("token")
+        if not token:
+            raise BaseAppException("Missing token parameter")
+
+        token_data = InstallTokenService.validate_and_get_token_data(token)
+        if token_data["os"] != NodeConstants.LINUX_OS:
+            raise BaseAppException("Token operating system does not match Linux installer")
+
+        file, _ = InstallerService.download_linux_installer()
+        return WebUtils.response_file(file, InstallerConstants.LINUX_INSTALLER_FILENAME)
+
     @action(detail=False, methods=["GET"], url_path="installer/windows_config")
     def windows_install_config(self, request):
         return self.installer_session(request)
@@ -562,9 +577,9 @@ class OpenSidecarViewSet(OpenAPIViewSet):
         config = InstallerSessionService.build_session_config(token)
         installer = config["installer"]
         install_dir = config["install_dir"]
-        server_url = config["server_url"].replace("/api/v1/node_mgmt/open_api/node", "")
-        installer_url = f"{server_url}/api/v1/node_mgmt/api/installer/linux/download/"
-        config_url = f"{server_url}/api/v1/node_mgmt/open_api/installer/session?token={token}"
+        bootstrap_base_url = request.build_absolute_uri("/").rstrip("/")
+        installer_url = f"{bootstrap_base_url}/api/v1/node_mgmt/open_api/installer/linux/download?token={token}"
+        config_url = f"{bootstrap_base_url}/api/v1/node_mgmt/open_api/installer/session?token={token}"
 
         script = f'''#!/bin/bash
 set -euo pipefail
