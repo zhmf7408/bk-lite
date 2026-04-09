@@ -14,13 +14,15 @@ import { ClientProvider } from '@/context/client';
 import { PermissionsProvider, usePermissions } from '@/context/permissions';
 import AuthProvider from '@/context/auth';
 import TopMenu from '@/components/top-menu';
-import { ConfigProvider } from 'antd';
+import { ConfigProvider, Watermark } from 'antd';
 import Spin from '@/components/spin';
+import { portalBrandingDefaults, usePortalBranding } from '@/hooks/usePortalBranding';
 import '@/styles/globals.css';
 import { MenuItem } from '@/types/index'
 import WithSideMenuLayout from '@/components/sub-layout'
 import { shouldRenderSecondLayerMenu } from '@/utils/menuHelpers'
 import { isSessionExpiredState } from '@/utils/sessionExpiry'
+import { useUserInfoContext } from '@/context/userInfo';
 
 const Loader = () => (
   <div className="flex justify-center items-center h-screen">
@@ -28,10 +30,41 @@ const Loader = () => (
   </div>
 );
 
+const applyWatermarkTemplate = (template: string, variables: Record<string, string>) => {
+  return template.replace(/\$\{([a-zA-Z0-9_]+)\}/g, (match, key) => variables[key] ?? match);
+};
+
+const PortalBrandingHead = () => {
+  const { portalName, faviconUrl } = usePortalBranding();
+
+  useEffect(() => {
+    const head = document.head;
+    let faviconLink = head.querySelector('link[data-portal-favicon="true"]') as HTMLLinkElement | null;
+
+    if (!faviconLink) {
+      faviconLink = document.createElement('link');
+      faviconLink.rel = 'icon';
+      faviconLink.setAttribute('data-portal-favicon', 'true');
+      head.appendChild(faviconLink);
+    }
+
+    faviconLink.type = 'image/png';
+    faviconLink.href = faviconUrl || portalBrandingDefaults.faviconUrl;
+  }, [faviconUrl]);
+
+  useEffect(() => {
+    document.title = `${portalName || portalBrandingDefaults.portalName} - AI 原生的轻量化运维平台`;
+  }, [portalName]);
+
+  return null;
+};
+
 const LayoutWithProviders = ({ children }: { children: React.ReactNode }) => {
   const { loading: permissionsLoading, hasPermission, menus } = usePermissions();
   const { data: session, status } = useSession();
   const { loading: menusLoading, configMenus } = useMenus();
+  const { username, displayName } = useUserInfoContext();
+  const { portalName, watermarkEnabled, watermarkText } = usePortalBranding();
   const router = useRouter();
   const pathname = usePathname();
   const [isAllowed, setIsAllowed] = useState(false);
@@ -102,11 +135,23 @@ const LayoutWithProviders = ({ children }: { children: React.ReactNode }) => {
     return pathname?.startsWith('/opspilot/studio/chat');
   }, [pathname]);
 
+  const watermarkContent = useMemo(() => {
+    const today = new Date().toISOString().slice(0, 10);
+    return applyWatermarkTemplate(watermarkText || portalBrandingDefaults.watermarkText, {
+      portalName: portalName || portalBrandingDefaults.portalName,
+      username: username || (session?.user as any)?.username || 'admin',
+      chname: displayName || (session?.user as any)?.username || 'admin',
+      email: ((session?.user as any)?.email as string | undefined) || 'admin@bklite.local',
+      phone: '13800138000',
+      date: today,
+    });
+  }, [displayName, portalName, session, username, watermarkText]);
+
   if (isLoading || (isAuthenticated && !isAllowed && pathname && !excludedPaths.includes(pathname) && !isLoading)) {
     return <Loader />;
   }
 
-  return (
+  const layoutContent = (
     <AntdRegistry>
       <div className="flex flex-col min-h-screen">
         {isAuthenticated && !isAuthRoute && (
@@ -129,6 +174,25 @@ const LayoutWithProviders = ({ children }: { children: React.ReactNode }) => {
       </div>
     </AntdRegistry>
   );
+
+  if (!isAuthenticated || !watermarkEnabled) {
+    return layoutContent;
+  }
+
+  return (
+    <Watermark
+      content={watermarkContent}
+      gap={[120, 120]}
+      rotate={-24}
+      zIndex={20}
+      font={{
+        color: 'rgba(93,103,121,0.14)',
+        fontSize: 14,
+      }}
+    >
+      {layoutContent}
+    </Watermark>
+  );
 };
 
 export default function RootLayout({
@@ -140,7 +204,7 @@ export default function RootLayout({
     <html lang="en">
       <head>
         <title>BlueKing Lite - AI 原生的轻量化运维平台</title>
-        <link rel="icon" href="/logo-site.png" type="image/png"/>
+        <link rel="icon" href="/logo-site.png" type="image/png" data-portal-favicon="true" />
         <Script src="/iconfont.js" strategy="afterInteractive"/>
       </head>
       <body>
@@ -150,6 +214,7 @@ export default function RootLayout({
             <LocaleProvider>
               <ThemeProvider>
                 <AuthProvider>
+                  <PortalBrandingHead />
                   <UserInfoProvider>
                     <ClientProvider>
                       <MenusProvider>

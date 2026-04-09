@@ -281,6 +281,52 @@
       "threeMonths": "3 Months",
       "seconds": "seconds"
     },
+    "settings": {
+      "tabs": {
+        "key": "Keys",
+        "portal": "Portal",
+        "license": "License"
+      },
+      "portal": {
+        "title": "Portal Settings",
+        "content": "Configure the portal name, watermark, and brand presentation. The preview on the right reuses the real console home layout.",
+        "basic": "Basic Information",
+        "portalName": "Portal Name",
+        "portalNameHint": "Used in the browser tab, console header, and welcome copy.",
+        "placeholderName": "Please enter portal name",
+        "logo": "Brand Assets",
+        "portalLogo": "Portal Logo",
+        "portalLogoHint": "A transparent background image is recommended. Supports PNG, JPG, WEBP, and SVG up to 512KB. It will be used on the sign-in page and console header.",
+        "browserFavicon": "Browser Favicon",
+        "browserFaviconHint": "Upload a square icon for browser tabs and bookmarks. Supports PNG, JPG, WEBP, SVG, and ICO up to 512KB.",
+        "uploadLogo": "Upload Logo",
+        "uploadFavicon": "Upload Icon",
+        "restoreDefault": "Restore Default",
+        "uploadPending": "Upload is not wired yet in this version. This area currently provides the layout and preview placeholder.",
+        "uploadSuccess": "Image uploaded and saved",
+        "restoreSuccess": "Default image restored",
+        "invalidImageType": "Only PNG, JPG, WEBP, and SVG are supported. Icons also support ICO.",
+        "uploadTooLarge": "Image size must be 512KB or smaller",
+        "watermark": "Portal Watermark",
+        "enabled": "Enabled",
+        "disabled": "Disabled",
+        "watermarkText": "Watermark Text",
+        "watermarkTextHint": "You can combine variables to generate personalized watermark text. When disabled, the preview will hide the watermark.",
+        "placeholderWatermark": "Please enter watermark text",
+        "availableVariables": "Available Variables",
+        "variableChineseName": "Display Name",
+        "variableChineseNameFallback": "Administrator",
+        "variablePhone": "Phone",
+        "variableDate": "Date",
+        "preview": "Preview",
+        "previewTitle": "Welcome to {{portalName}} Console",
+        "previewDescription": "The preview reuses the console homepage structure so you can verify the portal name, watermark, and branding in a real content layout.",
+        "previewDate": "Date",
+        "previewCustomSettings": "Custom Settings",
+        "previewEnter": "Open",
+        "saveSuccess": "Portal settings saved"
+      }
+    },
     "channel": {
       "settings": {
         "editChannel": "Edit Channel",
@@ -396,7 +442,13 @@
       "chinese": "Chinese",
       "selectedusers": "Selected Users",
       "modifyrole": "Modify Role",
-      "english": "English"
+      "english": "English",
+      "confirm": "Confirm",
+      "cancel": "Cancel",
+      "copySuccess": "Copied successfully",
+      "copyFailed": "Copy failed",
+      "fetchFailed": "Failed to fetch data",
+      "saveFailed": "Save failed"
     }
   }
 }

@@ -186,7 +186,7 @@ const ScrectKeyPage: React.FC = () => {
         />
       </div>
       <section
-        className="bg-[var(--color-bg)] p-4 rounded-md"
+        className="rounded-md bg-(--color-bg) p-4"
         style={{ height: 'calc(100vh - 235px)' }}
       >
         {loading ? (

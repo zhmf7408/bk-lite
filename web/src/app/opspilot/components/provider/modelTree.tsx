@@ -33,8 +33,8 @@ const ModelTree: React.FC<ModelTreeProps> = ({
         <div className="flex justify-between items-center w-full text-xs">
           <span>{t('common.all')}</span>
           <div className="flex items-center gap-1">
-            <span className="text-gray-500 text-xs flex-shrink-0">({totalCount})</span>
-            <div className="w-4 h-4 flex-shrink-0"></div>
+            <span className="shrink-0 text-xs text-(--color-text-3)">({totalCount})</span>
+            <div className="h-4 w-4 shrink-0"></div>
           </div>
         </div>
       ),
@@ -58,7 +58,7 @@ const ModelTree: React.FC<ModelTreeProps> = ({
               {group.display_name || group.name}
             </span>
             <div className="flex items-center gap-1">
-              <span className="text-gray-500 text-xs flex-shrink-0">({group.count || 0})</span>
+              <span className="shrink-0 text-xs text-(--color-text-3)">({group.count || 0})</span>
               {!group.is_build_in ? (
                 <Dropdown
                   trigger={['click']}
@@ -97,7 +97,7 @@ const ModelTree: React.FC<ModelTreeProps> = ({
                 </Dropdown>
               ) : (
                 // Placeholder for built-in groups to align count display
-                <div className="w-4 h-4 flex-shrink-0"></div>
+                <div className="h-4 w-4 shrink-0"></div>
               )}
             </div>
           </div>
@@ -153,8 +153,8 @@ const ModelTree: React.FC<ModelTreeProps> = ({
   }
 
   return (
-    <div className="h-full flex flex-col bg-[var(--color-bg-1)] rounded-md">
-      <div className="flex justify-between items-center p-3 border-b border-[var(--color-border-2)] gap-2">
+    <div className="h-full flex flex-col rounded-md bg-(--color-bg-1)">
+      <div className="flex items-center justify-between gap-2 border-b border-(--color-border-2) p-3">
         <Search
           placeholder={`${t('common.search')}...`}
           value={searchValue}
@@ -169,7 +169,7 @@ const ModelTree: React.FC<ModelTreeProps> = ({
             size="small"
             icon={<PlusOutlined />}
             onClick={onGroupAdd}
-            className="flex items-center justify-center flex-shrink-0"
+            className="flex shrink-0 items-center justify-center"
           />
         </PermissionWrapper>
       </div>
@@ -189,7 +189,7 @@ const ModelTree: React.FC<ModelTreeProps> = ({
             nodeDraggable: (node) => node.key !== 'all'
           }}
           allowDrop={({ dropNode }) => dropNode.key !== 'all'}
-          className="[&_.ant-tree-node-content-wrapper]:px-2 [&_.ant-tree-node-content-wrapper]:py-1 [&_.ant-tree-node-content-wrapper]:rounded [&_.ant-tree-node-content-wrapper]:transition-all [&_.ant-tree-node-content-wrapper:hover]:bg-gray-50 [&_.ant-tree-node-selected_.ant-tree-node-content-wrapper]:bg-blue-50 [&_.ant-tree-node-selected_.ant-tree-node-content-wrapper]:text-blue-600"
+          className="[&_.ant-tree-node-content-wrapper]:px-2 [&_.ant-tree-node-content-wrapper]:py-1 [&_.ant-tree-node-content-wrapper]:rounded [&_.ant-tree-node-content-wrapper]:transition-all [&_.ant-tree-node-content-wrapper:hover]:bg-(--color-fill-1) [&_.ant-tree-node-selected_.ant-tree-node-content-wrapper]:bg-(--color-primary-bg-active) [&_.ant-tree-node-selected_.ant-tree-node-content-wrapper]:text-(--color-primary)"
         />
       </div>
     </div>

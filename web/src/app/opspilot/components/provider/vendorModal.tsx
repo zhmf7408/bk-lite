@@ -227,7 +227,7 @@ const VendorModal: React.FC<VendorModalProps> = ({
                   className="flex flex-col items-center gap-3 rounded-2xl border px-3 py-4 transition-all duration-200"
                   style={{
                     borderColor: selected ? 'var(--color-primary)' : 'var(--color-border-2)',
-                    background: selected ? 'rgba(45, 107, 255, 0.08)' : '#fff',
+                    background: selected ? 'rgba(45, 107, 255, 0.08)' : 'var(--color-bg)',
                   }}
                   onClick={() => form.setFieldValue('vendor_type', option.value)}
                 >

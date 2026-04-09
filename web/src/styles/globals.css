@@ -80,6 +80,16 @@
   --color-modal-header-color: #f5f8ff;
   --color-bg-image-gradient-1: #e3e8ff;
   --color-bg-image-gradient-2: #f9fafb;
+  --color-portal-card-shadow: rgba(33,59,99, 0.1);
+  --color-portal-surface-soft: #edf4ff;
+  --color-portal-surface-soft-2: #f8fbff;
+  --color-portal-surface-overlay: rgba(255,255,255, 0.76);
+  --color-portal-preview-border: #d9e2f0;
+  --color-portal-preview-border-strong: #d6e1f1;
+  --color-portal-preview-divider: #e7edf6;
+  --color-portal-preview-shell: rgba(255,255,255, 0.96);
+  --color-portal-preview-tab-bg: #edf3fc;
+  --color-portal-preview-icon-bg: #f4f7fc;
 
   --ant-dropdown-padding-block: 5px;
   --ant-popover-inner-padding: 12px;
@@ -135,6 +145,16 @@
   --color-modal-header-color: var(--color-bg-2);
   --color-bg-image-gradient-1: #2e313a;
   --color-bg-image-gradient-2: #161719;
+  --color-portal-card-shadow: rgba(0,0,0, 0.28);
+  --color-portal-surface-soft: #13273a;
+  --color-portal-surface-soft-2: #0e1f2f;
+  --color-portal-surface-overlay: rgba(7,29,44, 0.78);
+  --color-portal-preview-border: rgba(255,255,255, 0.12);
+  --color-portal-preview-border-strong: rgba(255,255,255, 0.16);
+  --color-portal-preview-divider: rgba(255,255,255, 0.08);
+  --color-portal-preview-shell: rgba(7,29,44, 0.88);
+  --color-portal-preview-tab-bg: #213548;
+  --color-portal-preview-icon-bg: rgba(255,255,255, 0.08);
 }
 
 body {

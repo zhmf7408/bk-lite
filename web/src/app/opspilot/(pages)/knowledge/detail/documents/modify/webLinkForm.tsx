@@ -19,12 +19,12 @@ interface WebLinkFormProps {
 const WebLinkForm = forwardRef<FormInstance, WebLinkFormProps>(({ onFormChange, onFormDataChange, initialData }, ref) => {
   const { t } = useTranslation();
   const [form] = Form.useForm();
-  const [formData, setFormData] = useState<{ 
-    name: string; 
-    link: string; 
-    deep: number; 
-    sync_enabled: boolean; 
-    sync_time: string; 
+  const [formData, setFormData] = useState<{
+    name: string;
+    link: string;
+    deep: number;
+    sync_enabled: boolean;
+    sync_time: string;
   }>({
     name: initialData.name,
     link: initialData.link,

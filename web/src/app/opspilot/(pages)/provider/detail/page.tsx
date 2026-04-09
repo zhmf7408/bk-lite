@@ -31,7 +31,7 @@ const ProviderDetailPage: React.FC = () => {
   }
 
   return (
-    <div className="w-full rounded-3xl bg-white p-5 shadow-sm lg:p-6">
+    <div className="w-full rounded-3xl bg-(--color-bg) p-5 shadow-sm lg:p-6">
       <div className="mb-2 flex items-center gap-2 text-xs" style={{ color: 'var(--color-text-3)' }}>
         <span>供应商</span>
         <span>/</span>
