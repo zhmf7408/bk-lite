@@ -55,13 +55,24 @@ const WebLinkForm = forwardRef<FormInstance, WebLinkFormProps>(({ onFormChange, 
   };
 
   const validateURL = (_: any, value: string) => {
-    const urlPattern = new RegExp('^(https?:\\/\\/)?' + // 协议
-      '((([a-z\\d](([a-z\\d-]*[a-z\\d])?))\\.)+[a-z]{2,}|' + // 域名
-      '((\\d{1,3}\\.){3}\\d{1,3}))' + // 或者 IP 地址
-      '(\\:\\d+)?(\\/[-a-z\\d%_.~+]*)*' + // 端口和路径
-      '(\\?[;&a-z\\d%_.~+=-]*)?' + // 查询字符串
-      '(\\#[-a-z\\d_]*)?$', 'i'); // 片段定位符
-    return urlPattern.test(value) ? Promise.resolve() : Promise.reject(t('common.invalidURL'));
+    const normalizedValue = value?.trim();
+
+    if (!normalizedValue) {
+      return Promise.resolve();
+    }
+
+    try {
+      const candidate = /^https?:\/\//i.test(normalizedValue) ? normalizedValue : `https://${normalizedValue}`;
+      const parsedUrl = new URL(candidate);
+
+      if (!["http:", "https:"].includes(parsedUrl.protocol) || !parsedUrl.hostname) {
+        return Promise.reject(t('common.invalidURL'));
+      }
+
+      return Promise.resolve();
+    } catch {
+      return Promise.reject(t('common.invalidURL'));
+    }
   };
 
   return (
