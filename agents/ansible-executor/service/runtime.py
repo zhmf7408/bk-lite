@@ -1,4 +1,5 @@
 import os
+import shutil
 import sys
 from pathlib import Path
 
@@ -102,3 +103,27 @@ def log_ansible_windows_collection_layout() -> None:
         nested_module_path.exists(),
         nested_module_path.is_file(),
     )
+
+
+def repair_ansible_windows_collection_layout(collections_path: str | Path) -> bool:
+    collections_root = Path(collections_path)
+    windows_root = collections_root / "ansible_collections" / "ansible" / "windows"
+    if not windows_root.exists() or not windows_root.is_dir():
+        return False
+
+    repaired = False
+    for path in windows_root.rglob("*"):
+        nested_file = path / path.name
+        if not path.is_dir() or not nested_file.is_file():
+            continue
+        backup_content = nested_file.read_bytes()
+        shutil.rmtree(path)
+        path.write_bytes(backup_content)
+        repaired = True
+        logger.warning(
+            "repaired ansible windows collection entry: path=%s nested_file=%s",
+            path,
+            nested_file,
+        )
+
+    return repaired

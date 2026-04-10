@@ -135,7 +135,7 @@ def to_playbook_request(payload: dict[str, Any]) -> PlaybookRequest:
         raise ValueError("file_distribution must be object")
 
     logger.info(
-        "to_playbook_request payload check: "
+        "?? to_playbook_request payload check: "
         "task_id=%s "
         "playbook_path=%r "
         "playbook_content_is_none=%s "
