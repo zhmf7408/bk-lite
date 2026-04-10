@@ -27,8 +27,8 @@ from ag_ui.encoder import EventEncoder
 from langchain_core.messages import AIMessage, AIMessageChunk, HumanMessage, SystemMessage
 from langchain_core.messages.base import BaseMessage
 from langgraph.constants import START
-from loguru import logger
 
+from apps.core.logger import opspilot_logger as logger
 from apps.opspilot.metis.llm.chain.entity import BasicLLMRequest, BasicLLMResponse
 from apps.opspilot.utils.execution_interrupt import is_interrupt_requested
 

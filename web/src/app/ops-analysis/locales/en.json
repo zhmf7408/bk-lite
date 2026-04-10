@@ -1,8 +1,8 @@
 {
-"common": {
+  "common": {
     "total": "Total",
     "items": "items"
-},
+  },
   "topology": {
     "nodeConfig": {
       "width": "Width",
@@ -215,10 +215,10 @@
     "fieldDescription": "Description",
     "duplicateFieldKeys": "Duplicate field names: ",
     "valueTypes": {
-        "string": "String",
-        "number": "Number",
-        "boolean": "Boolean",
-        "datetime": "Datetime"
+      "string": "String",
+      "number": "Number",
+      "boolean": "Boolean",
+      "datetime": "Datetime"
     }
   },
   "dashboard": {
@@ -296,6 +296,59 @@
     "inputPlaceholder": "Please enter name",
     "selectItem": "Please select a dashboard or topology",
     "addDash": "Add Dashboard",
-    "addGroup": "Add Group"
+    "addGroup": "Add Group",
+    "exportYaml": "Export YAML",
+    "importYaml": "Import YAML",
+    "exportSuccess": "Export success",
+    "exportFailed": "Export failed",
+    "exportConfirmMsg": "Are you sure you want to export",
+    "includeDependencies": "Dependencies will be included automatically (such as data sources and namespaces)",
+    "importInvalidFileType": "Please upload a YAML file",
+    "importFileTooLarge": "File size cannot exceed 2MB",
+    "importPrecheckFailed": "Precheck failed, contains formatting errors",
+    "importPrecheckError": "Error parsing file",
+    "importSubmitFailed": "Submit import failed",
+    "importSubmitError": "Error occurred during import",
+    "importUploadText": "Click or drag file to this area",
+    "importUploadHint": "Support for a single or bulk upload. Strictly prohibit from uploading company data or other band files",
+    "objectName": "Object ID",
+    "objectType": "Type",
+    "conflictReason": "Conflict Reason",
+    "objectTypeLabel": {
+      "dashboard": "Dashboard",
+      "topology": "Topology",
+      "architecture": "Architecture",
+      "datasource": "Data Source",
+      "namespace": "Namespace"
+    },
+    "conflictReasonLabel": {
+      "name_conflict": "Name conflict",
+      "no_permission_conflict": "Cross-org conflict"
+    },
+    "conflictAction": "Action",
+    "actionSkip": "Skip",
+    "actionOverwrite": "Overwrite",
+    "actionRename": "Rename",
+    "importWarnings": "Warnings, please modify the YAML and re-upload",
+    "totalObjects": "Total objects: ",
+    "resolveConflicts": "Please resolve the following conflicts:",
+    "precheckPass": "Precheck passed, no conflicts found. Ready to import.",
+    "reupload": "Re-upload",
+    "startImport": "Start Import",
+    "status": "Status",
+    "statusSuccess": "Success",
+    "statusFailed": "Failed",
+    "statusSkipped": "Skipped",
+    "statusOverwritten": "Overwritten",
+    "message": "Message",
+    "importResultSummary": "Import complete",
+    "totalCount": "Total:",
+    "successCount": "Success:",
+    "overwrittenCount": "Overwritten:",
+    "skippedCount": "Skipped:",
+    "failedCount": "Failed:",
+    "stepUpload": "Upload File",
+    "stepPrecheck": "Precheck",
+    "stepResult": "Result"
   }
 }

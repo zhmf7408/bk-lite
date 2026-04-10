@@ -5,25 +5,31 @@ AGUI协议聊天流式处理模块
 """
 
 import json
-import logging
 import re
 import threading
 import time
 
 from django.http import StreamingHttpResponse
 
+from apps.core.logger import opspilot_logger as logger
 from apps.opspilot.models import LLMModel, SkillRequestLog
 from apps.opspilot.services.chat_service import chat_service
 from apps.opspilot.utils.agent_factory import create_agent_instance, create_sse_response_headers
 from apps.opspilot.utils.execution_interrupt import is_interrupt_requested
 from apps.opspilot.utils.sse_chat import _process_think_content, _split_think_content
 
-logger = logging.getLogger(__name__)
+
+def _looks_like_implicit_thinking_prefix(content: str) -> bool:
+    normalized = content.lstrip().lower()
+    if not normalized:
+        return True
+    prefixes = ("thinking", "thinking process", "reasoning", "thought process", "思考", "思考过程")
+    return any(prefix.startswith(normalized) or normalized.startswith(prefix) for prefix in prefixes)
 
 
 def _sanitize_think_tag_residue(content: str, show_think: bool) -> str:
     """移除残余 think 标签，兜底处理孤立的 <think>/</think> 输出"""
-    if show_think or not content:
+    if not content:
         return content
     return content.replace("<think>", "").replace("</think>", "")
 
@@ -144,6 +150,26 @@ def _flush_post_tool_pending_content_split(state: dict) -> list[str]:
     return lines
 
 
+def _flush_pending_content_detecting_implicit_think(state: dict) -> list[str]:
+    pending_content_events = state["pending_content_events"]
+    if not pending_content_events:
+        return []
+    combined_content = "".join(event.get("delta", "") for event in pending_content_events)
+    template_event = pending_content_events[-1]
+    pending_content_events.clear()
+    if "</think>" not in combined_content:
+        return [_build_sse_line({**template_event, "delta": combined_content})]
+    think_content, visible_content = combined_content.split("</think>", 1)
+    lines = []
+    think_content = _sanitize_think_tag_residue(think_content, True)
+    visible_content = _sanitize_think_tag_residue(visible_content, True)
+    if think_content.strip():
+        lines.append(_build_sse_line(_build_thinking_event(think_content, template_event.get("timestamp"))))
+    if visible_content:
+        lines.append(_build_sse_line({**template_event, "delta": visible_content}))
+    return lines
+
+
 def _handle_text_message_content_event(data_json: dict, state: dict, show_think: bool, enable_thinking_split: bool) -> tuple[str, list[str]]:
     content_chunk = data_json.get("delta", "")
     thinking_content = ""
@@ -179,12 +205,48 @@ def _handle_text_message_content_event(data_json: dict, state: dict, show_think:
             state["has_think_tags"],
         )
 
+    raw_output_content = output_content
     output_content = _sanitize_think_tag_residue(output_content, show_think)
     thinking_content = _sanitize_think_tag_residue(thinking_content, show_think)
 
     immediate_lines = []
     if show_think and enable_thinking_split and thinking_content:
         immediate_lines.append(_build_sse_line(_build_thinking_event(thinking_content, data_json.get("timestamp"))))
+
+    if state["pending_phase"] == "pre_think_candidate" and data_json.get("message_id") == state["active_message_id"]:
+        if raw_output_content == "</think>" and not state["pending_content_events"]:
+            return "", immediate_lines
+        if "</think>" in raw_output_content and _looks_like_implicit_thinking_prefix(raw_output_content):
+            state["buffer_pre_tool_content"] = False
+            state["pending_phase"] = None
+            state["pending_content_events"].append({**data_json, "delta": raw_output_content})
+            lines = _flush_pending_content_detecting_implicit_think(state)
+            if not lines:
+                return "", immediate_lines
+            output_line = lines[-1]
+            immediate_lines.extend(lines[:-1])
+            return output_line, immediate_lines
+        state["pending_content_events"].append({**data_json, "delta": raw_output_content})
+        combined_content = "".join(event.get("delta", "") for event in state["pending_content_events"])
+        if not _looks_like_implicit_thinking_prefix(combined_content):
+            state["buffer_pre_tool_content"] = False
+            state["pending_phase"] = None
+            lines = _flush_pending_content_events(state)
+            if not lines:
+                return "", immediate_lines
+            output_line = lines[-1]
+            immediate_lines.extend(lines[:-1])
+            return output_line, immediate_lines
+        if "</think>" in combined_content:
+            state["buffer_pre_tool_content"] = False
+            state["pending_phase"] = None
+            lines = _flush_pending_content_detecting_implicit_think(state)
+            if not lines:
+                return "", immediate_lines
+            output_line = lines[-1]
+            immediate_lines.extend(lines[:-1])
+            return output_line, immediate_lines
+        return "", immediate_lines
 
     if not output_content:
         return "", immediate_lines
@@ -198,13 +260,6 @@ def _handle_text_message_content_event(data_json: dict, state: dict, show_think:
 
 
 def _handle_tool_transition_event(event_type: str, data_json: dict, state: dict, show_think: bool, enable_thinking_split: bool) -> list[str]:
-    logger.info(
-        "[AGUI Chat] tool transition event: type=%s, tool_name=%s, tool_call_id=%s, parent_message_id=%s",
-        event_type,
-        data_json.get("tool_name"),
-        data_json.get("tool_call_id"),
-        data_json.get("parent_message_id"),
-    )
     if event_type == "TOOL_CALL_START":
         parent_message_id = data_json.get("parent_message_id")
         if state["buffer_pre_tool_content"] and parent_message_id == state["active_message_id"]:
@@ -250,6 +305,9 @@ def _handle_text_message_end_event(data_json: dict, state: dict, show_think: boo
                     )
                 )
 
+    if state["pending_phase"] == "pre_think_candidate" and data_json.get("message_id") == state["active_message_id"]:
+        lines.extend(_flush_pending_content_detecting_implicit_think(state))
+
     if state["buffer_pre_tool_content"] and data_json.get("message_id") == state["active_message_id"]:
         if state["emit_pending_as_thinking"] and state["pending_phase"] == "post_tool":
             lines.extend(_flush_post_tool_pending_content_split(state))
@@ -281,9 +339,15 @@ def _handle_agui_data_event(data_json: dict, state: dict, show_think: bool, enab
     if event_type == "TEXT_MESSAGE_START":
         state["active_message_id"] = data_json.get("message_id")
         state["pending_content_events"].clear()
-        state["buffer_pre_tool_content"] = True
-        state["emit_pending_as_thinking"] = show_think and enable_thinking_split
-        state["pending_phase"] = "post_tool" if state["post_tool_result_seen"] else "pre_tool"
+        state["pending_phase"] = (
+            "post_tool" if state["post_tool_result_seen"] else ("pre_think_candidate" if show_think and enable_thinking_split else None)
+        )
+        if state["post_tool_result_seen"]:
+            state["buffer_pre_tool_content"] = True
+            state["emit_pending_as_thinking"] = show_think and enable_thinking_split
+        else:
+            state["buffer_pre_tool_content"] = bool(show_think and enable_thinking_split)
+            state["emit_pending_as_thinking"] = False
         return _build_sse_line(data_json), []
 
     if event_type in {"THINKING_TEXT_MESSAGE_START", "THINKING_TEXT_MESSAGE_END"}:

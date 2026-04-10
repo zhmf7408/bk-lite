@@ -197,3 +197,19 @@ def daily_data_cleanup_task() -> dict:
 
     logger.info("Starting daily data cleanup task")
     return DataCleanupService.run_daily_cleanup()
+
+
+@shared_task
+def reconcile_instance_auto_association_task(instance_id: int) -> dict:
+    from apps.cmdb.services.auto_relation_reconcile import AutoRelationRuleReconcileService
+
+    logger.info("[AutoRelationRule] start instance reconcile, instance_id=%s", instance_id)
+    return AutoRelationRuleReconcileService.reconcile_for_instance(instance_id)
+
+
+@shared_task
+def full_sync_auto_association_rule_task(model_asst_id: str) -> dict:
+    from apps.cmdb.services.auto_relation_reconcile import AutoRelationRuleReconcileService
+
+    logger.info("[AutoRelationRule] start rule full sync, model_asst_id=%s", model_asst_id)
+    return AutoRelationRuleReconcileService.full_sync_rule(model_asst_id)

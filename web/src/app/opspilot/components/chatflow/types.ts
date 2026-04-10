@@ -135,7 +135,7 @@ export interface ChatflowEditorRef {
 }
 
 export interface ChatflowExecutionSummary {
-  status: 'idle' | 'running' | 'success' | 'failed';
+  status: 'idle' | 'running' | 'success' | 'failed' | 'interrupted' | 'interrupt_requested';
   title?: string;
   reason?: string | null;
 }

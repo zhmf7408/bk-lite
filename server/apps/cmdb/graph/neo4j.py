@@ -454,14 +454,17 @@ class Neo4jClient:
         edges = self.edge_to_list(objs, return_entity)
         return edges[0]
 
-    def format_properties_set(self, properties: dict):
+    def format_properties_set(self, properties: dict, alias: str = "n"):
         """格式化properties的set数据"""
         properties_str = ""
         for key, value in properties.items():
+            target = f"{alias}.{key}"
             if type(value) == str:
-                properties_str += f"n.{key}='{value}',"
+                properties_str += f"{target}='{value}',"
+            elif value is None:
+                properties_str += f"{target}=null,"
             else:
-                properties_str += f"n.{key}={value},"
+                properties_str += f"{target}={value},"
         return properties_str if properties_str == "" else properties_str[:-1]
 
     def set_entity_properties(
@@ -554,6 +557,17 @@ class Neo4jClient:
     def delete_edge(self, edge_id: int):
         """删除边"""
         self.session.run(f"MATCH ()-[n]->() WHERE id(n) = {edge_id} DELETE n")
+
+    def set_edge_properties(self, edge_id: int, properties: dict):
+        properties_str = self.format_properties_set(properties, alias="e")
+        if not properties_str:
+            raise BaseAppException("properties is empty")
+        edge = self.session.run(
+            f"MATCH ()-[e]->() WHERE id(e) = {edge_id} SET {properties_str} RETURN e"
+        ).single()
+        if not edge:
+            raise BaseAppException("edge not found")
+        return self.edge_to_dict(edge)
 
     def entity_objs(self, label: str, params: list, permission_params: str = ""):
         """实体对象查询"""

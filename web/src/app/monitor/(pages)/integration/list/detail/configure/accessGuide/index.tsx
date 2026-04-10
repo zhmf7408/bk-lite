@@ -1,7 +1,17 @@
 'use client';
 
 import React, { useEffect, useMemo, useState } from 'react';
-import { Button, Card, Form, Select, Space, Spin, Table, Tabs, Tag } from 'antd';
+import {
+  Button,
+  Card,
+  Form,
+  Select,
+  Space,
+  Spin,
+  Table,
+  Tabs,
+  Tag
+} from 'antd';
 import { CopyOutlined } from '@ant-design/icons';
 import { useSearchParams } from 'next/navigation';
 import { useTranslation } from '@/utils/i18n';
@@ -10,6 +20,7 @@ import { TemplateAccessGuideDoc } from '@/app/monitor/types/integration';
 import { useUserInfoContext } from '@/context/userInfo';
 import { Group } from '@/types/index';
 import CodeEditor from '@/app/monitor/components/codeEditor';
+import { useCopy } from '@/hooks/useCopy';
 
 type SampleFormat = 'curl' | 'python' | 'javascript';
 
@@ -34,7 +45,10 @@ const getGroupDisplayPath = (group: Group, flatGroups: Group[]) => {
   return names.join('/');
 };
 
-const buildCurlExample = (endpoint: string, line: string) => `curl -X POST '${endpoint}' \\
+const buildCurlExample = (
+  endpoint: string,
+  line: string
+) => `curl -X POST '${endpoint}' \\
   -H 'Content-Type: text/plain' \\
   --data-binary '${escapeSingleQuotes(line)}'`;
 
@@ -50,7 +64,10 @@ response = requests.post(url, headers=headers, data=payload.encode('utf-8'), tim
 print(response.status_code)
 print(response.text)`;
 
-const buildJavascriptExample = (endpoint: string, line: string) => `const endpoint = '${endpoint}';
+const buildJavascriptExample = (
+  endpoint: string,
+  line: string
+) => `const endpoint = '${endpoint}';
 
 const payload = '${line}';
 
@@ -65,27 +82,30 @@ const response = await fetch(endpoint, {
 console.log(response.status);
 console.log(await response.text());`;
 
-const buildRequestParamDocs = (doc: TemplateAccessGuideDoc | null) => [
+const buildRequestParamDocs = (
+  doc: TemplateAccessGuideDoc | null,
+  t: (key: string) => string
+) => [
   {
     key: 'organization_id',
-    name: 'organization_id=<组织ID>',
+    name: t('monitor.integrations.customApi.organizationIdName'),
     type: 'tag(number/string)',
-    required: '是',
-    description: `组织 ID 标签，固定为当前选择的组织，例如 ${doc?.organization_id || '--'}`
+    required: t('monitor.integrations.customApi.yes'),
+    description: `${t('monitor.integrations.customApi.organizationIdDesc')}${doc?.organization_id || '--'}`
   },
   {
     key: 'instance_type',
-    name: 'instance_type=<对象类型>',
+    name: t('monitor.integrations.customApi.instanceTypeName'),
     type: 'tag(string)',
-    required: '是',
-    description: `对象类型标签，固定为当前模板绑定对象类型，例如 ${doc?.instance_type || '--'}`
+    required: t('monitor.integrations.customApi.yes'),
+    description: `${t('monitor.integrations.customApi.instanceTypeDesc')}${doc?.instance_type || '--'}`
   },
   {
     key: 'plugin_id',
-    name: 'plugin_id=<模板ID>',
+    name: t('monitor.integrations.customApi.pluginIdName'),
     type: 'tag(number/string)',
-    required: '是',
-    description: `插件模板 ID 标签，固定为当前模板 ID，例如 ${doc?.plugin_id || '--'}`
+    required: t('monitor.integrations.customApi.yes'),
+    description: `${t('monitor.integrations.customApi.pluginIdDesc')}${doc?.plugin_id || '--'}`
   },
   {
     key: 'instance_identifier',
@@ -103,39 +123,35 @@ const buildRequestParamDocs = (doc: TemplateAccessGuideDoc | null) => [
     key: 'measurement',
     name: '<metric_name>',
     type: 'measurement',
-    required: '是',
-    description: '行协议中的 measurement，建议直接使用模板中定义的指标名称'
+    required: t('monitor.integrations.customApi.yes'),
+    description: t('monitor.integrations.customApi.measurementDesc')
   },
   {
     key: 'field_value',
-    name: 'value=<指标值>',
+    name: t('monitor.integrations.customApi.fieldValueName'),
     type: 'field(number/string/boolean)',
-    required: '是',
-    description: '指标值字段，字段名建议固定使用 value'
+    required: t('monitor.integrations.customApi.yes'),
+    description: t('monitor.integrations.customApi.fieldValueDesc')
   },
   {
     key: 'timestamp',
     name: '<timestamp>',
     type: 'timestamp(ms)',
-    required: '否',
-    description: '可选时间戳；不传时默认使用服务端接收时间，传入时推荐使用 13 位毫秒时间戳，例如 1712052000000'
+    required: t('monitor.integrations.customApi.no'),
+    description: t('monitor.integrations.customApi.timestampParamDesc')
   },
   {
     key: 'extra_tags',
-    name: '<extra_tag>=<value>',
+    name: t('monitor.integrations.customApi.extraTagsName'),
     type: 'tag(optional)',
-    required: '否',
-    description: '可选扩展标签，可按业务需要继续追加在 measurement 后面，但不能替代监控对象唯一标识维度'
+    required: t('monitor.integrations.customApi.no'),
+    description: t('monitor.integrations.customApi.extraTagsDesc')
   }
 ];
 
-const copyText = async (text: string) => {
-  if (!text) return;
-  await navigator.clipboard.writeText(text);
-};
-
 const TemplateAccessGuide: React.FC = () => {
-  useTranslation();
+  const { t } = useTranslation();
+  const { copy } = useCopy();
   const searchParams = useSearchParams();
   const pluginId = searchParams.get('plugin_id') || '';
   const { getTemplateAccessGuide, getCloudRegionList } = useIntegrationApi();
@@ -216,33 +232,25 @@ const TemplateAccessGuide: React.FC = () => {
     [doc?.line_protocol_example_with_timestamp_ms, lineProtocolExample]
   );
 
-  const sampleCode = useMemo(() => {
-    const endpoint = doc?.endpoint || '';
-    if (sampleFormat === 'python') {
-      return buildPythonExample(endpoint, lineProtocolExample);
-    }
-    if (sampleFormat === 'javascript') {
-      return buildJavascriptExample(endpoint, lineProtocolExample);
-    }
-    return buildCurlExample(endpoint, lineProtocolExample);
-  }, [doc?.endpoint, lineProtocolExample, sampleFormat]);
-
-  const requestParamDocs = useMemo(() => buildRequestParamDocs(doc), [doc]);
+  const requestParamDocs = useMemo(
+    () => buildRequestParamDocs(doc, t),
+    [doc, t]
+  );
 
   const sampleExamples = useMemo(
     () => [
       {
         key: 'without_timestamp',
-        title: '示例一：不传时间戳（推荐使用服务端接收时间）',
+        title: t('monitor.integrations.customApi.exampleWithoutTimestamp'),
         line: lineProtocolExampleWithoutTimestamp
       },
       {
         key: 'with_timestamp_ms',
-        title: '示例二：传入 13 位毫秒时间戳',
+        title: t('monitor.integrations.customApi.exampleWithTimestampMs'),
         line: lineProtocolExampleWithTimestampMs
       }
     ],
-    [lineProtocolExampleWithoutTimestamp, lineProtocolExampleWithTimestampMs]
+    [lineProtocolExampleWithoutTimestamp, lineProtocolExampleWithTimestampMs, t]
   );
 
   return (
@@ -250,7 +258,9 @@ const TemplateAccessGuide: React.FC = () => {
       <div className="px-[10px]">
         <Space direction="vertical" size={20} className="w-full">
           <div>
-            <div className="mb-3 text-lg font-semibold">接入配置</div>
+            <div className="mb-3 text-lg font-semibold">
+              {t('monitor.integrations.customApi.accessConfig')}
+            </div>
             <Card
               style={{
                 background: 'var(--color-fill-1)',
@@ -264,11 +274,16 @@ const TemplateAccessGuide: React.FC = () => {
               }}
             >
               <Form layout="vertical" requiredMark>
-                <Form.Item label="云区域" required>
+                <Form.Item
+                  label={t('monitor.integrations.customApi.cloudRegion')}
+                  required
+                >
                   <div className="w-1/2 max-w-full">
                     <Select
                       value={selectedCloudRegion}
-                      placeholder="请选择云区域"
+                      placeholder={t(
+                        'monitor.integrations.customApi.selectCloudRegion'
+                      )}
                       loading={cloudRegionLoading}
                       options={cloudRegionList.map((item) => ({
                         value: Number(item.id),
@@ -279,11 +294,17 @@ const TemplateAccessGuide: React.FC = () => {
                   </div>
                 </Form.Item>
 
-                <Form.Item label="组织" required className="mb-0">
+                <Form.Item
+                  label={t('monitor.integrations.customApi.organization')}
+                  required
+                  className="mb-0"
+                >
                   <div className="w-1/2 max-w-full">
                     <Select
                       value={selectedOrganization}
-                      placeholder="请选择组织"
+                      placeholder={t(
+                        'monitor.integrations.customApi.selectOrganization'
+                      )}
                       options={organizationOptions}
                       onChange={(value) => setSelectedOrganization(value)}
                     />
@@ -294,10 +315,12 @@ const TemplateAccessGuide: React.FC = () => {
           </div>
 
           <div>
-            <div className="mb-3 text-lg font-semibold">API端点</div>
+            <div className="mb-3 text-lg font-semibold">
+              {t('monitor.integrations.customApi.apiEndpoint')}
+            </div>
             <div className="rounded-md border border-[var(--color-border)] bg-[var(--color-fill-1)] p-4">
               <div className="flex w-full items-center gap-3 rounded-md border border-[var(--color-border-1)] bg-[var(--color-bg-1)] px-3 py-2">
-                <Tag className="m-0 shrink-0 border-0 bg-[#34d399] px-2 py-0.5 text-[12px] font-medium text-white">
+                <Tag className="m-0 shrink-0 border-0 bg-[var(--color-success)] px-2 py-0.5 text-[12px] font-medium text-white">
                   POST
                 </Tag>
                 <div className="min-w-0 flex-1 rounded border border-[var(--color-border-1)] bg-[var(--color-fill-1)] px-3 py-1.5">
@@ -313,16 +336,18 @@ const TemplateAccessGuide: React.FC = () => {
                   icon={<CopyOutlined />}
                   className="shrink-0"
                   disabled={!doc?.endpoint}
-                  onClick={() => copyText(doc?.endpoint || '')}
+                  onClick={() => copy(doc?.endpoint || '')}
                 >
-                  复制
+                  {t('common.copy')}
                 </Button>
               </div>
             </div>
           </div>
 
           <div>
-            <div className="mb-3 text-lg font-semibold">请求示例</div>
+            <div className="mb-3 text-lg font-semibold">
+              {t('monitor.integrations.customApi.requestExample')}
+            </div>
             <div className="rounded-md border border-[var(--color-border)] bg-[var(--color-fill-1)]">
               <Tabs
                 activeKey={sampleFormat}
@@ -341,12 +366,17 @@ const TemplateAccessGuide: React.FC = () => {
                       sampleFormat === 'python'
                         ? buildPythonExample(doc?.endpoint || '', item.line)
                         : sampleFormat === 'javascript'
-                          ? buildJavascriptExample(doc?.endpoint || '', item.line)
+                          ? buildJavascriptExample(
+                            doc?.endpoint || '',
+                            item.line
+                          )
                           : buildCurlExample(doc?.endpoint || '', item.line);
 
                     return (
                       <div key={item.key}>
-                        <div className="mb-2 text-sm font-medium text-[var(--color-text-1)]">{item.title}</div>
+                        <div className="mb-2 text-sm font-medium text-[var(--color-text-1)]">
+                          {item.title}
+                        </div>
                         <CodeEditor
                           value={exampleCode}
                           mode={sampleFormat === 'python' ? 'python' : 'shell'}
@@ -364,19 +394,33 @@ const TemplateAccessGuide: React.FC = () => {
             </div>
           </div>
 
-          <div>
-            <div className="mb-3 text-lg font-semibold">请求参数说明</div>
+          <div className="mb-[10px]">
+            <div className="mb-3 text-lg font-semibold">
+              {t('monitor.integrations.customApi.requestParamsDesc')}
+            </div>
             <div className="rounded-md border border-[var(--color-border)] bg-[var(--color-fill-1)] p-4">
               <Table
                 rowKey="key"
                 pagination={false}
                 dataSource={requestParamDocs}
                 columns={[
-                  { title: '参数', dataIndex: 'name', key: 'name' },
-                  { title: '类型', dataIndex: 'type', key: 'type' },
-                  { title: '必填', dataIndex: 'required', key: 'required' },
                   {
-                    title: '说明',
+                    title: t('monitor.integrations.customApi.param'),
+                    dataIndex: 'name',
+                    key: 'name'
+                  },
+                  {
+                    title: t('monitor.integrations.customApi.type'),
+                    dataIndex: 'type',
+                    key: 'type'
+                  },
+                  {
+                    title: t('monitor.integrations.customApi.required'),
+                    dataIndex: 'required',
+                    key: 'required'
+                  },
+                  {
+                    title: t('monitor.integrations.customApi.description'),
                     dataIndex: 'description',
                     key: 'description'
                   }

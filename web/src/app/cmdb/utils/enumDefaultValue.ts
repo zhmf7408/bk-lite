@@ -55,6 +55,11 @@ export const getAttributeEnumOptionIds = ({
 
 export const getEnumDefaultValueForForm = (field: FullInfoAttrItem): string | string[] | undefined => {
   const mode = field.enum_select_mode === 'multiple' ? 'multiple' : 'single';
-  const sanitized = sanitizeDefaultValue(field.default_value, getEnumOptionIds(Array.isArray(field.option) ? field.option : []), mode);
+  const enumOptions = Array.isArray(field.option)
+    ? field.option.filter(
+      (item): item is EnumList => Boolean(item) && typeof item === 'object' && 'id' in item && 'name' in item,
+    )
+    : [];
+  const sanitized = sanitizeDefaultValue(field.default_value, getEnumOptionIds(enumOptions), mode);
   return mode === 'multiple' ? sanitized : sanitized[0];
 };

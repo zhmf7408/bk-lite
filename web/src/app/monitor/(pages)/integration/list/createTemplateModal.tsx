@@ -6,7 +6,7 @@ import React, {
   useMemo,
   useState
 } from 'react';
-import { Button, Form, Input, Radio, Select } from 'antd';
+import { Button, Form, Input, Radio, Select, Alert } from 'antd';
 import OperateModal from '@/components/operate-modal';
 import { ModalRef, ObjectItem } from '@/app/monitor/types';
 import { useTranslation } from '@/utils/i18n';
@@ -31,6 +31,7 @@ const CreateTemplateModal = forwardRef<ModalRef, CreateTemplateModalProps>(
     const [selectedObjectType, setSelectedObjectType] = useState<
       string | undefined
     >(undefined);
+    const templateType = Form.useWatch('template_type', form);
 
     const objectTypeOptions = useMemo(() => {
       const typeMap = new Map<string, string>();
@@ -184,6 +185,14 @@ const CreateTemplateModal = forwardRef<ModalRef, CreateTemplateModalProps>(
               </Radio>
             </Radio.Group>
           </Form.Item>
+          {templateType === 'pull' && (
+            <Alert
+              message={t('monitor.integrations.pullTemplateHint')}
+              type="warning"
+              showIcon
+              className="mb-[16px]"
+            />
+          )}
           <Form.Item
             label={t('monitor.integrations.templateDescription')}
             name="description"

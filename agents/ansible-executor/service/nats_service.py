@@ -1,8 +1,6 @@
 import asyncio
 import importlib
 import json
-import logging
-import os
 import ssl
 import uuid
 from dataclasses import dataclass
@@ -10,10 +8,12 @@ from datetime import UTC, datetime
 from typing import Any
 
 import nats.errors
-from core.config import ServiceConfig
+from core.config import ServiceConfig, logger
 from nats.js.api import AckPolicy, ConsumerConfig, DeliverPolicy, RetentionPolicy, StorageType, StreamConfig
 from nats.js.errors import NotFoundError
 from service.ansible_runner import (
+    build_playbook_list_hosts_command,
+    build_playbook_winrm_preflight_command,
     cleanup_workspace,
     parse_ansible_output_per_host,
     prepare_adhoc_execution,
@@ -24,11 +24,11 @@ from service.ansible_runner import (
 )
 from service.task_store import TaskStore
 
-logging.basicConfig(
-    level=os.getenv("LOG_LEVEL", "INFO").upper(),
-    format="%(asctime)s %(levelname)s [ansible-executor] %(message)s",
-)
-logger = logging.getLogger(__name__)
+# logging.basicConfig(
+#     level=os.getenv("LOG_LEVEL", "INFO").upper(),
+#     format="%(asctime)s %(levelname)s [ansible-executor] %(message)s",
+# )
+# logger = logging.getLogger(__name__)
 
 
 def _extract_payload(data: bytes) -> dict:
@@ -83,7 +83,6 @@ class AnsibleNATSService:
         subject_pattern = f"{self.config.js_subject_prefix}.>"
         retry_subject = f"ansible_executor.callback.retry.{self.config.nats_instance_id}"
 
-        owner_stream = None
         try:
             owner_stream = await self.js.find_stream_name_by_subject(subject_pattern)
         except NotFoundError:
@@ -285,6 +284,21 @@ class AnsibleNATSService:
         callback = task.callback
         started_at = self._now_iso()
         self.task_store.update_status(task.task_id, "running", {"started_at": started_at}, self._now_iso())
+        logger.info(
+            "server config 999: "
+            "nats_servers=%r "
+            "nats_protocol=%s "
+            "nats_conn_timeout=%s "
+            "has_nats_username=%s "
+            "has_nats_password=%s "
+            "has_nats_tls_ca_file=%s",
+            list(self.config.nats_servers),
+            self.config.nats_protocol,
+            self.config.nats_conn_timeout,
+            bool(self.config.nats_username),
+            bool(self.config.nats_password),
+            bool(self.config.nats_tls_ca_file),
+        )
 
         try:
             if task.task_type == "adhoc":
@@ -293,7 +307,31 @@ class AnsibleNATSService:
                 code, output = await run_command(cmd, request.execute_timeout)
             else:
                 request = to_playbook_request(task.payload)
-                cmd, workspace = await prepare_playbook_execution(request)
+                cmd, workspace, prepared_request = await prepare_playbook_execution(self.config, request)
+                preflight_cmd = build_playbook_list_hosts_command(prepared_request)
+                preflight_code, preflight_output = await run_command(preflight_cmd, request.execute_timeout)
+                logger.info(
+                    "playbook host preflight finished: task_id=%s exit_code=%s",
+                    task.task_id,
+                    preflight_code,
+                )
+                if preflight_output:
+                    logger.info(
+                        "playbook host preflight output:\n%s",
+                        preflight_output,
+                    )
+                winrm_preflight_cmd = build_playbook_winrm_preflight_command(prepared_request)
+                winrm_preflight_code, winrm_preflight_output = await run_command(winrm_preflight_cmd, request.execute_timeout)
+                logger.info(
+                    "playbook winrm preflight finished: task_id=%s exit_code=%s",
+                    task.task_id,
+                    winrm_preflight_code,
+                )
+                if winrm_preflight_output:
+                    logger.info(
+                        "playbook winrm preflight output:\n%s",
+                        winrm_preflight_output,
+                    )
                 code, output = await run_command(cmd, request.execute_timeout)
         except Exception as err:
             error = str(err)
@@ -429,6 +467,12 @@ class AnsibleNATSService:
             if not task:
                 await msg.respond(_build_error(instance_id, "", f"task not found: {task_id}"))
                 return
+            logger.info(
+                "task_query returning snapshot: task_id=%s status=%s instance_id=%s",
+                task_id,
+                task.get("status"),
+                instance_id,
+            )
             await msg.respond(
                 json.dumps(
                     {

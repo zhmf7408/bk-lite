@@ -7,6 +7,7 @@ import { useProviderApi } from '@/app/opspilot/api/provider';
 import ModelItemModal from '@/app/opspilot/components/provider/modelItemModal';
 import { CONFIG_MAP, MODEL_TABS } from '@/app/opspilot/constants/provider';
 import type { Model, ModelVendor, ProviderResourceType } from '@/app/opspilot/types/provider';
+import { useTheme } from '@/context/theme';
 import { useTranslation } from '@/utils/i18n';
 
 const { Search } = Input;
@@ -24,27 +25,31 @@ const SECTION_TITLE_MAP: Record<ProviderResourceType, string> = {
   ocr_provider: '图像模型',
 };
 
-const SECTION_STYLE_MAP: Record<ProviderResourceType, { topGlow: string; panelGlow: string; headerBg: string }> = {
-  llm_model: {
-    topGlow: 'linear-gradient(180deg, rgba(231, 240, 253, 0.62) 0%, rgba(244, 249, 255, 0.38) 42%, rgba(255, 255, 255, 0) 100%)',
-    panelGlow: 'rgba(147, 197, 253, 0.14)',
-    headerBg: 'linear-gradient(135deg, rgba(249, 252, 255, 1) 0%, rgba(238, 246, 255, 0.94) 100%)',
-  },
-  embed_provider: {
-    topGlow: 'linear-gradient(180deg, rgba(231, 240, 253, 0.62) 0%, rgba(244, 249, 255, 0.38) 42%, rgba(255, 255, 255, 0) 100%)',
-    panelGlow: 'rgba(147, 197, 253, 0.14)',
-    headerBg: 'linear-gradient(135deg, rgba(249, 252, 255, 1) 0%, rgba(238, 246, 255, 0.94) 100%)',
-  },
-  rerank_provider: {
-    topGlow: 'linear-gradient(180deg, rgba(231, 240, 253, 0.62) 0%, rgba(244, 249, 255, 0.38) 42%, rgba(255, 255, 255, 0) 100%)',
-    panelGlow: 'rgba(147, 197, 253, 0.14)',
-    headerBg: 'linear-gradient(135deg, rgba(249, 252, 255, 1) 0%, rgba(238, 246, 255, 0.94) 100%)',
-  },
-  ocr_provider: {
-    topGlow: 'linear-gradient(180deg, rgba(231, 240, 253, 0.62) 0%, rgba(244, 249, 255, 0.38) 42%, rgba(255, 255, 255, 0) 100%)',
-    panelGlow: 'rgba(147, 197, 253, 0.14)',
-    headerBg: 'linear-gradient(135deg, rgba(249, 252, 255, 1) 0%, rgba(238, 246, 255, 0.94) 100%)',
-  },
+const getSectionStyleMap = (themeName: string): Record<ProviderResourceType, { topGlow: string; panelGlow: string; headerBg: string; sectionBg: string; tableBg: string; borderColor: string; shadow: string }> => {
+  const isDark = themeName === 'dark';
+
+  const shared = {
+    topGlow: isDark
+      ? 'linear-gradient(180deg, rgba(21, 90, 239, 0.18) 0%, rgba(21, 90, 239, 0.06) 42%, rgba(7, 29, 44, 0) 100%)'
+      : 'linear-gradient(180deg, rgba(231, 240, 253, 0.62) 0%, rgba(244, 249, 255, 0.38) 42%, rgba(255, 255, 255, 0) 100%)',
+    panelGlow: isDark ? 'rgba(21, 90, 239, 0.14)' : 'rgba(147, 197, 253, 0.14)',
+    headerBg: isDark
+      ? 'linear-gradient(135deg, var(--color-bg-1) 0%, var(--color-bg-2) 100%)'
+      : 'linear-gradient(135deg, rgba(249, 252, 255, 1) 0%, rgba(238, 246, 255, 0.94) 100%)',
+    sectionBg: isDark
+      ? 'linear-gradient(180deg, rgba(12, 37, 54, 0.96) 0%, rgba(7, 29, 44, 0.98) 34%, rgba(20, 20, 20, 1) 100%)'
+      : 'linear-gradient(180deg, rgba(249, 252, 255, 0.97) 0%, rgba(255, 255, 255, 0.99) 34%, rgba(255, 255, 255, 1) 100%)',
+    tableBg: isDark ? 'rgba(7, 29, 44, 0.82)' : 'rgba(255, 255, 255, 0.82)',
+    borderColor: isDark ? 'var(--color-border-1)' : 'rgba(191, 219, 254, 0.7)',
+    shadow: isDark ? '0 14px 28px rgba(0, 0, 0, 0.24)' : '0 14px 28px rgba(148, 163, 184, 0.08)',
+  };
+
+  return {
+    llm_model: shared,
+    embed_provider: shared,
+    rerank_provider: shared,
+    ocr_provider: shared,
+  };
 };
 
 const EMPTY_MODELS: ModelSectionState = {
@@ -56,6 +61,7 @@ const EMPTY_MODELS: ModelSectionState = {
 
 const ProviderModelManagement: React.FC<ProviderModelManagementProps> = ({ vendorId }) => {
   const { t } = useTranslation();
+  const { themeName } = useTheme();
   const { fetchModels, fetchModelDetail, addProvider, updateProvider, deleteProvider, fetchVendorDetail } = useProviderApi();
   const [loading, setLoading] = useState(false);
   const [searchValue, setSearchValue] = useState('');
@@ -108,6 +114,8 @@ const ProviderModelManagement: React.FC<ProviderModelManagementProps> = ({ vendo
       return acc;
     }, { ...EMPTY_MODELS });
   }, [modelsByType, searchValue]);
+
+  const sectionStyleMap = useMemo(() => getSectionStyleMap(themeName), [themeName]);
 
   const openAddModal = (type: ProviderResourceType) => {
     setModalType(type);
@@ -211,16 +219,16 @@ const ProviderModelManagement: React.FC<ProviderModelManagementProps> = ({ vendo
         <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
           {MODEL_TABS.map(({ type }) => {
             const sectionModels = filteredModelsByType[type];
-            const sectionStyle = SECTION_STYLE_MAP[type];
+            const sectionStyle = sectionStyleMap[type];
 
             return (
               <section
                 key={type}
-                className="relative flex flex-col overflow-hidden rounded-2xl border bg-white"
+                className="relative flex flex-col overflow-hidden rounded-2xl border"
                 style={{
-                  borderColor: 'rgba(191, 219, 254, 0.7)',
-                  background: 'linear-gradient(180deg, rgba(249, 252, 255, 0.97) 0%, rgba(255, 255, 255, 0.99) 34%, rgba(255, 255, 255, 1) 100%)',
-                  boxShadow: '0 14px 28px rgba(148, 163, 184, 0.08)',
+                  borderColor: sectionStyle.borderColor,
+                  background: sectionStyle.sectionBg,
+                  boxShadow: sectionStyle.shadow,
                   height: 'calc((100vh - 360px) / 2)',
                   minHeight: 240,
                 }}
@@ -252,7 +260,7 @@ const ProviderModelManagement: React.FC<ProviderModelManagementProps> = ({ vendo
                     <Empty description={t('provider.model.empty')} image={Empty.PRESENTED_IMAGE_SIMPLE} />
                   </div>
                 ) : (
-                  <div className="relative flex-1 overflow-auto bg-white/82 backdrop-blur-[2px]">
+                  <div className="relative flex-1 overflow-auto backdrop-blur-[2px]" style={{ background: sectionStyle.tableBg }}>
                     <div className="min-w-160">
                       <div className="grid grid-cols-[1.2fr_1.4fr_1fr_88px_100px] border-b px-4 py-3 text-xs font-medium" style={{ borderColor: 'var(--color-border-2)', color: 'var(--color-text-3)' }}>
                         <span>{t('provider.model.modelName')}</span>

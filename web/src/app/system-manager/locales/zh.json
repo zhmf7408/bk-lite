@@ -281,6 +281,52 @@
       "threeMonths": "三个月",
       "seconds": "秒"
     },
+    "settings": {
+      "tabs": {
+        "key": "密钥",
+        "portal": "门户",
+        "license": "许可"
+      },
+      "portal": {
+        "title": "门户设置",
+        "content": "配置门户名称、水印和品牌展示，右侧预览会同步展示控制台首页效果。",
+        "basic": "基础信息",
+        "portalName": "门户名称",
+        "portalNameHint": "用于浏览器标签、控制台头部和部分欢迎文案展示。",
+        "placeholderName": "请输入门户名称",
+        "logo": "品牌标识",
+        "portalLogo": "门户 Logo",
+        "portalLogoHint": "建议使用透明背景图片，支持 PNG、JPG、WEBP、SVG，大小不超过 512KB，后续会用于登录页和控制台头部。",
+        "browserFavicon": "浏览器标签图标",
+        "browserFaviconHint": "建议上传方形图标，支持 PNG、JPG、WEBP、SVG、ICO，大小不超过 512KB，用于浏览器标签页与收藏夹展示。",
+        "uploadLogo": "上传 Logo",
+        "uploadFavicon": "上传图标",
+        "restoreDefault": "恢复默认",
+        "uploadPending": "上传能力暂未接入，此版本先提供样式和预览占位。",
+        "uploadSuccess": "图片已上传并保存",
+        "restoreSuccess": "已恢复默认图片",
+        "invalidImageType": "仅支持 PNG、JPG、WEBP、SVG，图标额外支持 ICO 格式",
+        "uploadTooLarge": "图片不能超过 512KB",
+        "watermark": "门户水印",
+        "enabled": "已启用",
+        "disabled": "已关闭",
+        "watermarkText": "水印内容",
+        "watermarkTextHint": "支持通过变量组合出个性化水印内容，关闭后右侧预览将不显示水印。",
+        "placeholderWatermark": "请输入水印内容",
+        "availableVariables": "可用变量",
+        "variableChineseName": "中文名",
+        "variableChineseNameFallback": "管理员",
+        "variablePhone": "手机号",
+        "variableDate": "日期",
+        "preview": "效果预览",
+        "previewTitle": "欢迎使用{{portalName}}控制台",
+        "previewDescription": "预览区域直接复用控制台首页的内容结构，用于验证门户名称、水印和品牌风格在真实场景下的呈现效果。",
+        "previewDate": "日期",
+        "previewCustomSettings": "个性化设置",
+        "previewEnter": "点击进入",
+        "saveSuccess": "门户设置已保存"
+      }
+    },
     "channel": {
       "settings": {
         "editChannel": "编辑通知渠道",
@@ -356,6 +402,7 @@
       "rename": "重命名",
       "renameSuccess": "重命名成功",
       "organizationRoles": "组织角色",
+      "allowInheritRoles": "允许子组织继承角色",
       "form": {
         "name": "名称"
       },
@@ -373,6 +420,8 @@
       "name": "名称",
       "personalRole": "个人角色",
       "organizationRole": "组织角色",
+      "inheritedRole": "继承角色",
+      "inheritedFrom": "继承自",
       "users": "用户",
       "organizations": "组织",
       "title": "角色",
@@ -393,7 +442,13 @@
       "chinese": "中文(简体)",
       "selectedusers": "选定的用户",
       "modifyrole": "批量修改角色",
-      "english": "英文"
+      "english": "英文",
+      "confirm": "确认",
+      "cancel": "取消",
+      "copySuccess": "复制成功",
+      "copyFailed": "复制失败",
+      "fetchFailed": "获取数据失败",
+      "saveFailed": "保存失败"
     }
   }
 }

@@ -74,7 +74,7 @@ const BarChart: React.FC<BarChartProps> = ({
     grid: {
       top: 14,
       left: 18,
-      right: 24,
+      right: 18,
       bottom: 20,
       containLabel: true,
     },
@@ -199,7 +199,7 @@ const BarChart: React.FC<BarChartProps> = ({
 
       {/* 图例区域 - 仅在多系列数据时显示 */}
       {chartData?.series && chartData.series.length > 1 && (
-        <div className="w-32 ml-2 flex-shrink-0 h-full">
+        <div className="w-38 ml-2 shrink-0 h-full">
           <ChartLegend
             chart={chartRef.current?.getEchartsInstance()}
             data={chartData.series}

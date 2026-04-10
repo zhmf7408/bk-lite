@@ -41,12 +41,12 @@ const ViewDetail = () => {
         <div className={detailStyle.topIntro}>
           <div className="w-[40px] h-[40px] mr-[10px] min-w-[40px] rounded flex items-center justify-center bg-[var(--color-fill-2)]">
             <img
-              src={`/app/assets/assetModelIcon/${icon || 'cc-default_默认'}.svg`}
+              src={`/assets/icons/${icon || 'cc-default_默认'}.svg`}
               alt={monitorObjDisplayName || monitorObjectName || 'icon'}
               className="w-7 h-7"
               onError={(e) => {
                 (e.target as HTMLImageElement).src =
-                  '/app/assets/assetModelIcon/cc-default_默认.svg';
+                  '/assets/icons/cc-default_默认.svg';
               }}
             />
           </div>

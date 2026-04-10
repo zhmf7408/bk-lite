@@ -10,6 +10,7 @@ import {
   isSessionExpiredState,
   SESSION_EXPIRED_REQUEST_ERROR,
 } from '@/utils/sessionExpiry';
+import { forceLogoutAndRedirect } from '@/utils/forceLogout';
 
 const apiClient = axios.create({
   baseURL: '/api/proxy',
@@ -36,7 +37,7 @@ const handleResponse = (response: AxiosResponse, onError?: () => void) => {
 export const isSilentRequestError = (error: unknown) => {
   if (axios.isAxiosError(error)) {
     const status = error.response?.status;
-    return error.code === 'ECONNABORTED' || status === 401;
+    return error.code === 'ECONNABORTED' || status === 401 || status === 460;
   }
 
   return error instanceof Error && [
@@ -85,7 +86,10 @@ const useApiClient = () => {
         if (error.response) {
           const { status } = error.response;
           const messageText = error.response?.data?.message;
-          if (status === 401) {
+          if (status === 460) {
+            void forceLogoutAndRedirect();
+            return Promise.reject(error);
+          } else if (status === 401) {
             emitSessionExpired({ reason: 'api-session-expired', status });
             return Promise.reject(error);
           } else if ([400, 403].includes(status)) {

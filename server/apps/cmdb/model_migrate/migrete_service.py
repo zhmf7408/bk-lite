@@ -579,6 +579,15 @@ class ModelMigrate:
             existing_attr["option"] = incoming_attr.get("option")
             changed = True
 
+        is_enum_attr = existing_attr.get("attr_type") == "enum" or incoming_attr.get("attr_type") == "enum"
+        if is_enum_attr:
+            for key in ("enum_rule_type", "public_library_id", "enum_select_mode"):
+                if key not in incoming_attr:
+                    continue
+                if existing_attr.get(key) != incoming_attr.get(key):
+                    existing_attr[key] = incoming_attr.get(key)
+                    changed = True
+
         # 布尔约束仅接受布尔值，避免 Excel 空值/字符串造成脏覆盖。
         for key in ("is_only", "is_required", "editable"):
             value = incoming_attr.get(key)

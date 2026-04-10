@@ -2,6 +2,9 @@
   "common": {
     "edit": "编辑",
     "delete": "删除",
+    "export": "导出",
+    "import": "导入",
+    "exportSuccess": "导出成功",
     "pin": "置顶",
     "unpin": "取消置顶",
     "pinSuccess": "置顶成功",

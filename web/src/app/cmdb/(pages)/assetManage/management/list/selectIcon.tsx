@@ -82,7 +82,7 @@ const SelectIcon = forwardRef<SelectIconRef, SelectIconProps>(
                   onClick={() => setActiveIcon(item.key)}
                 >
                   <Image
-                    src={`/app/assets/assetModelIcon/${item.url}.svg`}
+                    src={`/assets/icons/${item.url}.svg`}
                     className="block cursor-pointer mb-1"
                     alt={t('picture')}
                     width={34}

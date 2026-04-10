@@ -937,12 +937,19 @@ const OperateModal: React.FC<OperateModalProps> = ({
               {t('common.noData')}
             </div>
           ) : (
-            <Checkbox.Group
-              options={namespaceList.map((ns: NamespaceItem) => ({
-                label: ns.name,
-                value: ns.id,
-              }))}
-            />
+            <Checkbox.Group className="grid grid-cols-3 gap-x-4 gap-y-2 pt-1">
+              {namespaceList.map((ns: NamespaceItem) => (
+                <Checkbox
+                  key={ns.id}
+                  value={ns.id}
+                  className="!ml-0 flex min-w-0 items-center"
+                >
+                  <span className="inline-block max-w-[180px] truncate align-bottom" title={ns.name}>
+                    {ns.name}
+                  </span>
+                </Checkbox>
+              ))}
+            </Checkbox.Group>
           )}
         </Form.Item>
         <Form.Item

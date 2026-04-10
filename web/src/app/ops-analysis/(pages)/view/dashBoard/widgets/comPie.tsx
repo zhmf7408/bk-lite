@@ -141,7 +141,7 @@ const OsPie: React.FC<OsPieProps> = ({ rawData, loading = false, onReady }) => {
 
       {/* 图例区域 */}
       {chartData && chartData.length > 1 && (
-        <div className="w-34 flex-shrink-0 h-full">
+        <div className="w-38 shrink-0 h-full">
           <ChartLegend
             chart={chartRef.current?.getEchartsInstance()}
             data={chartData.map((item: any) => ({ name: item.name }))}

@@ -117,6 +117,12 @@
           "url": "/system-manager/settings/key",
           "icon": "key",
           "name": "api_secret_key"
+        },
+        {
+          "title": "门户",
+          "url": "/system-manager/settings/portal",
+          "icon": "BImenhu-3",
+          "name": "portal_settings"
         }
       ]
     }
@@ -239,6 +245,12 @@
           "url": "/system-manager/settings/key",
           "icon": "key",
           "name": "api_secret_key"
+        },
+        {
+          "title": "Portal",
+          "url": "/system-manager/settings/portal",
+          "icon": "BImenhu-3",
+          "name": "portal_settings"
         }
       ]
     }

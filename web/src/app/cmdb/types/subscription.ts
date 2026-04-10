@@ -16,7 +16,11 @@ export interface AttributeChangeConfig {
 }
 
 export interface RelationChangeConfig {
-  related_model: string;
+  related_models?: {
+    related_model: string;
+    fields: string[];
+  }[];
+  related_model?: string;
   fields?: string[];
 }
 

@@ -253,7 +253,8 @@
         "installerSuggestionExtract": "请检查磁盘空间、安装包完整性，以及目标目录是否可写。",
         "installerSuggestionWriteConfig": "请检查运行配置内容，并确认安装目录具备写入权限。",
         "installerSuggestionInstall": "请查看安装日志，并确认目标主机满足所需运行环境与权限条件。",
-        "installerSuggestionGeneric": "请查看安装日志，修复报错后再重试。"
+        "installerSuggestionGeneric": "请查看安装日志，修复报错后再重试。",
+        "notDeployedTip": "当前云区域尚未完成环境部署，请前往「环境」页面进行部署后再继续使用相关功能。"
       },
       "editform": {
         "Introduction": "简介",

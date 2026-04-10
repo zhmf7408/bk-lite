@@ -107,6 +107,7 @@ class EventSerializer(serializers.ModelSerializer):
 
 class EventRawDataSerializer(serializers.ModelSerializer):
     event_id = serializers.CharField(source="event.id", read_only=True)
+    data = serializers.JSONField(read_only=True)
 
     class Meta:
         model = EventRawData

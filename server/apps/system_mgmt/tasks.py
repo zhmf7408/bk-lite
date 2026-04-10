@@ -1,6 +1,7 @@
 from celery import shared_task
 
 from apps.core.logger import system_mgmt_logger as logger
+from apps.core.utils.permission_cache import clear_users_permission_cache
 from apps.rpc.base import RpcClient
 from apps.system_mgmt.models import ErrorLog, Group, LoginModule, User
 
@@ -243,6 +244,7 @@ def _sync_users(user_list, group_id_mapping, domain, default_role):
             update_fields.append("domain")
 
         User.objects.bulk_update(update_users, update_fields, batch_size=100)
+        clear_users_permission_cache([{"username": user.username, "domain": user.domain} for user in update_users])
         logger.info(f"Updated {len(update_users)} existing users")
 
     return list(user_data_map.keys())

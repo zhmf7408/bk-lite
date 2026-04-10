@@ -21,6 +21,7 @@ import {
   Tooltip,
 } from 'antd';
 import { useTranslation } from '@/utils/i18n';
+import { useOpsAnalysis } from '@/app/ops-analysis/context/common';
 import {
   LayoutItem,
   TimeConfig,
@@ -55,6 +56,7 @@ const Dashboard = forwardRef<DashboardRef, DashboardProps>(
     const { t } = useTranslation();
     const { getDashboardDetail, saveDashboard } = useDashBoardApi();
     const dataSourceManager = useDataSourceManager();
+    const { fetchDataSources } = useOpsAnalysis();
     const [isEditMode, setIsEditMode] = useState(false);
     const [addModalVisible, setAddModalVisible] = useState(false);
     const [layout, setLayout] = useState<LayoutItem[]>([]);
@@ -128,6 +130,10 @@ const Dashboard = forwardRef<DashboardRef, DashboardProps>(
         )
       );
     });
+
+    useEffect(() => {
+      void fetchDataSources();
+    }, [fetchDataSources]);
 
     useEffect(() => {
       const loadDashboardData = async () => {

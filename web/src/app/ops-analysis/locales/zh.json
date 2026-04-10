@@ -1,8 +1,8 @@
 {
-"common": {
+  "common": {
     "total": "共",
     "items": "条"
-},
+  },
   "topology": {
     "nodeConfig": {
       "width": "宽度",
@@ -215,10 +215,10 @@
     "fieldDescription": "描述",
     "duplicateFieldKeys": "字段名重复：",
     "valueTypes": {
-        "string": "字符串",
-        "number": "数字",
-        "boolean": "布尔",
-        "datetime": "日期时间"
+      "string": "字符串",
+      "number": "数字",
+      "boolean": "布尔",
+      "datetime": "日期时间"
     }
   },
   "dashboard": {
@@ -296,6 +296,59 @@
     "inputPlaceholder": "请输入名称",
     "selectItem": "请选择仪表盘或拓扑",
     "addDash": "添加仪表盘",
-    "addGroup": "添加分组"
+    "addGroup": "添加分组",
+    "importYaml": "导入 YAML",
+    "exportYaml": "导出 YAML",
+    "exportSuccess": "导出成功",
+    "exportFailed": "导出失败",
+    "exportConfirmMsg": "您确定要导出",
+    "includeDependencies": "将自动包含依赖项（如数据源、命名空间等）",
+    "importInvalidFileType": "请上传 YAML 格式文件",
+    "importFileTooLarge": "文件大小不能超过 2MB",
+    "importPrecheckFailed": "文件预检失败，包含格式错误",
+    "importPrecheckError": "解析文件发生错误",
+    "importSubmitFailed": "提交导入失败",
+    "importSubmitError": "导入过程发生错误",
+    "importWarnings": "存在警告，请修改 YAML 后重新上传",
+    "importUploadText": "点击或拖拽文件到此区域",
+    "importUploadHint": "仅支持 .yaml/.yml 格式，大小不超过2MB",
+    "objectName": "对象标识",
+    "objectType": "类型",
+    "conflictReason": "冲突原因",
+    "objectTypeLabel": {
+      "dashboard": "仪表盘",
+      "topology": "拓扑图",
+      "architecture": "架构图",
+      "datasource": "数据源",
+      "namespace": "命名空间"
+    },
+    "conflictReasonLabel": {
+      "name_conflict": "名称冲突",
+      "no_permission_conflict": "跨组织冲突"
+    },
+    "conflictAction": "处理方式",
+    "actionSkip": "跳过",
+    "actionOverwrite": "覆盖",
+    "actionRename": "重命名",
+    "totalObjects": "总对象数:",
+    "resolveConflicts": "请解决以下冲突：",
+    "precheckPass": "预检通过，未发现冲突，可以导入。",
+    "reupload": "重新上传",
+    "startImport": "开始导入",
+    "importResultSummary": "导入完成",
+    "totalCount": "总计:",
+    "successCount": "成功:",
+    "overwrittenCount": "覆盖:",
+    "skippedCount": "跳过:",
+    "failedCount": "失败:",
+    "status": "状态",
+    "message": "信息",
+    "statusSuccess": "成功",
+    "statusFailed": "失败",
+    "statusSkipped": "已跳过",
+    "statusOverwritten": "已覆盖",
+    "stepUpload": "上传文件",
+    "stepPrecheck": "预检冲突",
+    "stepResult": "完成导入"
   }
 }

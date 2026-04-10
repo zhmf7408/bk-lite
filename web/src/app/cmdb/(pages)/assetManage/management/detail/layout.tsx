@@ -172,6 +172,13 @@ const AboutLayout = ({ children }: { children: React.ReactNode }) => {
       icon: '',
       operation: [],
     },
+    {
+      name: 'autoAssociationRules',
+      title: t('Model.autoAssociationRules'),
+      url: '/cmdb/assetManage/management/detail/autoAssociationRules',
+      icon: '',
+      operation: [],
+    },
   ];
 
   return (

@@ -3,6 +3,7 @@ import logging
 from django.core.management import BaseCommand
 from django.db import transaction
 
+from apps.core.utils.permission_cache import clear_users_permission_cache
 from apps.system_mgmt.models import Group, User
 
 logger = logging.getLogger(__name__)
@@ -22,7 +23,10 @@ class Command(BaseCommand):
                 logger.info("ID=1 的组不存在，创建默认组")
                 with transaction.atomic():
                     Group.objects.create(name="Default", parent_id=0, id=1)
+                    affected_users = list(User.objects.all().values("username", "domain"))
                     user_count = User.objects.all().update(group_list=[1])
+                    if affected_users:
+                        clear_users_permission_cache(affected_users)
                     logger.info(f"已创建默认组，并更新 {user_count} 个用户的组列表")
 
                 self.stdout.write(self.style.SUCCESS("✓ 已创建默认组并更新用户"))

@@ -115,7 +115,7 @@ const User: React.FC = () => {
   const openUserModal = useCallback((type: 'add') => {
     userModalRef.current?.showModal({
       type,
-      groupKeys: type === 'add' ? selectedTreeKeys.map(Number) : [],
+      groupKeys: type === 'add' ? selectedTreeKeys : [],
     });
   }, [selectedTreeKeys]);
 

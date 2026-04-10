@@ -5,10 +5,9 @@
 
 from rest_framework import routers
 
-from apps.operation_analysis.views.view import DashboardModelViewSet, DirectoryModelViewSet, \
-    TopologyModelViewSet, ArchitectureModelViewSet
-from apps.operation_analysis.views.datasource_view import DataSourceAPIModelViewSet, DataSourceTagModelViewSet, \
-    NameSpaceModelViewSet
+from apps.operation_analysis.views.view import DashboardModelViewSet, DirectoryModelViewSet, TopologyModelViewSet, ArchitectureModelViewSet
+from apps.operation_analysis.views.datasource_view import DataSourceAPIModelViewSet, DataSourceTagModelViewSet, NameSpaceModelViewSet
+from apps.operation_analysis.views.import_export_view import ImportExportViewSet
 
 router = routers.DefaultRouter()
 router.register(r"api/data_source", DataSourceAPIModelViewSet, basename="data_source")
@@ -18,9 +17,8 @@ router.register(r"api/topology", TopologyModelViewSet, basename="topology")
 router.register(r"api/architecture", ArchitectureModelViewSet, basename="architecture")
 router.register(r"api/namespace", NameSpaceModelViewSet, basename="namespace")
 router.register(r"api/tag", DataSourceTagModelViewSet, basename="tag")
+router.register(r"api/import_export", ImportExportViewSet, basename="import_export")
 
-urlpatterns = [
-    # path("api/test/", request_test),
-]
+urlpatterns = []
 
 urlpatterns += router.urls

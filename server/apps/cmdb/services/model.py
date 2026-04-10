@@ -1,6 +1,9 @@
 import json
+import uuid
 from dataclasses import asdict
 from typing import Any
+
+from django.utils import timezone
 
 from apps.cmdb.constants.constants import (
     CLASSIFICATION,
@@ -41,6 +44,17 @@ from apps.cmdb.services.unique_rule import (
     list_unique_rules,
     validate_unique_rules_against_existing_instances,
     update_unique_rule,
+)
+from apps.cmdb.services.auto_relation_rule import (
+    AUTO_RELATION_RULE_FIELD,
+    AutoRelationRule,
+    AutoRelationRuleSet,
+    build_auto_relation_rule_response,
+    dump_auto_relation_rule,
+    dump_auto_relation_rule_set,
+    parse_auto_relation_rule,
+    parse_auto_relation_rule_set,
+    validate_auto_relation_rule_payload,
 )
 from apps.cmdb.utils.change_record import create_change_record
 from apps.core.exceptions.base_app_exception import BaseAppException
@@ -1248,8 +1262,18 @@ class ModelManage(object):
         """
         删除模型关联
         """
+        association = None
+        with GraphClient() as ag:
+            association = ag.query_edge_by_id(id)
+
         with GraphClient() as ag:
             ag.delete_edge(id)
+
+        model_asst_id = str((association or {}).get("model_asst_id") or "").strip()
+        if model_asst_id:
+            from apps.cmdb.services.auto_relation_reconcile import schedule_rule_auto_relation_full_sync
+
+            schedule_rule_auto_relation_full_sync([model_asst_id])
 
     @staticmethod
     def model_association_info_search(model_asst_id: str):
@@ -1280,6 +1304,170 @@ class ModelManage(object):
             edges = ag.query_edge(MODEL_ASSOCIATION, query_list, param_type="OR")
 
         return edges
+
+    @staticmethod
+    def get_model_auto_relation_rules(model_id: str):
+        associations = ModelManage.model_association_search(model_id)
+        result = []
+        for association in associations:
+            rule_set = parse_auto_relation_rule_set(association.get(AUTO_RELATION_RULE_FIELD))
+            if not rule_set:
+                continue
+            for rule in rule_set.rules:
+                result.append(build_auto_relation_rule_response(association, rule))
+        return result
+
+    @staticmethod
+    def _get_model_attrs_for_auto_rule(model_id: str):
+        model_info = ModelManage.search_model_info(model_id)
+        if not model_info:
+            raise BaseAppException("模型不存在")
+        return ModelManage.parse_attrs(model_info.get("attrs", "[]"))
+
+    @staticmethod
+    def save_model_auto_relation_rule(
+        model_id: str,
+        model_asst_id: str,
+        payload: dict[str, Any],
+        username: str = "admin",
+    ):
+        association = ModelManage.model_association_info_search(model_asst_id)
+        if not association:
+            raise BaseAppException("模型关联不存在")
+        if model_id not in {association.get("src_model_id"), association.get("dst_model_id")}:
+            raise BaseAppException("模型关联不属于当前模型")
+
+        src_attrs = ModelManage._get_model_attrs_for_auto_rule(association["src_model_id"])
+        dst_attrs = ModelManage._get_model_attrs_for_auto_rule(association["dst_model_id"])
+        validated_rule = validate_auto_relation_rule_payload(
+            association,
+            src_attrs,
+            dst_attrs,
+            payload,
+        )
+        current_rule_set = parse_auto_relation_rule_set(association.get(AUTO_RELATION_RULE_FIELD)) or AutoRelationRuleSet(version=2, rules=[])
+        if any(rule.rule_id == validated_rule.rule_id for rule in current_rule_set.rules):
+            raise BaseAppException("自动关联规则标识重复")
+        persisted_rule = AutoRelationRule(
+            rule_id=validated_rule.rule_id or uuid.uuid4().hex,
+            enabled=validated_rule.enabled,
+            match_pairs=validated_rule.match_pairs,
+            updated_by=username,
+            updated_at=timezone.now().isoformat(),
+        )
+        next_rules = list(current_rule_set.rules)
+        next_rules.append(persisted_rule)
+        persisted_rule_set = AutoRelationRuleSet(version=2, rules=next_rules)
+
+        with GraphClient() as ag:
+            ag.set_edge_properties(
+                association["_id"],
+                {
+                    AUTO_RELATION_RULE_FIELD: dump_auto_relation_rule_set(persisted_rule_set),
+                },
+            )
+
+        from apps.cmdb.services.auto_relation_reconcile import schedule_rule_auto_relation_full_sync
+
+        schedule_rule_auto_relation_full_sync([model_asst_id])
+
+        return build_auto_relation_rule_response(association, persisted_rule)
+
+    @staticmethod
+    def update_model_auto_relation_rule(
+        model_id: str,
+        model_asst_id: str,
+        rule_id: str,
+        payload: dict[str, Any],
+        username: str = "admin",
+    ):
+        association = ModelManage.model_association_info_search(model_asst_id)
+        if not association:
+            raise BaseAppException("模型关联不存在")
+        if model_id not in {association.get("src_model_id"), association.get("dst_model_id")}:
+            raise BaseAppException("模型关联不属于当前模型")
+
+        src_attrs = ModelManage._get_model_attrs_for_auto_rule(association["src_model_id"])
+        dst_attrs = ModelManage._get_model_attrs_for_auto_rule(association["dst_model_id"])
+        validated_rule = validate_auto_relation_rule_payload(
+            association,
+            src_attrs,
+            dst_attrs,
+            {**payload, "rule_id": rule_id},
+        )
+
+        current_rule_set = parse_auto_relation_rule_set(association.get(AUTO_RELATION_RULE_FIELD))
+        if not current_rule_set:
+            raise BaseAppException("自动关联规则不存在")
+
+        replaced = False
+        next_rules: list[AutoRelationRule] = []
+        for current_rule in current_rule_set.rules:
+            if current_rule.rule_id != rule_id:
+                next_rules.append(current_rule)
+                continue
+            replaced = True
+            next_rules.append(
+                AutoRelationRule(
+                    rule_id=rule_id,
+                    enabled=validated_rule.enabled,
+                    match_pairs=validated_rule.match_pairs,
+                    updated_by=username,
+                    updated_at=timezone.now().isoformat(),
+                )
+            )
+
+        if not replaced:
+            raise BaseAppException("自动关联规则不存在")
+
+        persisted_rule = next((rule for rule in next_rules if rule.rule_id == rule_id), None)
+        persisted_rule_set = AutoRelationRuleSet(version=2, rules=next_rules)
+
+        with GraphClient() as ag:
+            ag.set_edge_properties(
+                association["_id"],
+                {
+                    AUTO_RELATION_RULE_FIELD: dump_auto_relation_rule_set(persisted_rule_set),
+                },
+            )
+
+        from apps.cmdb.services.auto_relation_reconcile import schedule_rule_auto_relation_full_sync
+
+        schedule_rule_auto_relation_full_sync([model_asst_id])
+
+        return build_auto_relation_rule_response(association, persisted_rule)
+
+    @staticmethod
+    def delete_model_auto_relation_rule(model_id: str, model_asst_id: str, rule_id: str):
+        association = ModelManage.model_association_info_search(model_asst_id)
+        if not association:
+            raise BaseAppException("模型关联不存在")
+        if model_id not in {association.get("src_model_id"), association.get("dst_model_id")}:
+            raise BaseAppException("模型关联不属于当前模型")
+
+        current_rule_set = parse_auto_relation_rule_set(association.get(AUTO_RELATION_RULE_FIELD))
+        if not current_rule_set:
+            raise BaseAppException("自动关联规则不存在")
+
+        next_rules = [rule for rule in current_rule_set.rules if rule.rule_id != rule_id]
+        if len(next_rules) == len(current_rule_set.rules):
+            raise BaseAppException("自动关联规则不存在")
+
+        serialized_rule_set = dump_auto_relation_rule_set(AutoRelationRuleSet(version=2, rules=next_rules)) if next_rules else ""
+
+        with GraphClient() as ag:
+            ag.set_edge_properties(
+                association["_id"],
+                {
+                    AUTO_RELATION_RULE_FIELD: serialized_rule_set,
+                },
+            )
+
+        from apps.cmdb.services.auto_relation_reconcile import schedule_rule_auto_relation_full_sync
+
+        schedule_rule_auto_relation_full_sync([model_asst_id])
+
+        return True
 
     @staticmethod
     def check_model_exist_association(model_id):
@@ -1479,7 +1667,6 @@ class ModelManage(object):
                             "enum_rule_type": "public_library",
                             "public_library_id": attr.get("public_library_id"),
                             "enum_select_mode": attr.get("enum_select_mode", ENUM_SELECT_MODE_DEFAULT),
-                            "option": option if isinstance(option, list) else [],
                         }
                     elif isinstance(option, list):
                         option = option

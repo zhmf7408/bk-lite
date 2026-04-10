@@ -22,60 +22,51 @@ const Collectorintro = () => {
 };
 
 const CollectorLayout = ({
-  children,
+  children
 }: Readonly<{
   children: React.ReactNode;
 }>) => {
   const router = useRouter();
   const { t } = useTranslation();
-  const searchParams = useSearchParams();
-  const notDeployed = searchParams.get('not_deployed');
-
   const customMenuItems = useMemo(() => {
     const menuItems = [
       {
         title: t('node-manager.cloudregion.pageConfig.node.title'),
         url: '/node-manager/cloudregion/node',
         icon: 'jiedianguanli',
-        name: 'cloud_region_node',
+        name: 'cloud_region_node'
       },
       {
         title: t('node-manager.cloudregion.pageConfig.environment.title'),
         url: '/node-manager/cloudregion/environment',
         icon: 'windows',
-        name: 'cloud_region_environment',
+        name: 'cloud_region_environment'
       },
       {
         title: t('node-manager.cloudregion.pageConfig.variable.title'),
         url: '/node-manager/cloudregion/variable',
         icon: 'bianliang',
-        name: 'cloud_region_variable',
-      },
+        name: 'cloud_region_variable'
+      }
     ];
-    // 如果 not_deployed === '1'，过滤掉节点菜单
-    if (notDeployed === '1') {
-      return menuItems.filter((item) => item.name !== 'cloud_region_node');
-    }
     return menuItems as any;
-  }, [t, notDeployed]);
+  }, [t]);
 
   const pageConfig = {
     node: {
       title: t('node-manager.cloudregion.pageConfig.node.title'),
-      description: t('node-manager.cloudregion.pageConfig.node.description'),
+      description: t('node-manager.cloudregion.pageConfig.node.description')
     },
     environment: {
       title: t('node-manager.cloudregion.pageConfig.environment.title'),
       description: t(
         'node-manager.cloudregion.pageConfig.environment.description'
-      ),
+      )
     },
     variable: {
       title: t('node-manager.cloudregion.pageConfig.variable.title'),
-      description: t(
-        'node-manager.cloudregion.pageConfig.variable.description'
-      ),
-    },
+      description: t('node-manager.cloudregion.pageConfig.variable.description')
+    }
   };
   const Topsection = () => {
     const pathname = usePathname();
@@ -95,7 +86,7 @@ const CollectorLayout = ({
   };
 
   return (
-    <div className='w-full'>
+    <div className="w-full">
       <SubLayout
         topSection={<Topsection></Topsection>}
         showBackButton={true}

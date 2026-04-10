@@ -17,6 +17,7 @@ from apps.cmdb.utils.base import get_default_group_id, get_current_team_from_req
 from apps.cmdb.utils.change_record import create_change_record
 from apps.cmdb.utils.permission_util import CmdbRulesFormatUtil
 from apps.cmdb.views.mixins import CmdbPermissionMixin
+from apps.core.exceptions.base_app_exception import BaseAppException
 from apps.core.decorators.api_permission import HasPermission
 from apps.core.utils.web_utils import WebUtils
 
@@ -351,6 +352,98 @@ class ModelViewSet(CmdbPermissionMixin, viewsets.ViewSet):
             return WebUtils.response_error("抱歉！您没有此模型的权限", status_code=status.HTTP_403_FORBIDDEN)
 
         result = ModelManage.model_association_search(model_id)
+        return WebUtils.response_success(result)
+
+    @HasPermission("model_management-View")
+    @action(detail=False, methods=["get", "post"], url_path="(?P<model_id>.+?)/auto_association_rules")
+    def model_auto_association_rules(self, request, model_id: str):
+        model_info = ModelManage.search_model_info(model_id)
+        if not model_info:
+            return WebUtils.response_error("模型不存在", status_code=status.HTTP_404_NOT_FOUND)
+
+        permissions_map = CmdbRulesFormatUtil.format_user_groups_permissions(
+            request=request,
+            model_id=model_id,
+            permission_type=PERMISSION_MODEL,
+        )
+
+        organizations = self.organizations(request, model_info)
+        if not organizations:
+            return WebUtils.response_error("抱歉！您没有此模型的权限", status_code=status.HTTP_403_FORBIDDEN)
+
+        operator = VIEW if request.method == "GET" else OPERATE
+        has_permission = CmdbRulesFormatUtil.has_object_permission(
+            obj_type=PERMISSION_MODEL,
+            operator=operator,
+            model_id=model_id,
+            permission_instances_map=permissions_map,
+            instance=model_info,
+            default_group_id=self.default_group_id,
+        )
+        if not has_permission:
+            return WebUtils.response_error("抱歉！您没有此模型的权限", status_code=status.HTTP_403_FORBIDDEN)
+
+        try:
+            if request.method == "GET":
+                result = ModelManage.get_model_auto_relation_rules(model_id)
+            else:
+                model_asst_id = request.data.get("model_asst_id")
+                if not model_asst_id:
+                    return WebUtils.response_error("model_asst_id 不能为空", status_code=status.HTTP_400_BAD_REQUEST)
+                result = ModelManage.save_model_auto_relation_rule(
+                    model_id,
+                    model_asst_id,
+                    request.data,
+                    username=request.user.username,
+                )
+        except BaseAppException as err:
+            return WebUtils.response_error(error_message=err.message, status_code=status.HTTP_400_BAD_REQUEST)
+
+        return WebUtils.response_success(result)
+
+    @HasPermission("model_management-Edit Model")
+    @action(detail=False, methods=["put", "delete"], url_path="(?P<model_id>.+?)/auto_association_rules/(?P<model_asst_id>.+?)/(?P<rule_id>.+?)")
+    def model_auto_association_rule_detail(self, request, model_id: str, model_asst_id: str, rule_id: str):
+        model_info = ModelManage.search_model_info(model_id)
+        if not model_info:
+            return WebUtils.response_error("模型不存在", status_code=status.HTTP_404_NOT_FOUND)
+
+        permissions_map = CmdbRulesFormatUtil.format_user_groups_permissions(
+            request=request,
+            model_id=model_id,
+            permission_type=PERMISSION_MODEL,
+        )
+
+        organizations = self.organizations(request, model_info)
+        if not organizations:
+            return WebUtils.response_error("抱歉！您没有此模型的权限", status_code=status.HTTP_403_FORBIDDEN)
+
+        has_permission = CmdbRulesFormatUtil.has_object_permission(
+            obj_type=PERMISSION_MODEL,
+            operator=OPERATE,
+            model_id=model_id,
+            permission_instances_map=permissions_map,
+            instance=model_info,
+            default_group_id=self.default_group_id,
+        )
+        if not has_permission:
+            return WebUtils.response_error("抱歉！您没有此模型的权限", status_code=status.HTTP_403_FORBIDDEN)
+
+        try:
+            if request.method == "PUT":
+                result = ModelManage.update_model_auto_relation_rule(
+                    model_id,
+                    model_asst_id,
+                    rule_id,
+                    request.data,
+                    username=request.user.username,
+                )
+            else:
+                ModelManage.delete_model_auto_relation_rule(model_id, model_asst_id, rule_id)
+                result = True
+        except BaseAppException as err:
+            return WebUtils.response_error(error_message=err.message, status_code=status.HTTP_400_BAD_REQUEST)
+
         return WebUtils.response_success(result)
 
     @HasPermission("model_management-Add Model")

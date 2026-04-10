@@ -75,6 +75,13 @@
               "url": "/cmdb/assetManage/management/detail/uniqueRules",
               "name": "model_unique_rules",
               "withParentPermission": true
+            },
+            {
+              "title": "自动关联规则",
+              "icon": "shujumoxingguanli",
+              "url": "/cmdb/assetManage/management/detail/autoAssociationRules",
+              "name": "model_auto_association_rules",
+              "withParentPermission": true
             }
           ]
         },
@@ -182,6 +189,13 @@
               "icon": "shujumoxingguanli",
               "url": "/cmdb/assetManage/management/detail/uniqueRules",
               "name": "model_unique_rules",
+              "withParentPermission": true
+            },
+            {
+              "title": "Auto Association Rules",
+              "icon": "shujumoxingguanli",
+              "url": "/cmdb/assetManage/management/detail/autoAssociationRules",
+              "name": "model_auto_association_rules",
               "withParentPermission": true
             }
           ]

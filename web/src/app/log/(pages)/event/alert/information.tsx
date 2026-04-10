@@ -45,7 +45,7 @@ const Information: React.FC<TableDataItem> = ({
   const activeColumns = useMemo(() => {
     let columns: ColumnItem[] = [
       {
-        title: 'timestrap',
+        title: 'timestamp',
         dataIndex: '_time',
         key: '_time',
         width: 150,
@@ -59,7 +59,7 @@ const Information: React.FC<TableDataItem> = ({
         title: 'message',
         dataIndex: '_msg',
         key: '_msg',
-        width: 600,
+        width: 350,
         render: (val) => <>{val || '--'}</>
       }
     ];
@@ -68,7 +68,7 @@ const Information: React.FC<TableDataItem> = ({
         title: item,
         dataIndex: item,
         key: item,
-        width: 100
+        width: 120
       }));
       columns = [...columns, ...displayColumns];
     }
@@ -79,7 +79,7 @@ const Information: React.FC<TableDataItem> = ({
           title: item,
           dataIndex: item,
           key: item,
-          width: 100
+          width: 120
         }));
     }
     return columns;
