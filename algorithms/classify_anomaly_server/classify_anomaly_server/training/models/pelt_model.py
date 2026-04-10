@@ -46,6 +46,7 @@ class PELTModel(BaseAnomalyModel):
         self.threshold = float(threshold)
         self.feature_names_: list[str] | None = None
         self.n_samples_train_: int | None = None
+        self.hyperopt_history_: list[dict[str, float | int | str]] = []
 
     def fit(
         self,
@@ -194,6 +195,8 @@ class PELTModel(BaseAnomalyModel):
         if early_stop_enabled:
             logger.info(f"早停机制: 启用 (patience={patience})")
 
+        self.hyperopt_history_ = []
+
         for pen in search_space["pen"]:
             for min_size in search_space["min_size"]:
                 for jump in jump_values:
@@ -228,6 +231,22 @@ class PELTModel(BaseAnomalyModel):
                         metrics = candidate.evaluate(val_data, labels_array)
                         fallback_metric = "f1"
                     score = float(metrics.get(metric, metrics[fallback_metric]))
+                    trial_num_changepoints = float(
+                        candidate.evaluate_changepoints(val_data, labels_array).get(
+                            "num_changepoints", 0.0
+                        )
+                    )
+                    self.hyperopt_history_.append(
+                        {
+                            "trial": int(eval_count),
+                            "metric": str(metric),
+                            "score": float(score),
+                            "pen": float(pen),
+                            "min_size": int(min_size),
+                            "jump": int(jump),
+                            "num_changepoints": trial_num_changepoints,
+                        }
+                    )
 
                     logger.debug(
                         f"PELT trial [{eval_count}/{total_evals}] "
@@ -324,6 +343,10 @@ class PELTModel(BaseAnomalyModel):
             logger.info(
                 f"PELT 超参数搜索完成: {eval_count} 轮, 最优 {metric}={best_score:.4f}, "
                 f"参数={best_params}"
+            )
+            mlflow.log_dict(
+                {"trial_history": self.hyperopt_history_},
+                "pelt_hyperopt_history.json",
             )
 
         self.pen = float(best_params["pen"])

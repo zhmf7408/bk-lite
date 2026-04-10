@@ -694,6 +694,27 @@ class UniversalTrainer:
                     artifact_name=f"{self.config.model_type}_changepoints",
                     metrics=metrics,
                 )
+                _ = MLFlowUtils.plot_pelt_changepoint_alignment(
+                    timestamps=timestamps,
+                    values=values,
+                    changepoints=changepoints,
+                    true_labels=y_true,
+                    tolerance=getattr(model, "event_window", 1),
+                    title=f"{self.config.model_type} 变点对齐分析",
+                    artifact_name=f"{self.config.model_type}_alignment",
+                )
+                hyperopt_history = getattr(model, "hyperopt_history_", [])
+                if hyperopt_history:
+                    _ = MLFlowUtils.plot_pelt_hyperopt_trajectory(
+                        trial_history=hyperopt_history,
+                        title=f"{self.config.model_type} 超参数搜索轨迹",
+                        artifact_name=f"{self.config.model_type}_hyperopt_trajectory",
+                    )
+                    _ = MLFlowUtils.plot_pelt_pen_score_changepoints(
+                        trial_history=hyperopt_history,
+                        title=f"{self.config.model_type} pen-score-num_changepoints",
+                        artifact_name=f"{self.config.model_type}_pen_score_num_changepoints",
+                    )
 
             # 2. 混淆矩阵（从 metrics 中提取）
             if "test_confusion_matrix" in metrics:
