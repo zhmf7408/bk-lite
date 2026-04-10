@@ -285,7 +285,7 @@ class AnsibleNATSService:
         started_at = self._now_iso()
         self.task_store.update_status(task.task_id, "running", {"started_at": started_at}, self._now_iso())
         logger.info(
-            "server config999: "
+            "server config 999: "
             "nats_servers=%r "
             "nats_protocol=%s "
             "nats_conn_timeout=%s "
