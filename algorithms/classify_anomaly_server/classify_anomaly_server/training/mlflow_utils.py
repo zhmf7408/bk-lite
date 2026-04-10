@@ -335,6 +335,137 @@ class MLFlowUtils:
         return img_path
 
     @staticmethod
+    def plot_pelt_changepoint_results(
+        timestamps: Union[pd.DatetimeIndex, np.ndarray],
+        values: np.ndarray,
+        changepoints: np.ndarray,
+        predictions: np.ndarray,
+        true_labels: Optional[np.ndarray] = None,
+        event_window: int = 1,
+        title: str = "PELT 变点检测结果",
+        artifact_name: str = "pelt_changepoint_plot",
+        metrics: Optional[Dict[str, float]] = None,
+    ) -> str:
+        """绘制 PELT 专属变点/事件窗口图并上传到 MLflow。"""
+        fig, axes = plt.subplots(2, 1, figsize=(14, 10), sharex=True)
+
+        if isinstance(timestamps, pd.DatetimeIndex):
+            index = timestamps
+        else:
+            index = np.arange(len(values))
+
+        ax1 = axes[0]
+        ax1.plot(
+            index, values, color="#2E86AB", linewidth=1.5, alpha=0.85, label="原始数据"
+        )
+
+        for idx, changepoint in enumerate(changepoints):
+            if 0 <= changepoint < len(values):
+                ax1.axvline(
+                    x=index[changepoint],
+                    color="#F24236",
+                    linestyle="--",
+                    linewidth=1.5,
+                    alpha=0.85,
+                    label="检测到的变点" if idx == 0 else None,
+                )
+
+        if true_labels is not None:
+            true_mask = true_labels == 1
+            if true_mask.any():
+                ax1.scatter(
+                    np.asarray(index)[true_mask],
+                    values[true_mask],
+                    color="#06A77D",
+                    s=45,
+                    marker="x",
+                    linewidths=2,
+                    alpha=0.85,
+                    label="真实异常窗口",
+                )
+
+        ax1.set_title(f"{title} - 原始序列与变点", fontsize=12, fontweight="bold")
+        ax1.set_ylabel("数值", fontsize=10)
+        ax1.legend(loc="best", framealpha=0.9, fontsize=9)
+        ax1.grid(True, alpha=0.3, linestyle="--")
+
+        ax2 = axes[1]
+        ax2.step(
+            index,
+            predictions,
+            where="mid",
+            color="#9D4EDD",
+            linewidth=1.5,
+            label="事件窗口标记",
+        )
+        ax2.fill_between(
+            index,
+            0,
+            1,
+            where=predictions == 1,
+            color="#F24236",
+            alpha=0.2,
+            label="预测窗口",
+        )
+
+        for idx, changepoint in enumerate(changepoints):
+            if 0 <= changepoint < len(values):
+                start = max(0, changepoint - event_window)
+                end = min(len(values) - 1, changepoint + event_window)
+                ax2.axvspan(
+                    index[start],
+                    index[end],
+                    color="#F6BD60",
+                    alpha=0.15,
+                    label="变点影响窗口" if idx == 0 else None,
+                )
+
+        ax2.set_title("PELT 事件窗口视图", fontsize=12, fontweight="bold")
+        ax2.set_xlabel("时间", fontsize=10)
+        ax2.set_ylabel("窗口标签", fontsize=10)
+        ax2.set_ylim(-0.05, 1.05)
+        ax2.legend(loc="best", framealpha=0.9, fontsize=9)
+        ax2.grid(True, alpha=0.3, linestyle="--")
+
+        if metrics:
+            display_metrics = {
+                k: v
+                for k, v in metrics.items()
+                if not k.startswith("_") and isinstance(v, (int, float))
+            }
+            metrics_text = "\n".join(
+                [f"{k}: {v:.4f}" for k, v in display_metrics.items()]
+            )
+            ax1.text(
+                0.02,
+                0.98,
+                metrics_text,
+                transform=ax1.transAxes,
+                fontsize=9,
+                verticalalignment="top",
+                bbox=dict(boxstyle="round", facecolor="wheat", alpha=0.8),
+            )
+
+        plt.tight_layout()
+
+        img_path = f"{artifact_name}.png"
+        plt.savefig(img_path, dpi=150, bbox_inches="tight")
+
+        if mlflow.active_run():
+            mlflow.log_artifact(img_path)
+            logger.info(f"PELT 变点结果图已上传到 MLflow: {img_path}")
+
+            try:
+                import os
+
+                os.remove(img_path)
+            except Exception as e:
+                logger.warning(f"删除临时文件失败: {img_path}, 错误: {e}")
+
+        plt.close()
+        return img_path
+
+    @staticmethod
     def plot_confusion_matrix(
         confusion_matrix: np.ndarray,
         title: str = "混淆矩阵",
