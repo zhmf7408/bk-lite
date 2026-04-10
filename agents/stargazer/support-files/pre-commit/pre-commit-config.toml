@@ -1,5 +1,5 @@
 [tool.black]
-line-length = 120
+line-length = 150
 include = '\.pyi?$'
 exclude = '''
 /(
@@ -19,7 +19,7 @@ exclude = '''
 # https://pycqa.github.io/isort/docs/configuration/options.html
 profile = "black"
 py_version = 36
-line_length = 120
+line_length = 150
 multi_line_output = 3
 include_trailing_comma = true
 force_grid_wrap = 0

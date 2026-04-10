@@ -8,18 +8,11 @@ from datetime import UTC, datetime
 from typing import Any
 
 import nats.errors
-from nats.js.api import (
-    AckPolicy,
-    ConsumerConfig,
-    DeliverPolicy,
-    RetentionPolicy,
-    StorageType,
-    StreamConfig,
-)
-from nats.js.errors import NotFoundError
-
 from core.config import ServiceConfig, logger
+from nats.js.api import AckPolicy, ConsumerConfig, DeliverPolicy, RetentionPolicy, StorageType, StreamConfig
+from nats.js.errors import NotFoundError
 from service.ansible_runner import (
+    build_playbook_list_hosts_command,
     cleanup_workspace,
     parse_ansible_output_per_host,
     prepare_adhoc_execution,
@@ -29,7 +22,6 @@ from service.ansible_runner import (
     to_playbook_request,
 )
 from service.task_store import TaskStore
-
 
 # logging.basicConfig(
 #     level=os.getenv("LOG_LEVEL", "INFO").upper(),
@@ -50,7 +42,12 @@ def _extract_payload(data: bytes) -> dict:
 
 def _build_error(instance_id: str, result: str, error: str) -> bytes:
     return json.dumps(
-        {"success": False, "result": result, "error": error, "instance_id": instance_id},
+        {
+            "success": False,
+            "result": result,
+            "error": error,
+            "instance_id": instance_id,
+        },
         ensure_ascii=False,
     ).encode("utf-8")
 
@@ -287,7 +284,7 @@ class AnsibleNATSService:
         started_at = self._now_iso()
         self.task_store.update_status(task.task_id, "running", {"started_at": started_at}, self._now_iso())
         logger.info(
-            "server config: "
+            "server config 990: "
             "nats_servers=%r "
             "nats_protocol=%s "
             "nats_conn_timeout=%s "
@@ -310,6 +307,18 @@ class AnsibleNATSService:
             else:
                 request = to_playbook_request(task.payload)
                 cmd, workspace = await prepare_playbook_execution(self.config, request)
+                preflight_cmd = build_playbook_list_hosts_command(request)
+                preflight_code, preflight_output = await run_command(preflight_cmd, request.execute_timeout)
+                logger.info(
+                    "playbook host preflight finished: task_id=%s exit_code=%s",
+                    task.task_id,
+                    preflight_code,
+                )
+                if preflight_output:
+                    logger.info(
+                        "playbook host preflight output:\n%s",
+                        preflight_output,
+                    )
                 code, output = await run_command(cmd, request.execute_timeout)
         except Exception as err:
             error = str(err)
