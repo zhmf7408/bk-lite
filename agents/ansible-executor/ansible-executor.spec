@@ -3,7 +3,6 @@
 import importlib.util
 from pathlib import Path
 
-from PyInstaller.building.datastruct import Tree
 from PyInstaller.utils.hooks import collect_all, copy_metadata
 
 
@@ -26,12 +25,9 @@ ANSIBLE_WINDOWS_ROOT = BUILD_SUPPORT_MODULE.ensure_ansible_windows_collection(
 )
 
 ansible_datas, ansible_binaries, ansible_hiddenimports = collect_all("ansible")
-ansible_windows_tree = Tree(
-    str(ANSIBLE_WINDOWS_ROOT),
-    prefix="collections/ansible_collections/ansible/windows",
-    excludes=["*.pyc", "__pycache__"],
+ansible_windows_datas = BUILD_SUPPORT_MODULE.ansible_collections_root_to_datas(
+    COLLECTIONS_ROOT
 )
-ansible_windows_datas = BUILD_SUPPORT_MODULE.tree_toc_to_datas(ansible_windows_tree)
 
 a = Analysis(
     ["main.py"],
