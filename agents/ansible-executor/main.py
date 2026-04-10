@@ -6,13 +6,7 @@ from core.config import load_config
 from dotenv import load_dotenv
 from service.embedded_ansible import run_embedded_ansible
 from service.nats_service import AnsibleNATSService
-from service.runtime import (
-    configure_ansible_environment,
-    find_config_path,
-    find_dotenv_path,
-    log_ansible_windows_collection_layout,
-    repair_ansible_windows_collection_layout,
-)
+from service.runtime import configure_ansible_environment, find_config_path, find_dotenv_path, repair_ansible_windows_collection_layout
 
 
 def main() -> None:
@@ -20,7 +14,6 @@ def main() -> None:
     collections_path = os.environ.get("ANSIBLE_COLLECTIONS_PATH")
     if collections_path:
         repair_ansible_windows_collection_layout(collections_path)
-    log_ansible_windows_collection_layout()
     dotenv_path = find_dotenv_path()
     if dotenv_path:
         load_dotenv(dotenv_path)

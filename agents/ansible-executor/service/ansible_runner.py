@@ -134,43 +134,11 @@ def to_playbook_request(payload: dict[str, Any]) -> PlaybookRequest:
     if file_distribution is not None and not isinstance(file_distribution, dict):
         raise ValueError("file_distribution must be object")
 
-    logger.info(
-        "?? to_playbook_request payload check: "
-        "task_id=%s "
-        "playbook_path=%r "
-        "playbook_content_is_none=%s "
-        "inventory=%r "
-        "inventory_content_is_none=%s "
-        "host_credentials_count=%s "
-        "files_count=%s "
-        "file_distribution=%r "
-        "payload_keys=%s",
-        payload.get("task_id", ""),
-        playbook_path,
-        playbook_content is None,
-        inventory,
-        inventory_content is None,
-        len(host_credentials),
-        len(files),
-        file_distribution,
-        sorted(payload.keys()),
-    )
-
     no_playbook_path = not playbook_path
     no_playbook_content = not playbook_content
     no_file_distribution = not file_distribution
 
     if no_playbook_path and no_playbook_content and no_file_distribution:
-        logger.error(
-            "to_playbook_request validation failed: "
-            "missing playbook_path/playbook_content/file_distribution "
-            "task_id=%s "
-            "raw_file_distribution=%r "
-            "raw_payload=%r",
-            payload.get("task_id", ""),
-            payload.get("file_distribution"),
-            payload,
-        )
         raise ValueError("playbook_path or playbook_content is required")
     if not inventory and not inventory_content and not host_credentials:
         raise ValueError("inventory or inventory_content or host_credentials is required")
@@ -216,26 +184,6 @@ async def download_object_to_workspace(config: ServiceConfig, workspace: Path, b
         raise ValueError("file_key is required")
     if not file_name:
         raise ValueError("file name is required")
-
-    logger.info(
-        "download_object_to_workspace config: "
-        "task_file=%s "
-        "bucket_name=%s "
-        "nats_servers=%r "
-        "nats_protocol=%s "
-        "nats_conn_timeout=%s "
-        "has_nats_username=%s "
-        "has_nats_password=%s "
-        "has_nats_tls_ca_file=%s",
-        file_name,
-        bucket_name,
-        list(config.nats_servers),
-        config.nats_protocol,
-        config.nats_conn_timeout,
-        bool(config.nats_username),
-        bool(config.nats_password),
-        bool(config.nats_tls_ca_file),
-    )
 
     nats_client_module = importlib.import_module("nats.aio.client")
     nc = nats_client_module.Client()
@@ -576,12 +524,6 @@ async def prepare_playbook_execution(
         playbook_file = workspace / "playbook.yml"
         playbook_file.write_text(playbook_content, encoding="utf-8")
         playbook_path = str(playbook_file)
-        logger.info(
-            "prepared playbook file: task_id=%s path=%s content=%s",
-            payload.task_id,
-            playbook_path,
-            playbook_content,
-        )
 
     inventory_value = payload.inventory
     if payload.inventory_content or payload.host_credentials:
@@ -593,12 +535,6 @@ async def prepare_playbook_execution(
             parts.append(_build_host_credentials_inventory(workspace, payload.host_credentials).rstrip("\n"))
         inventory_file.write_text("\n".join([p for p in parts if p]) + "\n", encoding="utf-8")
         inventory_value = str(inventory_file)
-        logger.info(
-            "prepared inventory file: task_id=%s path=%s content=%s",
-            payload.task_id,
-            inventory_value,
-            _mask_sensitive_inventory_content(inventory_file.read_text(encoding="utf-8")),
-        )
 
     prepared_payload = PlaybookRequest(
         playbook_path=playbook_path,
@@ -704,7 +640,6 @@ def build_playbook_winrm_preflight_command(payload: PlaybookRequest) -> list[str
 
 
 async def run_command(cmd: list[str], timeout: int) -> tuple[int, str]:
-    logger.info("execute command: %s", " ".join(shlex.quote(part) for part in cmd))
     proc = await asyncio.create_subprocess_exec(
         *cmd,
         stdout=asyncio.subprocess.PIPE,
@@ -719,10 +654,4 @@ async def run_command(cmd: list[str], timeout: int) -> tuple[int, str]:
         return 124, "command timed out"
     output = stdout.decode("utf-8", errors="replace")
     exit_code = proc.returncode or 0
-    logger.info("command finished: exit_code=%s", exit_code)
-    if output:
-        if exit_code == 0:
-            logger.info("command output:\n%s", output)
-        else:
-            logger.error("command output:\n%s", output)
     return exit_code, output
