@@ -306,8 +306,8 @@ class AnsibleNATSService:
                 code, output = await run_command(cmd, request.execute_timeout)
             else:
                 request = to_playbook_request(task.payload)
-                cmd, workspace = await prepare_playbook_execution(self.config, request)
-                preflight_cmd = build_playbook_list_hosts_command(request)
+                cmd, workspace, prepared_request = await prepare_playbook_execution(self.config, request)
+                preflight_cmd = build_playbook_list_hosts_command(prepared_request)
                 preflight_code, preflight_output = await run_command(preflight_cmd, request.execute_timeout)
                 logger.info(
                     "playbook host preflight finished: task_id=%s exit_code=%s",

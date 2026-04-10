@@ -135,7 +135,7 @@ def to_playbook_request(payload: dict[str, Any]) -> PlaybookRequest:
         raise ValueError("file_distribution must be object")
 
     logger.info(
-        "to_playbook_request payload check: "
+        "to_playbook_request payload check999: "
         "task_id=%s "
         "playbook_path=%r "
         "playbook_content_is_none=%s "
@@ -545,7 +545,7 @@ def prepare_adhoc_execution(payload: AdhocRequest) -> tuple[list[str], Path]:
 async def prepare_playbook_execution(
     config: ServiceConfig,
     payload: PlaybookRequest,
-) -> tuple[list[str], Path]:
+) -> tuple[list[str], Path, PlaybookRequest]:
     workspace = create_task_workspace(payload.task_id)
     extra_vars = dict(payload.extra_vars or {})
 
@@ -600,24 +600,23 @@ async def prepare_playbook_execution(
             _mask_sensitive_inventory_content(inventory_file.read_text(encoding="utf-8")),
         )
 
-    cmd = build_playbook_command(
-        PlaybookRequest(
-            playbook_path=playbook_path,
-            playbook_content=None,
-            inventory=inventory_value,
-            inventory_content=None,
-            extra_vars=extra_vars,
-            execute_timeout=payload.execute_timeout,
-            task_id=payload.task_id,
-            callback=payload.callback,
-            private_key_content=None,
-            private_key_passphrase=None,
-            host_credentials=None,
-            files=None,
-            file_distribution=None,
-        )
+    prepared_payload = PlaybookRequest(
+        playbook_path=playbook_path,
+        playbook_content=None,
+        inventory=inventory_value,
+        inventory_content=None,
+        extra_vars=extra_vars,
+        execute_timeout=payload.execute_timeout,
+        task_id=payload.task_id,
+        callback=payload.callback,
+        private_key_content=None,
+        private_key_passphrase=None,
+        host_credentials=None,
+        files=None,
+        file_distribution=None,
     )
-    return cmd, workspace
+    cmd = build_playbook_command(prepared_payload)
+    return cmd, workspace, prepared_payload
 
 
 def build_adhoc_command(payload: AdhocRequest) -> list[str]:
