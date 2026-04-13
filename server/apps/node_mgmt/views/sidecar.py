@@ -415,7 +415,7 @@ class OpenSidecarViewSet(OpenAPIViewSet):
             - 下载地址包含临时 token，防止未授权下载
 
         Usage:
-            curl -sSLk http://server/api/v1/node_mgmt/open_api/installer/render?token=xxx | sudo bash
+            if [ "$(id -u)" -eq 0 ]; then curl -sSLk http://server/api/v1/node_mgmt/open_api/installer/render?token=xxx | bash; elif command -v sudo >/dev/null 2>&1; then curl -sSLk http://server/api/v1/node_mgmt/open_api/installer/render?token=xxx | sudo bash; else echo "Error: root or sudo is required"; fi
             iwr http://server/api/v1/node_mgmt/open_api/installer/render?token=xxx -useb | iex
 
         示例:

@@ -173,6 +173,7 @@ class InstallerViewSet(ViewSet):
             request.data["cloud_region_id"],
             request.data.get("organizations", []),
             request.data.get("node_name", ""),
+            install_mode=InstallerService.MANUAL_INSTALL_MODE,
         )
         return WebUtils.response_success(data)
 

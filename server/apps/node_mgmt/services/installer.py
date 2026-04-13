@@ -19,6 +19,9 @@ from apps.node_mgmt.utils.task_result_schema import normalize_task_result_for_re
 
 
 class InstallerService:
+    AUTO_INSTALL_MODE = "auto"
+    MANUAL_INSTALL_MODE = "manual"
+
     @staticmethod
     def installer_metadata(target_os: str) -> dict:
         if target_os not in {NodeConstants.WINDOWS_OS, NodeConstants.LINUX_OS}:
@@ -36,7 +39,17 @@ class InstallerService:
         }
 
     @staticmethod
-    def get_install_command(user, ip, node_id, os, package_id, cloud_region_id, organizations, node_name):
+    def get_install_command(
+        user,
+        ip,
+        node_id,
+        os,
+        package_id,
+        cloud_region_id,
+        organizations,
+        node_name,
+        install_mode=MANUAL_INSTALL_MODE,
+    ):
         """
         获取安装命令（生成包含临时 token 的 curl 命令）
 
@@ -75,7 +88,7 @@ class InstallerService:
 
         # 根据操作系统生成不同的安装命令
         if os == NodeConstants.LINUX_OS:
-            install_command = InstallerService.get_linux_bootstrap_command(token)
+            install_command = InstallerService.get_linux_bootstrap_command(token, install_mode=install_mode)
         elif os == NodeConstants.WINDOWS_OS:
             # Windows: 返回新的 OpenAPI 接口地址，不走 webhook
             # 客户端直接调用此接口获取 JSON 配置信息
@@ -243,10 +256,28 @@ class InstallerService:
         return async_to_sync(download_file_by_s3)(InstallerConstants.LINUX_INSTALLER_S3_PATH)
 
     @staticmethod
-    def get_linux_bootstrap_command(token: str) -> str:
+    def get_linux_bootstrap_command(token: str, install_mode: str = MANUAL_INSTALL_MODE) -> str:
         session = InstallerSessionService.build_session_config(token)
         installer = session["installer"]
         install_dir = session["install_dir"]
         server_url = session["server_url"].replace("/api/v1/node_mgmt/open_api/node", "")
         bootstrap_url = f"{server_url}/api/v1/node_mgmt/open_api/installer/linux_bootstrap?token={token}"
-        return f"curl -sSLk {bootstrap_url} | sudo bash -s -- --install-dir '{install_dir}' --installer-name '{installer['filename']}'"
+        command = f"curl -sSLk {bootstrap_url} | bash -s -- --install-dir '{install_dir}' --installer-name '{installer['filename']}'"
+
+        if install_mode == InstallerService.AUTO_INSTALL_MODE:
+            return (
+                'if [ "$(id -u)" -eq 0 ]; then '
+                f"{command}; "
+                "elif command -v sudo >/dev/null 2>&1; then "
+                f"if sudo -n bash -c true >/dev/null 2>&1; then {command.replace('| bash', '| sudo -n bash')}; "
+                "else echo 'Error: automatic installation requires root or passwordless sudo for the current user'; exit 1; fi; "
+                "else echo 'Error: root or sudo is required to install controller'; exit 1; fi"
+            )
+
+        return (
+            'if [ "$(id -u)" -eq 0 ]; then '
+            f"{command}; "
+            "elif command -v sudo >/dev/null 2>&1; then "
+            f"{command.replace('| bash', '| sudo bash')}; "
+            "else echo 'Error: root or sudo is required to install controller'; exit 1; fi"
+        )

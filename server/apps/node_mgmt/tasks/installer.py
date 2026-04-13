@@ -487,6 +487,7 @@ def install_controller_on_nodes(task_obj, nodes, package_obj):
                 task_obj.cloud_region_id,
                 node_obj.organizations,
                 node_obj.node_name,
+                install_mode=InstallerService.AUTO_INSTALL_MODE,
             )
 
             if package_obj.os == NodeConstants.LINUX_OS:
