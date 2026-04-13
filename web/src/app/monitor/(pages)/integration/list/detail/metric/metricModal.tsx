@@ -5,7 +5,7 @@ import React, {
   useRef,
   forwardRef,
   useImperativeHandle,
-  useEffect,
+  useEffect
 } from 'react';
 import {
   Input,
@@ -16,7 +16,7 @@ import {
   Cascader,
   InputNumber,
   ColorPicker,
-  theme,
+  theme
 } from 'antd';
 import { AggregationColor } from 'antd/es/color-picker/color';
 import { PlusOutlined, MinusOutlined } from '@ant-design/icons';
@@ -47,7 +47,7 @@ const genPresets = (presets = presetPalettes) => {
   return Object.entries(presets).map<Presets>(([label, colors]) => ({
     label,
     colors,
-    key: label,
+    key: label
   }));
 };
 
@@ -61,14 +61,14 @@ const MetricModal = forwardRef<ModalRef, ModalProps>(
     const presets = genPresets({
       primary: generate(token.colorPrimary),
       red,
-      green,
+      green
     });
     const formRef = useRef<FormInstance>(null);
     const commonContext = useCommon();
     const unitList = useRef<CascaderItem[]>(
       (commonContext?.groupedUnitList || []).map((item: any) => ({
         ...item,
-        value: item.label,
+        value: item.label
       }))
     );
     const [groupVisible, setGroupVisible] = useState<boolean>(false);
@@ -77,9 +77,9 @@ const MetricModal = forwardRef<ModalRef, ModalProps>(
     const [title, setTitle] = useState<string>('');
     const [type, setType] = useState<string>('');
     const [dimensions, setDimensions] = useState<DimensionItem[]>([
-      { name: '' },
+      { name: '' }
     ]);
-    const [instanceIdKeys, setInstanceIdKeys] = useState<(string | null)[]>([]);
+
     const [enumList, setEnumList] = useState<EnumItem[]>([]);
 
     useImperativeHandle(ref, () => ({
@@ -93,18 +93,12 @@ const MetricModal = forwardRef<ModalRef, ModalProps>(
           if (type === 'add') {
             formData.type = 'metric';
             setDimensions([{ name: '' }]);
-            setInstanceIdKeys([null]);
             setEnumList([INIT_UNIT_ITEM]);
           } else {
             setDimensions(
               (formData.dimensions as DimensionItem[])?.length
                 ? (formData.dimensions as DimensionItem[])
                 : [{ name: '' }]
-            );
-            setInstanceIdKeys(
-              (formData.instance_id_keys as (string | null)[])?.length
-                ? (formData.instance_id_keys as (string | null)[])
-                : [null]
             );
             if (formData.data_type === 'Number') {
               formData.unit = findCascaderPath(
@@ -125,7 +119,7 @@ const MetricModal = forwardRef<ModalRef, ModalProps>(
           setGroupForm(formData);
           setEnumList([{ name: null, id: null, color: null }]);
         }
-      },
+      }
     }));
 
     useEffect(() => {
@@ -162,16 +156,13 @@ const MetricModal = forwardRef<ModalRef, ModalProps>(
         operateGroup({
           ...values,
           dimensions: dimensions.some((item) => !item.name) ? [] : dimensions,
-          instance_id_keys: instanceIdKeys.some((item) => !item)
-            ? []
-            : instanceIdKeys,
           monitor_object: monitorObject,
           monitor_plugin: pluginId,
           type: 'metric',
           unit:
             values.data_type === 'Enum'
               ? JSON.stringify(enumList)
-              : values.unit.at(-1),
+              : values.unit.at(-1)
         });
       });
     };
@@ -186,12 +177,6 @@ const MetricModal = forwardRef<ModalRef, ModalProps>(
       const _enumList = cloneDeep(enumList);
       _enumList.push(INIT_UNIT_ITEM);
       setEnumList(_enumList);
-    };
-
-    const addInstanceIdKeys = () => {
-      const keys = cloneDeep(instanceIdKeys);
-      keys.push(null);
-      setInstanceIdKeys(keys);
     };
 
     const handleCancel = () => {
@@ -211,13 +196,6 @@ const MetricModal = forwardRef<ModalRef, ModalProps>(
       return Promise.resolve();
     };
 
-    const validateInstanceIdkeys = async () => {
-      if (instanceIdKeys.some((item) => !item)) {
-        return Promise.reject(new Error(t('common.valueValidate')));
-      }
-      return Promise.resolve();
-    };
-
     const onDimensionValChange = (
       e: React.ChangeEvent<HTMLInputElement>,
       index: number
@@ -225,15 +203,6 @@ const MetricModal = forwardRef<ModalRef, ModalProps>(
       const _dimensions = cloneDeep(dimensions);
       _dimensions[index].name = e.target.value;
       setDimensions(_dimensions);
-    };
-
-    const onInstanceIdKeysChange = (
-      e: React.ChangeEvent<HTMLInputElement>,
-      index: number
-    ) => {
-      const keys = cloneDeep(instanceIdKeys);
-      keys[index] = e.target.value;
-      setInstanceIdKeys(keys);
     };
 
     const handleEnumIdChange = (val: number | null, index: number) => {
@@ -261,12 +230,6 @@ const MetricModal = forwardRef<ModalRef, ModalProps>(
       const _dimensions = cloneDeep(dimensions);
       _dimensions.splice(index, 1);
       setDimensions(_dimensions);
-    };
-
-    const deleteInstanceIdKeys = (index: number) => {
-      const keys = cloneDeep(instanceIdKeys);
-      keys.splice(index, 1);
-      setInstanceIdKeys(keys);
     };
 
     const deleteEnumItem = (index: number) => {
@@ -328,42 +291,6 @@ const MetricModal = forwardRef<ModalRef, ModalProps>(
                   </Option>
                 ))}
               </Select>
-            </Form.Item>
-            <Form.Item<MetricInfo>
-              label={t('monitor.integrations.instanceIdKeys')}
-              name="instance_id_keys"
-              rules={[{ required: true, validator: validateInstanceIdkeys }]}
-            >
-              <ul>
-                {instanceIdKeys.map((item, index) => (
-                  <li
-                    className={`flex ${
-                      index + 1 !== instanceIdKeys?.length && 'mb-[10px]'
-                    }`}
-                    key={index}
-                  >
-                    <Input
-                      className="w-[79%]"
-                      value={item as string}
-                      onChange={(e) => {
-                        onInstanceIdKeysChange(e, index);
-                      }}
-                    />
-                    <Button
-                      icon={<PlusOutlined />}
-                      className="ml-[10px]"
-                      onClick={addInstanceIdKeys}
-                    ></Button>
-                    {!!index && (
-                      <Button
-                        icon={<MinusOutlined />}
-                        className="ml-[10px]"
-                        onClick={() => deleteInstanceIdKeys(index)}
-                      ></Button>
-                    )}
-                  </li>
-                ))}
-              </ul>
             </Form.Item>
             <Form.Item<MetricInfo>
               label={t('monitor.integrations.dimension')}

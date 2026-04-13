@@ -273,6 +273,7 @@ class GroupViewSet(LanguageViewSet, ViewSetUtils):
                 "result": True,
                 "data": {
                     "group_id": group.id,
+                    "group_name": group.name,
                     "allow_inherit_roles": group.allow_inherit_roles,
                     "own_role_ids": own_role_ids,
                     "inherited_role_ids": inherited_role_ids,

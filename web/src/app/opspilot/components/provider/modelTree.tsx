@@ -26,7 +26,7 @@ const ModelTree: React.FC<ModelTreeProps> = ({
   // Generate tree data structure
   const treeData = useMemo(() => {
     const totalCount = groups.reduce((sum, group) => sum + (group.count || 0), 0);
-    
+
     const allNode: DataNode = {
       key: 'all',
       title: (
@@ -42,8 +42,8 @@ const ModelTree: React.FC<ModelTreeProps> = ({
     };
 
     // Filter groups based on search value
-    const filteredGroups = searchValue 
-      ? groups.filter(group => 
+    const filteredGroups = searchValue
+      ? groups.filter(group =>
         (group.display_name || group.name).toLowerCase().includes(searchValue.toLowerCase())
       )
       : groups;
@@ -121,24 +121,24 @@ const ModelTree: React.FC<ModelTreeProps> = ({
   const handleDrop = async (info: any) => {
     const dropKey = info.node.key;
     const dragKey = info.dragNode.key;
-    
+
     // Prevent dragging to/from "all" node
     if (dropKey === 'all' || dragKey === 'all') return;
-    
+
     const dragGroup = groups.find(g => String(g.id) === dragKey);
     const dropGroup = groups.find(g => String(g.id) === dropKey);
-    
+
     // Validation: ensure both groups exist and not dragging to self
     if (!dragGroup || !dropGroup || dragGroup.id === dropGroup.id) return;
-    
+
     const targetIndex = dropGroup.index || 0;
-    
+
     // Validation: ensure callback function exists
     if (!onGroupOrderChange) {
       console.error('onGroupOrderChange function is not provided');
       return;
     }
-    
+
     try {
       // Call API to update group order
       await onGroupOrderChange([{ id: dragGroup.id, index: targetIndex }]);
@@ -173,7 +173,7 @@ const ModelTree: React.FC<ModelTreeProps> = ({
           />
         </PermissionWrapper>
       </div>
-      
+
       <div className="flex-1 p-2 overflow-auto">
         <Tree
           showLine={{ showLeafIcon: false }}
