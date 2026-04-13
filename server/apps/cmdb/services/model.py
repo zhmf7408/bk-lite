@@ -1899,12 +1899,7 @@ class ModelManage(object):
         return file_stream
 
     @staticmethod
-    def import_model_config(file):
-        from apps.cmdb.model_migrate.migrete_service import ModelMigrate
-
-        migrator = ModelMigrate(file_source=file, is_pre=False)
-        result = migrator.main()
-        model_config = migrator.model_config
+    def _apply_model_config_post_import_extras(model_config: dict[str, list[dict]]):
         with GraphClient() as ag:
             for sheet_name, rows in model_config.items():
                 if not sheet_name.startswith("attr-"):
@@ -1951,4 +1946,12 @@ class ModelManage(object):
                     raise
 
         ModelManage._import_auto_relation_rule_sets_from_asso_sheets(model_config)
+
+    @staticmethod
+    def import_model_config(file):
+        from apps.cmdb.model_migrate.migrete_service import ModelMigrate
+
+        migrator = ModelMigrate(file_source=file, is_pre=False)
+        result = migrator.main()
+        ModelManage._apply_model_config_post_import_extras(migrator.model_config)
         return result
