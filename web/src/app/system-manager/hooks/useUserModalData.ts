@@ -39,6 +39,7 @@ interface UseUserModalDataReturn {
   personalRoleIds: number[];
   groupRules: GroupRules;
   organizationRoleIds: number[];
+  organizationRoleSourceMap: Record<string, string>;
   isSuperuser: boolean;
   currentUserId: string;
   setSelectedGroups: (groups: React.Key[]) => void;
@@ -70,6 +71,7 @@ export function useUserModalData(): UseUserModalDataReturn {
   const [personalRoleIds, setPersonalRoleIds] = useState<number[]>([]);
   const [groupRules, setGroupRules] = useState<GroupRules>({});
   const [organizationRoleIds, setOrganizationRoleIds] = useState<number[]>([]);
+  const [organizationRoleSourceMap, setOrganizationRoleSourceMap] = useState<Record<string, string>>({});
   const [isSuperuser, setIsSuperuser] = useState<boolean>(false);
 
   const { addUser, editUser, getUserDetail, getRoleList } = useUserApi();
@@ -95,6 +97,7 @@ export function useUserModalData(): UseUserModalDataReturn {
     async (groupIds: React.Key[]): Promise<number[]> => {
       if (groupIds.length === 0) {
         setOrganizationRoleIds([]);
+        setOrganizationRoleSourceMap({});
         return [];
       }
 
@@ -102,6 +105,19 @@ export function useUserModalData(): UseUserModalDataReturn {
         const groupDetails = await Promise.all(
           groupIds.map((groupId) => getGroupDetailWithRoles({ group_id: String(groupId) }))
         );
+
+        const orgRoleSourceMap = groupDetails.reduce<Record<string, string>>((acc, detail) => {
+          [...(detail.own_role_ids || []), ...(detail.inherited_role_ids || [])].forEach((roleId) => {
+            const roleKey = String(roleId);
+            const existingGroupNames = acc[roleKey] ? acc[roleKey].split(', ') : [];
+
+            if (!existingGroupNames.includes(detail.group_name)) {
+              acc[roleKey] = [...existingGroupNames, detail.group_name].filter(Boolean).join(', ');
+            }
+          });
+
+          return acc;
+        }, {});
 
         const orgRoleIds = [...new Set(
           groupDetails.flatMap((detail) => [
@@ -111,11 +127,13 @@ export function useUserModalData(): UseUserModalDataReturn {
         )];
 
         setOrganizationRoleIds(orgRoleIds);
+        setOrganizationRoleSourceMap(orgRoleSourceMap);
         await fetchRoleInfoWithOrgRoles();
         return orgRoleIds;
       } catch (error) {
         console.error('Failed to fetch group roles:', error);
         setOrganizationRoleIds([]);
+        setOrganizationRoleSourceMap({});
         return [];
       }
     },
@@ -162,9 +180,11 @@ export function useUserModalData(): UseUserModalDataReturn {
 
       if (modalType === 'edit' && userId) {
         setOrganizationRoleIds([]);
+        setOrganizationRoleSourceMap({});
         fetchUserDetail(userId);
       } else if (modalType === 'add') {
         setOrganizationRoleIds([]);
+        setOrganizationRoleSourceMap({});
         setSelectedGroups(groupKeys);
         setPersonalRoleIds([]);
         setSelectedRoles([]);
@@ -294,6 +314,7 @@ export function useUserModalData(): UseUserModalDataReturn {
     personalRoleIds,
     groupRules,
     organizationRoleIds,
+    organizationRoleSourceMap,
     isSuperuser,
     currentUserId,
     setSelectedGroups,
