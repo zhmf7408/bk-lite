@@ -20,6 +20,7 @@ interface TransferRightTreeProps {
   selectedKeys: React.Key[];
   personalRoleIds: React.Key[];
   organizationRoleIds: React.Key[];
+  organizationRoleSourceMap: Record<string, string>;
   inheritedRoleIds: React.Key[];
   inheritedRoleSourceMap: Record<string, string>;
   rightSearchValue: string;
@@ -118,6 +119,7 @@ function transformRightTreeRole(
   selectedKeys: React.Key[],
   personalRoleIds: React.Key[],
   organizationRoleIds: React.Key[],
+  organizationRoleSourceMap: Record<string, string>,
   inheritedRoleIds: React.Key[],
   inheritedRoleSourceMap: Record<string, string>,
   forceOrganizationRole: boolean,
@@ -132,6 +134,7 @@ function transformRightTreeRole(
     const isExplicitlySelected = selectedKeys.some((key) => String(key) === String(nodeKey));
     const isPersonalRole = personalRoleIds.some((key) => String(key) === String(nodeKey));
     const isOrgRole = isExplicitlySelected && (forceOrganizationRole || isDisabled || organizationRoleIds.some((key) => String(key) === String(nodeKey)));
+    const organizationRoleSource = organizationRoleSourceMap[String(nodeKey)] || '';
     const isLeafNode = !node.children || node.children.length === 0;
     const canDelete = forceOrganizationRole ? isExplicitlySelected : isPersonalRole;
 
@@ -149,9 +152,11 @@ function transformRightTreeRole(
               </Tooltip>
             )}
             {isLeafNode && isOrgRole && (
-              <Tag className='font-mini' color="orange">
-                {t('system.role.organizationRole')}
-              </Tag>
+              <Tooltip title={organizationRoleSource ? `${t('system.data.group')}：${organizationRoleSource}` : undefined}>
+                <Tag className='font-mini' color="orange">
+                  {t('system.role.organizationRole')}
+                </Tag>
+              </Tooltip>
             )}
             {isLeafNode && isPersonalRole && (
               <Tag className='font-mini' color="blue">
@@ -188,6 +193,7 @@ function transformRightTreeRole(
         selectedKeys,
         personalRoleIds,
         organizationRoleIds,
+        organizationRoleSourceMap,
         inheritedRoleIds,
         inheritedRoleSourceMap,
         forceOrganizationRole,
@@ -204,6 +210,7 @@ const TransferRightTree: React.FC<TransferRightTreeProps> = ({
   selectedKeys,
   personalRoleIds,
   organizationRoleIds,
+  organizationRoleSourceMap,
   inheritedRoleIds,
   inheritedRoleSourceMap,
   rightSearchValue,
@@ -232,13 +239,14 @@ const TransferRightTree: React.FC<TransferRightTreeProps> = ({
       selectedKeys,
       personalRoleIds,
       organizationRoleIds,
+      organizationRoleSourceMap,
       inheritedRoleIds,
       inheritedRoleSourceMap,
       forceOrganizationRole,
       t,
       onChange
     );
-  }, [filteredRightData, treeData, selectedKeys, personalRoleIds, onChange, organizationRoleIds, inheritedRoleIds, inheritedRoleSourceMap, mode, onPermissionSetting, forceOrganizationRole, t]);
+  }, [filteredRightData, treeData, selectedKeys, personalRoleIds, onChange, organizationRoleIds, organizationRoleSourceMap, inheritedRoleIds, inheritedRoleSourceMap, mode, onPermissionSetting, forceOrganizationRole, t]);
 
   return (
     <div className="flex flex-col w-full">

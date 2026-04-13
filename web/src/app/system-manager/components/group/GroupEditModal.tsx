@@ -36,7 +36,6 @@ const GroupEditModal = forwardRef<GroupModalRef, ModalProps>(({ onSuccess }, ref
   const [currentGroupName, setCurrentGroupName] = useState<string>('');
   const [roleTreeData, setRoleTreeData] = useState<TreeDataNode[]>([]);
   const [selectedRoleIds, setSelectedRoleIds] = useState<number[]>([]);
-  const [allowInheritRoles, setAllowInheritRoles] = useState(false);
   const [inheritedRoleIds, setInheritedRoleIds] = useState<number[]>([]);
   const [inheritedRoleSourceMap, setInheritedRoleSourceMap] = useState<Record<string, string>>({});
 
@@ -49,11 +48,10 @@ const GroupEditModal = forwardRef<GroupModalRef, ModalProps>(({ onSuccess }, ref
         formRef.current?.setFieldsValue({
           groupName: currentGroupName,
           roleIds: selectedRoleIds,
-          allowInheritRoles: allowInheritRoles,
         });
       }, 0);
     }
-  }, [visible, currentGroupName, selectedRoleIds, allowInheritRoles]);
+  }, [visible, currentGroupName, selectedRoleIds]);
 
   const fetchAvailableRoles = async () => {
     try {
@@ -83,10 +81,13 @@ const GroupEditModal = forwardRef<GroupModalRef, ModalProps>(({ onSuccess }, ref
   const fetchGroupDetail = async (groupId: string | number) => {
     try {
       const detail = await getGroupDetailWithRoles({ group_id: groupId });
-      setAllowInheritRoles(detail.allow_inherit_roles);
       setInheritedRoleIds(detail.inherited_role_ids || []);
       setInheritedRoleSourceMap(detail.inherited_role_source_map || {});
       setSelectedRoleIds(detail.own_role_ids || []);
+      formRef.current?.setFieldsValue({
+        allowInheritRoles: detail.allow_inherit_roles,
+        roleIds: detail.own_role_ids || [],
+      });
     } catch (error) {
       console.error('Failed to fetch group detail:', error);
     }
@@ -109,7 +110,6 @@ const GroupEditModal = forwardRef<GroupModalRef, ModalProps>(({ onSuccess }, ref
   const handleCancel = () => {
     setVisible(false);
     setSelectedRoleIds([]);
-    setAllowInheritRoles(false);
     setInheritedRoleIds([]);
     setInheritedRoleSourceMap({});
   };
@@ -145,6 +145,10 @@ const GroupEditModal = forwardRef<GroupModalRef, ModalProps>(({ onSuccess }, ref
   const handleRoleChange = (newKeys: number[]) => {
     setSelectedRoleIds(newKeys);
     formRef.current?.setFieldsValue({ roleIds: newKeys });
+  };
+
+  const handleAllowInheritRolesChange = (checked: boolean) => {
+    formRef.current?.setFieldsValue({ allowInheritRoles: checked });
   };
 
   return (
@@ -187,7 +191,7 @@ const GroupEditModal = forwardRef<GroupModalRef, ModalProps>(({ onSuccess }, ref
               valuePropName="checked"
               className="mb-0"
             >
-              <Switch size="small" />
+              <Switch size="small" onChange={handleAllowInheritRolesChange} />
             </Form.Item>
             <span className="text-[14px] text-(--color-text-2)">{t('system.group.allowInheritRoles')}</span>
           </div>
