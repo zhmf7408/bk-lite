@@ -6,6 +6,34 @@
   "description": "opspolit",
   "glyphs": [
     {
+      "icon_id": "42368684",
+      "name": "BI门户-3",
+      "font_class": "BImenhu-3",
+      "unicode": "ecf7",
+      "unicode_decimal": 60663
+    },
+    {
+      "icon_id": "26377711",
+      "name": "winlogbeat",
+      "font_class": "winlogbeat1",
+      "unicode": "e71d",
+      "unicode_decimal": 59165
+    },
+    {
+      "icon_id": "27239503",
+      "name": "redis",
+      "font_class": "redis",
+      "unicode": "e72e",
+      "unicode_decimal": 59182
+    },
+    {
+      "icon_id": "28401217",
+      "name": "SNMP",
+      "font_class": "snmp_trap",
+      "unicode": "e750",
+      "unicode_decimal": 59216
+    },
+    {
       "icon_id": "15872015",
       "name": "首页",
       "font_class": "shouye",
@@ -1176,8 +1204,8 @@
     },
     {
       "icon_id": "12153207",
-      "name": "postgres",
-      "font_class": "postgres",
+      "name": "postgresql",
+      "font_class": "postgresql",
       "unicode": "e669",
       "unicode_decimal": 58985
     },
@@ -1197,8 +1225,8 @@
     },
     {
       "icon_id": "18005108",
-      "name": "elasticsearch-Elasticsearch",
-      "font_class": "elasticsearch-Elasticsearch",
+      "name": "elasticsearch",
+      "font_class": "elasticsearch",
       "unicode": "e8a2",
       "unicode_decimal": 59554
     },

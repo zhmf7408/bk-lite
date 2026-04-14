@@ -1,5 +1,9 @@
+import os
+import shutil
 import sys
 from pathlib import Path
+
+from core.config import logger
 
 
 def application_root() -> Path:
@@ -50,3 +54,42 @@ def current_entrypoint_command() -> list[str]:
     if getattr(sys, "frozen", False):
         return [sys.executable]
     return [sys.executable, str(application_root() / "main.py")]
+
+
+def configure_ansible_environment() -> None:
+    if os.environ.get("ANSIBLE_COLLECTIONS_PATH"):
+        return
+    root = application_root()
+    candidates = [
+        root / "collections",
+        root / "ansible-executor" / "collections",
+        root / "_internal" / "collections",
+    ]
+    for collections_dir in candidates:
+        if collections_dir.exists() and collections_dir.is_dir():
+            os.environ["ANSIBLE_COLLECTIONS_PATH"] = str(collections_dir)
+            return
+
+
+def repair_ansible_windows_collection_layout(collections_path: str | Path) -> bool:
+    collections_root = Path(collections_path)
+    windows_root = collections_root / "ansible_collections" / "ansible" / "windows"
+    if not windows_root.exists() or not windows_root.is_dir():
+        return False
+
+    repaired = False
+    for path in windows_root.rglob("*"):
+        nested_file = path / path.name
+        if not path.is_dir() or not nested_file.is_file():
+            continue
+        backup_content = nested_file.read_bytes()
+        shutil.rmtree(path)
+        path.write_bytes(backup_content)
+        repaired = True
+        logger.warning(
+            "repaired ansible windows collection entry: path=%s nested_file=%s",
+            path,
+            nested_file,
+        )
+
+    return repaired

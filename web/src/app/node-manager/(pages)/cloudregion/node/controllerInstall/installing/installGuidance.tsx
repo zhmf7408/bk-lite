@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, forwardRef, useImperativeHandle } from 'react';
-import { Steps, Tag } from 'antd';
+import { Progress, Steps, Tag } from 'antd';
 import {
   CheckCircleFilled,
   CloseCircleFilled,
@@ -10,7 +10,18 @@ import {
 } from '@ant-design/icons';
 import OperateDrawer from '@/app/node-manager/components/operate-drawer';
 import { ModalRef } from '@/app/node-manager/types';
-import { LogStep, StatusConfig } from '@/app/node-manager/types/controller';
+import {
+  LogStep,
+  StatusConfig
+} from '@/app/node-manager/types/controller';
+import {
+  getInstallerFailureSuggestion,
+  getInstallerProgressPercent,
+  getInstallerProgressText,
+  getInstallerStepInfo,
+  getInstallerStepLabel,
+  normalizeInstallerLogs
+} from '@/app/node-manager/utils/installerProgress';
 import { useTranslation } from '@/utils/i18n';
 import { useLocalizedTime } from '@/hooks/useLocalizedTime';
 
@@ -31,7 +42,7 @@ const InstallGuidance = forwardRef<ModalRef, InstallGuidanceProps>(
       showModal: ({ title, form }) => {
         setGroupVisible(true);
         setTitle(title || '');
-        setLogs(form?.logs || []);
+        setLogs(normalizeInstallerLogs(form?.logs));
         setNodeInfo({
           ip: form?.ip || '',
           nodeName: form?.nodeName || ''
@@ -41,7 +52,7 @@ const InstallGuidance = forwardRef<ModalRef, InstallGuidanceProps>(
         newLogs: LogStep[],
         newNodeInfo?: { ip?: string; nodeName?: string }
       ) => {
-        setLogs(newLogs);
+        setLogs(normalizeInstallerLogs(newLogs));
         // 如果提供了新的节点信息，也更新它
         if (newNodeInfo) {
           setNodeInfo((prev) => ({
@@ -132,13 +143,29 @@ const InstallGuidance = forwardRef<ModalRef, InstallGuidanceProps>(
               current={logs.length}
               items={logs.map((log) => {
                 const statusConfig = getStatusConfig(log.status);
+                const stepProgress = log.details?.progress;
+                const progressPercent = getInstallerProgressPercent(stepProgress);
+                const progressText = getInstallerProgressText(stepProgress);
+                const stepInfo = getInstallerStepInfo(
+                  log.details?.step_index,
+                  log.details?.step_total
+                );
+                const displayAction = getInstallerStepLabel(
+                  t,
+                  log.details?.raw_step || log.action,
+                  log.action
+                );
+                const failureSuggestion = getInstallerFailureSuggestion(
+                  t,
+                  log.details?.raw_step || log.action
+                );
                 return {
                   status: statusConfig.stepStatus,
                   icon: statusConfig.icon,
                   title: (
                     <div className="flex items-center justify-between">
                       <span className="text-[14px] font-medium">
-                        {log.action}
+                        {displayAction}
                       </span>
                       <Tag
                         className="ml-[10px]"
@@ -167,9 +194,43 @@ const InstallGuidance = forwardRef<ModalRef, InstallGuidanceProps>(
                             : '--'}
                           ]
                         </div>
-                        <div className="text-[12px] text-[var(--color-text-1)]">
-                          {log.message}
-                        </div>
+                          <div className="text-[12px] text-[var(--color-text-1)]">
+                            {log.message || '--'}
+                          </div>
+                        {(stepInfo || progressText) && (
+                          <div className="mt-[8px] flex flex-wrap items-center gap-[8px] text-[12px] text-[var(--color-text-2)]">
+                            {stepInfo && (
+                              <Tag bordered={false} color="default" className="m-0">
+                                {stepInfo}
+                              </Tag>
+                            )}
+                            {progressText && <span>{progressText}</span>}
+                          </div>
+                        )}
+                        {progressPercent !== null && (
+                          <div className="mt-[8px]">
+                            <Progress
+                              percent={progressPercent}
+                              size="small"
+                              status={log.status === 'error' ? 'exception' : 'active'}
+                              showInfo={false}
+                            />
+                          </div>
+                        )}
+                        {log.details?.error && (
+                          <div className="mt-[8px] text-[12px] text-[var(--color-error)]">
+                            {t('node-manager.cloudregion.node.failureReason')}:
+                            {' '}
+                            {log.details.error}
+                          </div>
+                        )}
+                        {['error', 'timeout'].includes(log.status) && (
+                          <div className="mt-[4px] text-[12px] text-[var(--color-text-2)]">
+                            {t('node-manager.cloudregion.node.nextAction')}:
+                            {' '}
+                            {failureSuggestion}
+                          </div>
+                        )}
                       </div>
                     </div>
                   )

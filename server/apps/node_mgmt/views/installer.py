@@ -15,6 +15,7 @@ from apps.node_mgmt.tasks.installer import (
     timeout_controller_install_task,
     CONTROLLER_INSTALL_TASK_TIMEOUT_SECONDS,
 )
+from apps.node_mgmt.utils.task_result_schema import normalize_task_result_for_read
 
 
 class InstallerViewSet(ViewSet):
@@ -94,9 +95,7 @@ class InstallerViewSet(ViewSet):
     # 采集器
     @action(detail=False, methods=["post"], url_path="collector/install")
     def collector_install(self, request):
-        task_id = InstallerService.install_collector(
-            request.data["collector_package"], request.data["nodes"]
-        )
+        task_id = InstallerService.install_collector(request.data["collector_package"], request.data["nodes"])
         install_collector.delay(task_id)
         return WebUtils.response_success(dict(task_id=task_id))
 
@@ -110,11 +109,7 @@ class InstallerViewSet(ViewSet):
         serializer.is_valid(raise_exception=True)
         validated_data = cast(dict[str, Any], serializer.validated_data)
 
-        queryset = (
-            CollectorTaskNode.objects.filter(task_id=task_id)
-            .select_related("node")
-            .prefetch_related("node__nodeorganization_set")
-        )
+        queryset = CollectorTaskNode.objects.filter(task_id=task_id).select_related("node").prefetch_related("node__nodeorganization_set")
         status_list = validated_data.get("status")
         if status_list:
             queryset = queryset.filter(status__in=status_list)
@@ -130,14 +125,11 @@ class InstallerViewSet(ViewSet):
             {
                 "node_id": task_node.node_id,
                 "status": task_node.status,
-                "result": task_node.result,
+                "result": normalize_task_result_for_read(task_node.result),
                 "ip": task_node.node.ip,
                 "os": task_node.node.operating_system,
                 "node_name": task_node.node.name,
-                "organizations": [
-                    rel.organization
-                    for rel in task_node.node.nodeorganization_set.all()
-                ],
+                "organizations": [rel.organization for rel in task_node.node.nodeorganization_set.all()],
                 "install_method": task_node.node.install_method,
             }
             for task_node in items
@@ -150,12 +142,8 @@ class InstallerViewSet(ViewSet):
             "running": summary_queryset.filter(status="running").count(),
             "success": summary_queryset.filter(status="success").count(),
             "error": summary_queryset.filter(status="error").count(),
-            "timeout": summary_queryset.filter(
-                result__overall_status="timeout"
-            ).count(),
-            "cancelled": summary_queryset.filter(
-                result__overall_status="cancelled"
-            ).count(),
+            "timeout": summary_queryset.filter(result__overall_status="timeout").count(),
+            "cancelled": summary_queryset.filter(result__overall_status="cancelled").count(),
         }
 
         task_obj = CollectorTask.objects.filter(id=task_id).first()
@@ -185,12 +173,24 @@ class InstallerViewSet(ViewSet):
             request.data["cloud_region_id"],
             request.data.get("organizations", []),
             request.data.get("node_name", ""),
+            install_mode=InstallerService.MANUAL_INSTALL_MODE,
         )
         return WebUtils.response_success(data)
 
     @action(detail=False, methods=["GET"], url_path="windows/download")
     def windows_download(self, request):
         file, _ = InstallerService.download_windows_installer()
-        return WebUtils.response_file(
-            file, InstallerConstants.WINDOWS_INSTALLER_FILENAME
-        )
+        return WebUtils.response_file(file, InstallerConstants.WINDOWS_INSTALLER_FILENAME)
+
+    @action(detail=False, methods=["GET"], url_path="linux/download")
+    def linux_download(self, request):
+        file, _ = InstallerService.download_linux_installer()
+        return WebUtils.response_file(file, InstallerConstants.LINUX_INSTALLER_FILENAME)
+
+    @action(detail=False, methods=["GET"], url_path="manifest")
+    def manifest(self, request):
+        return WebUtils.response_success(InstallerService.installer_manifest())
+
+    @action(detail=False, methods=["GET"], url_path="metadata/(?P<target_os>[^/.]+)")
+    def metadata(self, request, target_os):
+        return WebUtils.response_success(InstallerService.installer_metadata(target_os))

@@ -55,7 +55,7 @@ const SubscriptionRuleForm = forwardRef<SubscriptionRuleFormRef, SubscriptionRul
   );
   const [channelOptions, setChannelOptions] = useState<{ label: string; value: number }[]>([]);
   const [modelFields, setModelFields] = useState<AttrFieldType[]>([]);
-  const [relationFields, setRelationFields] = useState<AttrFieldType[]>([]);
+  const [relationFieldsByModel, setRelationFieldsByModel] = useState<Record<string, AttrFieldType[]>>({});
   const [relatedModels, setRelatedModels] = useState<{ id: string; name: string }[]>([]);
   const [submitted, setSubmitted] = useState(false);
   const [triggerConfigErrors, setTriggerConfigErrors] = useState<Record<string, string>>({});
@@ -119,35 +119,116 @@ const SubscriptionRuleForm = forwardRef<SubscriptionRuleFormRef, SubscriptionRul
     'is_collect_task',
   ]), []);
 
+  const relationChangeModels = useMemo(() => {
+    const relationChange = triggerConfig.relation_change;
+    const byNewShape = relationChange?.related_models;
+    if (Array.isArray(byNewShape) && byNewShape.length > 0) {
+      return byNewShape
+        .filter((item) => !!item?.related_model)
+        .map((item) => ({
+          related_model: item.related_model,
+          fields: Array.isArray(item.fields) ? item.fields : [],
+        }));
+    }
+    if (relationChange?.related_model) {
+      return [{
+        related_model: relationChange.related_model,
+        fields: Array.isArray(relationChange.fields) ? relationChange.fields : [],
+      }];
+    }
+    return [];
+  }, [triggerConfig.relation_change]);
+
+  const normalizeRelationChangeModels = useCallback((config: TriggerConfig) => {
+    const relationChange = config.relation_change;
+    const byNewShape = relationChange?.related_models;
+    if (Array.isArray(byNewShape) && byNewShape.length > 0) {
+      return byNewShape
+        .filter((item) => !!item?.related_model)
+        .map((item) => ({
+          related_model: item.related_model,
+          fields: Array.isArray(item.fields) ? item.fields : [],
+        }));
+    }
+    if (relationChange?.related_model) {
+      return [{
+        related_model: relationChange.related_model,
+        fields: Array.isArray(relationChange.fields) ? relationChange.fields : [],
+      }];
+    }
+    return [];
+  }, []);
+
   useEffect(() => {
-    const relatedModelId = triggerConfig.relation_change?.related_model;
-    if (!relatedModelId) {
-      setRelationFields([]);
+    const selectedModelIds = relationChangeModels.map((item) => item.related_model);
+    if (selectedModelIds.length === 0) {
+      setRelationFieldsByModel({});
       return;
     }
-    getModelAttrGroupsFullInfo(relatedModelId)
-      .then((data: any) => {
-        const groups = Array.isArray(data?.groups) ? data.groups : [];
-        const fields = groups.flatMap((group: any) => (
-          Array.isArray(group?.attrs) ? group.attrs : []
-        ));
-        setRelationFields(fields);
-        const defaultFields = fields
-          .filter((f: AttrFieldType) => !RELATION_CHANGE_EXCLUDED_FIELD_IDS.has(f.attr_id))
-          .map((f: AttrFieldType) => f.attr_id);
-        setTriggerConfig((prev) => ({
-          ...prev,
-          relation_change: {
-            related_model: relatedModelId,
-            fields: defaultFields,
-          },
-        }));
-      })
-      .catch(() => {
-        setRelationFields([]);
+
+    selectedModelIds.forEach((relatedModelId) => {
+      if (relationFieldsByModel[relatedModelId]) {
+        return;
+      }
+      getModelAttrGroupsFullInfo(relatedModelId)
+        .then((data: any) => {
+          const groups = Array.isArray(data?.groups) ? data.groups : [];
+          const fields = groups.flatMap((group: any) => (
+            Array.isArray(group?.attrs) ? group.attrs : []
+          ));
+          setRelationFieldsByModel((prev) => ({
+            ...prev,
+            [relatedModelId]: fields,
+          }));
+          const defaultFields = fields
+            .filter((f: AttrFieldType) => !RELATION_CHANGE_EXCLUDED_FIELD_IDS.has(f.attr_id))
+            .map((f: AttrFieldType) => f.attr_id);
+          setTriggerConfig((prev) => {
+            const currentModels = normalizeRelationChangeModels(prev);
+            const normalized = currentModels.map((item) => (
+              item.related_model === relatedModelId
+                ? {
+                  ...item,
+                  fields: item.fields?.length ? item.fields : defaultFields,
+                }
+                : item
+            ));
+            return {
+              ...prev,
+              relation_change: {
+                ...prev.relation_change,
+                related_models: normalized,
+                related_model: normalized[0]?.related_model,
+                fields: normalized[0]?.fields || [],
+              },
+            };
+          });
+        })
+        .catch(() => {
+          setRelationFieldsByModel((prev) => ({
+            ...prev,
+            [relatedModelId]: [],
+          }));
+        });
+    });
+
+    setRelationFieldsByModel((prev) => {
+      const next: Record<string, AttrFieldType[]> = {};
+      selectedModelIds.forEach((id) => {
+        if (prev[id]) {
+          next[id] = prev[id];
+        }
       });
+      return next;
+    });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [triggerConfig.relation_change?.related_model]);
+  }, [
+    relationChangeModels,
+    getModelAttrGroupsFullInfo,
+    RELATION_CHANGE_EXCLUDED_FIELD_IDS,
+    normalizeRelationChangeModels,
+    relationFieldsByModel,
+  ]);
 
   const dateFields = useMemo(
     () => modelFields.filter((f) => ['time', 'date', 'datetime'].includes(f.attr_type)).map((f) => ({
@@ -245,14 +326,16 @@ const SubscriptionRuleForm = forwardRef<SubscriptionRuleFormRef, SubscriptionRul
     }
     
     if (triggerTypes.includes('relation_change')) {
-      const relatedModel = triggerConfig.relation_change?.related_model;
-      const fields = triggerConfig.relation_change?.fields || [];
-      if (!relatedModel) {
-        errors['relation_change.related_model'] = requiredMsg;
+      const models = relationChangeModels;
+      if (models.length === 0) {
+        errors['relation_change.related_models'] = requiredMsg;
       }
-      if (fields.length === 0) {
-        errors['relation_change.fields'] = requiredMsg;
-      }
+      models.forEach((item) => {
+        const fields = item.fields || [];
+        if (fields.length === 0) {
+          errors[`relation_change.related_models.${item.related_model}.fields`] = requiredMsg;
+        }
+      });
     }
     
     if (triggerTypes.includes('expiration')) {
@@ -263,7 +346,7 @@ const SubscriptionRuleForm = forwardRef<SubscriptionRuleFormRef, SubscriptionRul
     }
     
     return errors;
-  }, [triggerTypes, triggerConfig, t]);
+  }, [triggerTypes, triggerConfig, t, relationChangeModels]);
 
   const handleSubmit = useCallback(async (isEnabled: boolean) => {
     setSubmitted(true);
@@ -417,7 +500,12 @@ const SubscriptionRuleForm = forwardRef<SubscriptionRuleFormRef, SubscriptionRul
             }}
             modelFields={modelFields.map((field) => ({ id: field.attr_id, name: field.attr_name, type: field.attr_type }))}
             relatedModels={relatedModels}
-            relationFields={relationFields.map((field) => ({ id: field.attr_id, name: field.attr_name, type: field.attr_type }))}
+            relationFieldsByModel={Object.fromEntries(
+              Object.entries(relationFieldsByModel).map(([key, fields]) => [
+                key,
+                fields.map((field) => ({ id: field.attr_id, name: field.attr_name, type: field.attr_type })),
+              ])
+            )}
             dateFields={dateFields}
             triggerConfig={triggerConfig}
             errors={triggerConfigErrors}

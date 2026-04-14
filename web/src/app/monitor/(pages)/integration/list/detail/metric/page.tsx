@@ -51,6 +51,7 @@ const Configure = () => {
   const groupName = searchParams.get('name') || '';
   const groupId = searchParams.get('id');
   const pluginID = searchParams.get('plugin_id') || '';
+  const templateType = searchParams.get('template_type') || '';
   const groupRef = useRef<ModalRef>(null);
   const metricRef = useRef<ModalRef>(null);
   const [searchText, setSearchText] = useState<string>('');
@@ -170,7 +171,7 @@ const Configure = () => {
     let _objId = '';
     try {
       const data = await getMonitorObject();
-      if (needsTagsEntry(groupName, data)) {
+      if (templateType !== 'pull' && needsTagsEntry(groupName, data)) {
         setShowTabs(true);
         const objectType = getObjectTypeByName(groupName, data);
         const _items = data

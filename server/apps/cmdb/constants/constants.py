@@ -392,6 +392,16 @@ COLLECT_OBJ_TREE = [
                 "desc": "采集Redis关键配置信息",
                 "encrypted_fields": ["password"],
             },
+            {
+                "id": "es",
+                "model_id": "es",
+                "name": "【BETA】Elasticsearch",
+                "task_type": CollectPluginTypes.DB,
+                "type": CollectDriverTypes.JOB,
+                "tag": ["Agent", "JOB", "Linux"],
+                "desc": "采集Elasticsearch关键配置信息",
+                "encrypted_fields": ["password"],
+            },
         ],
     },
     {

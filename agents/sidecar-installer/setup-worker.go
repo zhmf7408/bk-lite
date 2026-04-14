@@ -3,6 +3,7 @@ package main
 import (
 	"archive/zip"
 	"crypto/tls"
+	"crypto/x509"
 	"encoding/json"
 	"flag"
 	"fmt"
@@ -13,17 +14,42 @@ import (
 	"path/filepath"
 	"strings"
 	"time"
+
+	"github.com/nats-io/nats.go"
 )
 
 type Config struct {
-	ServerURL   string `json:"server_url"`
-	APIToken    string `json:"api_token"`
-	NodeID      string `json:"node_id"`
-	NodeName    string `json:"node_name"`
-	ZoneID      string `json:"zone_id"`
-	GroupID     string `json:"group_id"`
-	DownloadURL string `json:"download_url"`
-	InstallDir  string `json:"install_dir"`
+	ServerURL  string        `json:"server_url"`
+	APIToken   string        `json:"api_token"`
+	NodeID     string        `json:"node_id"`
+	NodeName   string        `json:"node_name"`
+	ZoneID     string        `json:"zone_id"`
+	GroupID    string        `json:"group_id"`
+	OS         string        `json:"os"`
+	InstallDir string        `json:"install_dir"`
+	Storage    StorageConfig `json:"storage"`
+}
+
+type StorageConfig struct {
+	Bucket       string `json:"bucket"`
+	FileKey      string `json:"file_key"`
+	FileName     string `json:"file_name"`
+	NATSServers  string `json:"nats_servers"`
+	NATSUsername string `json:"nats_username"`
+	NATSPassword string `json:"nats_password"`
+	NATSProtocol string `json:"nats_protocol"`
+	NATSTLSCA    string `json:"nats_tls_ca"`
+}
+
+type InstallerEvent struct {
+	Step       string `json:"step"`
+	Status     string `json:"status"`
+	Message    string `json:"message,omitempty"`
+	Progress   *int   `json:"progress,omitempty"`
+	Downloaded int64  `json:"downloaded_bytes,omitempty"`
+	Total      int64  `json:"total_bytes,omitempty"`
+	Timestamp  string `json:"timestamp"`
+	Error      string `json:"error,omitempty"`
 }
 
 var (
@@ -59,10 +85,12 @@ func run(client *http.Client) {
 	log("=======================")
 
 	log("[1/6] Fetching configuration...")
+	emitEvent("fetch_session", "running", "Fetching installer session", nil, 0, 0, "")
 	cfg, err := fetchConfig(client, *configURL)
 	if err != nil {
-		fatal("Fetch failed: %v", err)
+		fatalStep("fetch_session", "Fetch failed: %v", err)
 	}
+	emitEvent("fetch_session", "success", "Installer session fetched", intPtr(100), 0, 0, "")
 	log("      Node: %s", cfg.NodeID)
 
 	if *installDir != "" {
@@ -83,41 +111,62 @@ func run(client *http.Client) {
 	}
 
 	log("[2/6] Preparing directories...")
+	emitEvent("prepare_directories", "running", "Preparing directories", nil, 0, 0, "")
 	if err := prepareDirs(cfg.InstallDir); err != nil {
-		fatal("Failed: %v", err)
+		fatalStep("prepare_directories", "Failed: %v", err)
 	}
+	emitEvent("prepare_directories", "success", "Directories prepared", intPtr(100), 0, 0, "")
 
-	if cfg.DownloadURL != "" {
+	if cfg.Storage.FileKey != "" {
 		log("[3/6] Downloading package...")
-		zipPath, err := download(client, cfg.DownloadURL)
+		emitEvent("download_package", "running", "Downloading controller package", intPtr(0), 0, 0, "")
+		zipPath, err := downloadFromStorage(&cfg.Storage)
 		if err != nil {
-			fatal("Download failed: %v", err)
+			fatalStep("download_package", "Download failed: %v", err)
 		}
+		emitEvent("download_package", "success", "Controller package downloaded", intPtr(100), 0, 0, "")
 
 		log("[4/6] Extracting files...")
+		emitEvent("extract_package", "running", "Extracting controller package", intPtr(0), 0, 0, "")
 		n, err := extract(zipPath, cfg.InstallDir)
 		if err != nil {
-			fatal("Extract failed: %v", err)
+			fatalStep("extract_package", "Extract failed: %v", err)
 		}
 		os.Remove(zipPath)
 		log("      Extracted %d files", n)
+		emitEvent("extract_package", "success", fmt.Sprintf("Extracted %d files", n), intPtr(100), 0, 0, "")
 	} else {
-		log("[3/6] No download URL, skipping...")
+		log("[3/6] No storage package, skipping...")
 		log("[4/6] No extraction needed...")
 	}
 
 	log("[5/6] Writing configuration...")
-	if err := writeConfig(cfg); err != nil {
-		fatal("Config write failed: %v", err)
+	emitEvent("configure_runtime", "running", "Configuring installer runtime", nil, 0, 0, "")
+	if isLinux(cfg.OS) {
+		log("      Linux package mode, skipping generated sidecar.yml")
+	} else {
+		if err := writeConfig(cfg); err != nil {
+			fatalStep("configure_runtime", "Config write failed: %v", err)
+		}
 	}
+	emitEvent("configure_runtime", "success", "Installer runtime configured", intPtr(100), 0, 0, "")
 
 	log("[6/6] Registering service...")
-	if err := registerService(cfg.InstallDir); err != nil {
-		fatal("Service registration failed: %v", err)
+	emitEvent("run_package_installer", "running", "Running package installer", nil, 0, 0, "")
+	if isLinux(cfg.OS) {
+		if err := runLinuxInstaller(cfg); err != nil {
+			fatalStep("run_package_installer", "Linux install failed: %v", err)
+		}
+	} else {
+		if err := registerService(cfg.InstallDir); err != nil {
+			fatalStep("run_package_installer", "Service registration failed: %v", err)
+		}
 	}
+	emitEvent("run_package_installer", "success", "Package installer finished", intPtr(100), 0, 0, "")
 
 	log("")
 	log("Installation complete!")
+	emitEvent("complete", "success", "Installation complete", intPtr(100), 0, 0, "")
 }
 
 func log(format string, args ...interface{}) {
@@ -125,9 +174,39 @@ func log(format string, args ...interface{}) {
 	os.Stdout.Sync()
 }
 
+func emitEvent(step, status, message string, progress *int, downloaded, total int64, errMsg string) {
+	event := InstallerEvent{
+		Step:       step,
+		Status:     status,
+		Message:    message,
+		Progress:   progress,
+		Downloaded: downloaded,
+		Total:      total,
+		Timestamp:  time.Now().UTC().Format(time.RFC3339),
+		Error:      errMsg,
+	}
+	payload, err := json.Marshal(event)
+	if err != nil {
+		fmt.Printf("BKINSTALL_EVENT %s\n", fmt.Sprintf(`{"step":"%s","status":"%s","message":"%s"}`, step, status, message))
+	} else {
+		fmt.Printf("BKINSTALL_EVENT %s\n", string(payload))
+	}
+	os.Stdout.Sync()
+}
+
+func intPtr(v int) *int {
+	return &v
+}
+
 func fatal(format string, args ...interface{}) {
 	fmt.Fprintf(os.Stderr, "ERROR: "+format+"\n", args...)
 	os.Exit(1)
+}
+
+func fatalStep(step, format string, err error) {
+	msg := fmt.Sprintf(format, err)
+	emitEvent(step, "failed", msg, nil, 0, 0, msg)
+	fatal("%s", msg)
 }
 
 func newHTTPClient(skipTLS bool) *http.Client {
@@ -164,7 +243,37 @@ func fetchConfig(client *http.Client, url string) (*Config, error) {
 	if cfg.NodeName == "" {
 		cfg.NodeName = cfg.NodeID
 	}
+	if cfg.OS == "" {
+		cfg.OS = "windows"
+	}
 	return &cfg, nil
+}
+
+func isLinux(osName string) bool {
+	return strings.EqualFold(strings.TrimSpace(osName), "linux")
+}
+
+func runLinuxInstaller(cfg *Config) error {
+	installScript := filepath.Join(cfg.InstallDir, "install.sh")
+	if _, err := os.Stat(installScript); err != nil {
+		return fmt.Errorf("install.sh not found at %s", installScript)
+	}
+	if err := os.Chmod(installScript, 0755); err != nil {
+		return err
+	}
+	cmd := exec.Command(
+		installScript,
+		cfg.ServerURL,
+		cfg.APIToken,
+		cfg.ZoneID,
+		cfg.GroupID,
+		cfg.NodeName,
+		cfg.NodeID,
+	)
+	cmd.Dir = cfg.InstallDir
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
+	return cmd.Run()
 }
 
 func printConfig(cfg *Config) {
@@ -182,9 +291,103 @@ func printConfig(cfg *Config) {
 	if cfg.APIToken != "" {
 		fmt.Printf("API Token:    %s\r\n", mask(cfg.APIToken))
 	}
-	if cfg.DownloadURL != "" {
-		fmt.Printf("Download URL: %s\r\n", cfg.DownloadURL)
+	if cfg.Storage.FileKey != "" {
+		fmt.Printf("Package Key:  %s\r\n", cfg.Storage.FileKey)
 	}
+}
+
+func downloadFromStorage(storage *StorageConfig) (string, error) {
+	if strings.TrimSpace(storage.NATSServers) == "" {
+		return "", fmt.Errorf("missing nats_servers")
+	}
+	if strings.TrimSpace(storage.Bucket) == "" {
+		return "", fmt.Errorf("missing bucket")
+	}
+	if strings.TrimSpace(storage.FileKey) == "" {
+		return "", fmt.Errorf("missing file_key")
+	}
+
+	serverURL := normalizeNATSURL(storage.NATSProtocol, storage.NATSServers)
+	options := []nats.Option{}
+	if storage.NATSUsername != "" {
+		options = append(options, nats.UserInfo(storage.NATSUsername, storage.NATSPassword))
+	}
+	if strings.EqualFold(strings.TrimSpace(storage.NATSProtocol), "tls") {
+		tlsConfig := &tls.Config{}
+		if *skipTLS {
+			tlsConfig.InsecureSkipVerify = true
+		} else if strings.TrimSpace(storage.NATSTLSCA) != "" {
+			pool := x509.NewCertPool()
+			if !pool.AppendCertsFromPEM([]byte(storage.NATSTLSCA)) {
+				return "", fmt.Errorf("invalid nats_tls_ca PEM content")
+			}
+			tlsConfig.RootCAs = pool
+		}
+		options = append(options, nats.Secure(tlsConfig))
+	}
+
+	nc, err := nats.Connect(serverURL, options...)
+	if err != nil {
+		return "", fmt.Errorf("connect nats failed: %w", err)
+	}
+	defer nc.Close()
+
+	js, err := nc.JetStream()
+	if err != nil {
+		return "", fmt.Errorf("create jetstream context failed: %w", err)
+	}
+
+	store, err := js.ObjectStore(storage.Bucket)
+	if err != nil {
+		return "", fmt.Errorf("open object store failed: %w", err)
+	}
+
+	obj, err := store.Get(storage.FileKey)
+	if err != nil {
+		return "", fmt.Errorf("get object failed: %w", err)
+	}
+	defer obj.Close()
+
+	meta, _ := store.GetInfo(storage.FileKey)
+	totalSize := int64(0)
+	if meta != nil {
+		totalSize = int64(meta.Size)
+	}
+
+	tmp := filepath.Join(os.TempDir(), fmt.Sprintf("sidecar-%d.zip", time.Now().UnixNano()))
+	f, err := os.Create(tmp)
+	if err != nil {
+		return "", err
+	}
+	defer f.Close()
+
+	if totalSize > 0 {
+		pw := &progressWriter{total: totalSize, desc: "Downloading", step: "download_package"}
+		_, err = io.Copy(f, io.TeeReader(obj, pw))
+		if err == nil && pw.lastPct < 100 {
+			emitEvent("download_package", "running", "Downloading", intPtr(100), totalSize, totalSize, "")
+		}
+	} else {
+		_, err = io.Copy(f, obj)
+	}
+	if err != nil {
+		os.Remove(tmp)
+		return "", err
+	}
+
+	return tmp, nil
+}
+
+func normalizeNATSURL(protocol, servers string) string {
+	trimmed := strings.TrimSpace(servers)
+	if strings.Contains(trimmed, "://") {
+		return trimmed
+	}
+	proto := strings.TrimSpace(protocol)
+	if proto == "" {
+		proto = "nats"
+	}
+	return fmt.Sprintf("%s://%s", proto, trimmed)
 }
 
 func prepareDirs(base string) error {
@@ -202,6 +405,7 @@ type progressWriter struct {
 	downloaded int64
 	lastPct    int
 	desc       string
+	step       string
 }
 
 func (pw *progressWriter) Write(p []byte) (int, error) {
@@ -209,8 +413,9 @@ func (pw *progressWriter) Write(p []byte) (int, error) {
 	pw.downloaded += int64(n)
 	if pw.total > 0 {
 		pct := int(pw.downloaded * 100 / pw.total)
-		if pct/10 > pw.lastPct/10 {
+		if pct/5 > pw.lastPct/5 {
 			log("      %s... %d%%", pw.desc, pct)
+			emitEvent(pw.step, "running", pw.desc, intPtr(pct), pw.downloaded, pw.total, "")
 			pw.lastPct = pct
 		}
 	}
@@ -236,10 +441,11 @@ func download(client *http.Client, url string) (string, error) {
 
 	if resp.ContentLength > 0 {
 		log("      Downloading... 0%%")
-		pw := &progressWriter{total: resp.ContentLength, desc: "Downloading"}
+		pw := &progressWriter{total: resp.ContentLength, desc: "Downloading", step: "download_package"}
 		_, err = io.Copy(f, io.TeeReader(resp.Body, pw))
 		if pw.lastPct < 100 {
 			log("      Downloading... 100%%")
+			emitEvent("download_package", "running", "Downloading", intPtr(100), resp.ContentLength, resp.ContentLength, "")
 		}
 	} else {
 		_, err = io.Copy(f, resp.Body)
@@ -273,6 +479,7 @@ func extract(zipPath, dest string) (int, error) {
 	lastPct := 0
 	if totalFiles > 0 {
 		log("      Extracting... 0%%")
+		emitEvent("extract_package", "running", "Extracting", intPtr(0), 0, int64(totalFiles), "")
 	}
 	destClean := filepath.Clean(dest) + string(os.PathSeparator)
 
@@ -320,8 +527,9 @@ func extract(zipPath, dest string) (int, error) {
 
 		if totalFiles > 0 {
 			pct := count * 100 / totalFiles
-			if pct/10 > lastPct/10 {
+			if pct/5 > lastPct/5 {
 				log("      Extracting... %d%%", pct)
+				emitEvent("extract_package", "running", "Extracting", intPtr(pct), int64(count), int64(totalFiles), "")
 				lastPct = pct
 			}
 		}
@@ -329,6 +537,7 @@ func extract(zipPath, dest string) (int, error) {
 
 	if totalFiles > 0 && lastPct < 100 {
 		log("      Extracting... 100%%")
+		emitEvent("extract_package", "running", "Extracting", intPtr(100), int64(totalFiles), int64(totalFiles), "")
 	}
 
 	return count, nil

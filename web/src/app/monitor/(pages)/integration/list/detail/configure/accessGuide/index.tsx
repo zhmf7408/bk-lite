@@ -108,6 +108,18 @@ const buildRequestParamDocs = (
     description: `${t('monitor.integrations.customApi.pluginIdDesc')}${doc?.plugin_id || '--'}`
   },
   {
+    key: 'instance_identifier',
+    name: (doc?.instance_id_keys?.length || 0) > 1
+      ? doc?.instance_id_keys.map((item) => `${item}=<value>`).join(', ')
+      : `${doc?.instance_id_keys?.[0] || 'instance_id'}=<value>`,
+    type: 'tag(string)',
+    required: '是',
+    description:
+      (doc?.instance_id_keys?.length || 0) > 0
+        ? `监控对象唯一标识维度，必须传入：${(doc?.instance_id_keys || []).join('、')}。当监控对象未配置 instance_id_keys 时，默认必传 instance_id。`
+        : '监控对象唯一标识维度，默认必传 instance_id。'
+  },
+  {
     key: 'measurement',
     name: '<metric_name>',
     type: 'measurement',

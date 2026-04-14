@@ -5,20 +5,28 @@ import type { TablePaginationConfig } from 'antd/es/table';
 import OperateModal from './operateModal';
 import CustomTable from '@/components/custom-table';
 import PermissionWrapper from '@/components/permission';
-import { Button, Input, Card, message, Modal } from 'antd';
+import { Button, Input, Card, message, Modal, Space } from 'antd';
+import { UploadOutlined } from '@ant-design/icons';
 import { useTranslation } from '@/utils/i18n';
 import { DatasourceItem } from '@/app/ops-analysis/types/dataSource';
 import { useDataSourceApi } from '@/app/ops-analysis/api/dataSource';
+import { useOpsAnalysis } from '@/app/ops-analysis/context/common';
+import { useImportExportApi } from '@/app/ops-analysis/api/importExport';
+import { ImportModal } from '@/app/ops-analysis/components/importExport';
 
 const Datasource: React.FC = () => {
   const { t } = useTranslation();
   const { getDataSourceList, deleteDataSource } = useDataSourceApi();
+  const { refreshDataSources } = useOpsAnalysis();
+  const { exportObjects, downloadYaml } = useImportExportApi();
   const [searchKey, setSearchKey] = useState('');
   const [searchValue, setSearchValue] = useState('');
   const [filteredList, setFilteredList] = useState<DatasourceItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [modalVisible, setModalVisible] = useState(false);
   const [currentRow, setCurrentRow] = useState<DatasourceItem | undefined>();
+  const [importModalVisible, setImportModalVisible] = useState(false);
+  const [exportLoading, setExportLoading] = useState<number | null>(null);
   const [pagination, setPagination] = useState({
     current: 1,
     total: 0,
@@ -93,6 +101,7 @@ const Datasource: React.FC = () => {
         try {
           await deleteDataSource(row.id);
           message.success(t('successfullyDeleted'));
+          await refreshDataSources();
 
           if (pagination.current > 1 && filteredList.length === 1) {
             setPagination((prev) => ({ ...prev, current: prev.current - 1 }));
@@ -108,6 +117,24 @@ const Datasource: React.FC = () => {
         }
       },
     });
+  };
+
+  const handleExport = async (row: DatasourceItem) => {
+    try {
+      setExportLoading(row.id);
+      const response = await exportObjects({
+        object_type: 'datasource',
+        object_ids: [row.id],
+      });
+      if (response.yaml_content) {
+        downloadYaml(response.yaml_content, `datasource_${row.name}_export`);
+        message.success(t('common.exportSuccess'));
+      }
+    } catch (error: any) {
+      message.error(error?.message || t('common.exportFailed'));
+    } finally {
+      setExportLoading(null);
+    }
   };
 
   const handleTableChange = (pg: TablePaginationConfig) => {
@@ -140,9 +167,9 @@ const Datasource: React.FC = () => {
       render: (text: string) => (text ? new Date(text).toLocaleString() : '-'),
     },
     {
-      title: t('common.edit'),
+      title: t('common.actions'),
       key: 'operation',
-      width: 100,
+      width: 150,
       render: (_: unknown, row: DatasourceItem) => (
         <div className="space-x-4">
           <PermissionWrapper requiredPermissions={['Edit']}>
@@ -152,6 +179,16 @@ const Datasource: React.FC = () => {
               onClick={() => handleEdit('edit', row)}
             >
               {t('common.edit')}
+            </Button>
+          </PermissionWrapper>
+          <PermissionWrapper requiredPermissions={['View']}>
+            <Button
+              type="link"
+              size="small"
+              loading={exportLoading === row.id}
+              onClick={() => handleExport(row)}
+            >
+              {t('common.export')}
             </Button>
           </PermissionWrapper>
           <PermissionWrapper requiredPermissions={['Delete']}>
@@ -201,11 +238,21 @@ const Datasource: React.FC = () => {
               }}
             />
           </div>
-          <PermissionWrapper requiredPermissions={['Add']}>
-            <Button type="primary" onClick={() => handleEdit('add')}>
-              {t('common.addNew')}
-            </Button>
-          </PermissionWrapper>
+          <Space>
+            <PermissionWrapper requiredPermissions={['Add']}>
+              <Button
+                icon={<UploadOutlined />}
+                onClick={() => setImportModalVisible(true)}
+              >
+                {t('common.import')}
+              </Button>
+            </PermissionWrapper>
+            <PermissionWrapper requiredPermissions={['Add']}>
+              <Button type="primary" onClick={() => handleEdit('add')}>
+                {t('common.addNew')}
+              </Button>
+            </PermissionWrapper>
+          </Space>
         </div>
         <CustomTable
           size="middle"
@@ -221,8 +268,17 @@ const Datasource: React.FC = () => {
           open={modalVisible}
           currentRow={currentRow}
           onClose={() => setModalVisible(false)}
-          onSuccess={() => {
+          onSuccess={async () => {
             setModalVisible(false);
+            await refreshDataSources();
+            fetchDataSources();
+          }}
+        />
+        <ImportModal
+          visible={importModalVisible}
+          onCancel={() => setImportModalVisible(false)}
+          targetDirectoryId={null}
+          onSuccess={() => {
             fetchDataSources();
           }}
         />

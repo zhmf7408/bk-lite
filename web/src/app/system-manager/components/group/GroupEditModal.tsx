@@ -1,5 +1,6 @@
 import React, { useState, useRef, forwardRef, useImperativeHandle, useEffect } from 'react';
-import { Input, Button, Form, message } from 'antd';
+import { Input, Button, Form, message, Switch, Tooltip } from 'antd';
+import { InfoCircleOutlined } from '@ant-design/icons';
 import OperateModal from '@/components/operate-modal';
 import type { FormInstance } from 'antd';
 import { useTranslation } from '@/utils/i18n';
@@ -35,14 +36,14 @@ const GroupEditModal = forwardRef<GroupModalRef, ModalProps>(({ onSuccess }, ref
   const [currentGroupName, setCurrentGroupName] = useState<string>('');
   const [roleTreeData, setRoleTreeData] = useState<TreeDataNode[]>([]);
   const [selectedRoleIds, setSelectedRoleIds] = useState<number[]>([]);
+  const [inheritedRoleIds, setInheritedRoleIds] = useState<number[]>([]);
+  const [inheritedRoleSourceMap, setInheritedRoleSourceMap] = useState<Record<string, string>>({});
 
-  const { updateGroup } = useGroupApi();
+  const { updateGroup, getGroupDetailWithRoles } = useGroupApi();
   const { getRoleList } = useUserApi();
 
-  // 确保在表单渲染完成后设置字段值
   useEffect(() => {
     if (visible && formRef.current) {
-      // 使用 setTimeout 确保表单完全渲染
       setTimeout(() => {
         formRef.current?.setFieldsValue({
           groupName: currentGroupName,
@@ -52,13 +53,11 @@ const GroupEditModal = forwardRef<GroupModalRef, ModalProps>(({ onSuccess }, ref
     }
   }, [visible, currentGroupName, selectedRoleIds]);
 
-  // 获取可用的角色列表
   const fetchAvailableRoles = async () => {
     try {
       setRoleLoading(true);
       const roleData = await getRoleList({ client_list: clientData });
 
-      // 转换为Transfer组件需要的树形数据格式
       const formattedRoles = roleData.map((item: any) => ({
         key: item.id,
         title: item.name,
@@ -79,17 +78,30 @@ const GroupEditModal = forwardRef<GroupModalRef, ModalProps>(({ onSuccess }, ref
     }
   };
 
+  const fetchGroupDetail = async (groupId: string | number) => {
+    try {
+      const detail = await getGroupDetailWithRoles({ group_id: groupId });
+      setInheritedRoleIds(detail.inherited_role_ids || []);
+      setInheritedRoleSourceMap(detail.inherited_role_source_map || {});
+      setSelectedRoleIds(detail.own_role_ids || []);
+      formRef.current?.setFieldsValue({
+        allowInheritRoles: detail.allow_inherit_roles,
+        roleIds: detail.own_role_ids || [],
+      });
+    } catch (error) {
+      console.error('Failed to fetch group detail:', error);
+    }
+  };
+
   useImperativeHandle(ref, () => ({
-    showModal: ({ type, groupId, groupName, roleIds }) => {
+    showModal: ({ type, groupId, groupName }) => {
       setVisible(true);
       setCurrentGroupId(groupId);
       setCurrentGroupName(groupName || '');
       formRef.current?.resetFields();
 
       if (type === 'edit') {
-        const currentRoleIds = roleIds || [];
-        setSelectedRoleIds(currentRoleIds);
-
+        fetchGroupDetail(groupId);
         fetchAvailableRoles();
       }
     },
@@ -98,6 +110,8 @@ const GroupEditModal = forwardRef<GroupModalRef, ModalProps>(({ onSuccess }, ref
   const handleCancel = () => {
     setVisible(false);
     setSelectedRoleIds([]);
+    setInheritedRoleIds([]);
+    setInheritedRoleSourceMap({});
   };
 
   const handleConfirm = async () => {
@@ -109,6 +123,7 @@ const GroupEditModal = forwardRef<GroupModalRef, ModalProps>(({ onSuccess }, ref
         group_id: currentGroupId,
         group_name: formData.groupName,
         role_ids: formData.roleIds || [],
+        allow_inherit_roles: formData.allowInheritRoles ?? false,
       });
 
       message.success(t('common.updateSuccess'));
@@ -132,6 +147,10 @@ const GroupEditModal = forwardRef<GroupModalRef, ModalProps>(({ onSuccess }, ref
     formRef.current?.setFieldsValue({ roleIds: newKeys });
   };
 
+  const handleAllowInheritRolesChange = (checked: boolean) => {
+    formRef.current?.setFieldsValue({ allowInheritRoles: checked });
+  };
+
   return (
     <OperateModal
       title={t('system.group.editGroup')}
@@ -152,16 +171,35 @@ const GroupEditModal = forwardRef<GroupModalRef, ModalProps>(({ onSuccess }, ref
           name="groupName"
           label={t('system.group.form.name')}
           rules={[{ required: true, message: t('common.inputRequired') }]}
+          className="mb-0"
         >
           <Input
             placeholder={`${t('common.inputMsg')}${t('system.group.form.name')}`}
           />
         </Form.Item>
 
+        <div className="mt-4 flex items-center justify-between">
+          <div className="flex items-center gap-1 text-[14px] font-medium text-(--color-text-1)">
+            <span>{t('system.group.organizationRoles')}</span>
+            <Tooltip title={t('system.group.organizationRolesTooltip')}>
+              <InfoCircleOutlined className="text-(--color-text-3)" />
+            </Tooltip>
+          </div>
+          <div className="flex items-center gap-3">
+            <Form.Item
+              name="allowInheritRoles"
+              valuePropName="checked"
+              className="mb-0"
+            >
+              <Switch size="small" onChange={handleAllowInheritRolesChange} />
+            </Form.Item>
+            <span className="text-[14px] text-(--color-text-2)">{t('system.group.allowInheritRoles')}</span>
+          </div>
+        </div>
+
         <Form.Item
           name="roleIds"
-          label={t('system.group.organizationRoles')}
-          tooltip={t('system.group.organizationRolesTooltip')}
+          className="mt-3"
         >
           <RoleTransfer
             treeData={roleTreeData}
@@ -170,6 +208,8 @@ const GroupEditModal = forwardRef<GroupModalRef, ModalProps>(({ onSuccess }, ref
             onChange={handleRoleChange}
             groupRules={{}}
             forceOrganizationRole={true}
+            inheritedRoleIds={inheritedRoleIds}
+            inheritedRoleSourceMap={inheritedRoleSourceMap}
           />
         </Form.Item>
       </Form>

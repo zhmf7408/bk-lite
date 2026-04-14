@@ -1,5 +1,8 @@
 import useApiClient from '@/utils/request';
 import {
+  ControllerManualInstallStatusItem,
+  InstallerManifest,
+  InstallerArtifactMetadata,
   ManualInstallController,
   RetryInstallParams
 } from '../types/controller';
@@ -47,7 +50,7 @@ const useControllerApi = () => {
 
   const getManualInstallStatus = async (params: {
     node_ids: React.Key[] | string;
-  }) => {
+  }): Promise<ControllerManualInstallStatusItem[]> => {
     return await post(
       '/node_mgmt/api/installer/controller/manual_install_status/',
       params
@@ -59,8 +62,18 @@ const useControllerApi = () => {
     package_id?: string;
     cloud_region_id?: number;
     os?: string;
-  }) => {
+  }): Promise<string> => {
     return await post('/node_mgmt/api/installer/get_install_command/', params);
+  };
+
+  const getInstallerManifest = async (): Promise<InstallerManifest> => {
+    return await get('/node_mgmt/api/installer/manifest/');
+  };
+
+  const getInstallerMetadata = async (
+    os: string
+  ): Promise<InstallerArtifactMetadata> => {
+    return await get(`/node_mgmt/api/installer/metadata/${os}/`);
   };
 
   return {
@@ -68,7 +81,9 @@ const useControllerApi = () => {
     retryInstallController,
     manualInstallController,
     getManualInstallStatus,
-    getInstallCommand
+    getInstallCommand,
+    getInstallerManifest,
+    getInstallerMetadata
   };
 };
 

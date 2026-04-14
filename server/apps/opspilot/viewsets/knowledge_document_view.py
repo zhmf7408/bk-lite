@@ -1,4 +1,5 @@
 import hashlib
+import os
 
 from django.db import transaction
 from django.http import FileResponse, JsonResponse
@@ -361,7 +362,7 @@ class KnowledgeDocumentViewSet(LanguageViewSet):
         etag = hashlib.md5(data).hexdigest()
         # Reset file pointer to start
         file_data.seek(0)
-        response = FileResponse(file_data)
+        response = FileResponse(file_data, as_attachment=False, filename=os.path.basename(file_obj.file.name))
         response["ETag"] = etag
         return response
 

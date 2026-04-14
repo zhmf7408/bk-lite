@@ -27,12 +27,12 @@ const IntegrationDetailLayout = ({
     <div className="p-4 rounded-md w-full h-[95px] flex items-center bg-[var(--color-bg-2)]">
       <div className="w-[72px] h-[72px] mr-[10px] min-w-[72px] rounded-lg flex items-center justify-center bg-[var(--color-fill-1)]">
         <img
-          src={`/app/assets/assetModelIcon/${icon}.svg`}
+          src={`/assets/icons/${icon}.svg`}
           alt="icon"
           className="w-[60px] h-[60px]"
           onError={(e) => {
             (e.target as HTMLImageElement).src =
-              '/app/assets/assetModelIcon/cc-default_默认.svg';
+              '/assets/icons/cc-default_默认.svg';
           }}
         />
       </div>

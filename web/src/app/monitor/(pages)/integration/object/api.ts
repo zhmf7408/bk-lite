@@ -63,7 +63,9 @@ const useObjectApi = () => {
     params: GetObjectsParams = {},
     signal?: AbortSignal
   ): Promise<{ results: MonitorObjectItem[]; count: number }> => {
-    const queryParams: Record<string, any> = {};
+    const queryParams: Record<string, any> = {
+      parent_only: true
+    };
 
     if (params.type_id) {
       queryParams.type = params.type_id;

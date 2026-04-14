@@ -1,37 +1,19 @@
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import dayjs, { Dayjs } from 'dayjs';
-import { useDataSourceApi } from '@/app/ops-analysis/api/dataSource';
-import { useUserInfoContext } from '@/context/userInfo';
-import { addAuthToDataSources } from '@/app/ops-analysis/utils/permissionChecker';
+import { useOpsAnalysis } from '@/app/ops-analysis/context/common';
 import { DatasourceItem, ParamItem } from '@/app/ops-analysis/types/dataSource';
 
 type FormParamValue = string | number | boolean | Dayjs | [number, number] | null;
 type FormParams = Record<string, FormParamValue>;
 
 export const useDataSourceManager = () => {
-  const [dataSources, setDataSources] = useState<DatasourceItem[]>([]);
-  const [dataSourcesLoading, setDataSourcesLoading] = useState(false);
   const [selectedDataSource, setSelectedDataSource] = useState<DatasourceItem | undefined>();
-  const { getDataSourceList } = useDataSourceApi();
-  const { selectedGroup } = useUserInfoContext();
-
-  const fetchDataSources = async () => {
-    try {
-      setDataSourcesLoading(true);
-      const data: DatasourceItem[] = await getDataSourceList({
-        all_groups: true,
-      });
-      // 添加权限检查
-      const dataWithAuth = addAuthToDataSources(data || [], selectedGroup?.id);
-      setDataSources(dataWithAuth);
-      return dataWithAuth;
-    } catch {
-      setDataSources([]);
-      return [];
-    } finally {
-      setDataSourcesLoading(false);
-    }
-  };
+  const {
+    dataSources,
+    dataSourcesLoading,
+    fetchDataSources,
+    refreshDataSources,
+  } = useOpsAnalysis();
 
   const findDataSource = (
     dataSourceId?: string | number
@@ -113,17 +95,13 @@ export const useDataSourceManager = () => {
         : param.value,
     }));
   };
-
-  useEffect(() => {
-    fetchDataSources();
-  }, []);
-
   return {
     dataSources,
     dataSourcesLoading,
     selectedDataSource,
     setSelectedDataSource,
     fetchDataSources,
+    refreshDataSources,
     findDataSource,
     setDefaultParamValues,
     restoreUserParamValues,

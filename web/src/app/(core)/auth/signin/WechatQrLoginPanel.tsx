@@ -1,7 +1,7 @@
 'use client';
 
-import { ArrowLeftOutlined } from '@ant-design/icons';
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { useTheme } from '@/context/theme';
 
 declare global {
   interface Window {
@@ -12,7 +12,6 @@ declare global {
 interface WechatQrLoginPanelProps {
   callbackUrl: string;
   thirdLogin?: string;
-  onBack: () => void;
 }
 
 interface WechatSettings {
@@ -20,10 +19,12 @@ interface WechatSettings {
   app_id?: string;
 }
 
-export default function WechatQrLoginPanel({ callbackUrl, thirdLogin, onBack }: WechatQrLoginPanelProps) {
+export default function WechatQrLoginPanel({ callbackUrl, thirdLogin }: WechatQrLoginPanelProps) {
   const [wechatSettings, setWechatSettings] = useState<WechatSettings | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const { themeName } = useTheme();
+  const isDarkTheme = themeName === 'dark';
   const containerRef = useRef<HTMLDivElement | null>(null);
 
   const redirectUri = useMemo(() => {
@@ -123,47 +124,44 @@ export default function WechatQrLoginPanel({ callbackUrl, thirdLogin, onBack }: 
   }, [loading, redirectUri, wechatSettings]);
 
   return (
-    <div className="mx-auto w-full max-w-md">
-      <div className="mb-4 flex justify-end">
-        <button
-          type="button"
-          onClick={onBack}
-          className="inline-flex items-center gap-1.5 rounded-lg bg-[#EEF4FF] px-3 py-1.5 text-[11px] font-medium text-[#355C9A] transition-colors hover:bg-[#E4EEFF] hover:text-[#24487F]"
-        >
-          <ArrowLeftOutlined className="text-[12px]" />
-          <span>返回账号登录</span>
-        </button>
-      </div>
-
-      <div className="rounded-3xl border border-[#E6EDF2] bg-white p-5 pt-8 text-center">
-        <div className="mb-4 text-center">
-          <div className="text-[15px] font-semibold text-(--color-text-1)">微信扫码登录</div>
-          <div className="mt-1.5 text-[12px] text-(--color-text-3)">打开微信扫一扫完成登录</div>
-        </div>
-
+    <div className="mx-auto w-full max-w-97">
+      <div className="px-3 pb-1 pt-1 text-center">
         {loading ? (
-          <div className="py-4">
-            <div className="mx-auto flex aspect-square w-full max-w-45 items-center justify-center rounded-2xl bg-[#F3F6FA] px-4 text-center">
-              <div className="text-[12px] leading-5 text-(--color-text-3)">正在加载微信二维码...</div>
+          <div className="py-1">
+            <div
+              className="mx-auto flex aspect-square w-full max-w-52 items-center justify-center rounded-3xl px-4 text-center"
+              style={{
+                background: isDarkTheme ? 'rgba(255,255,255,0.04)' : '#F4F7FB',
+                boxShadow: isDarkTheme ? '0 10px 24px rgba(0, 0, 0, 0.18)' : '0 10px 24px rgba(148, 163, 184, 0.10)',
+              }}
+            >
+              <div className="text-[11px] leading-5 text-(--color-text-3)">正在加载二维码...</div>
             </div>
           </div>
         ) : error ? (
-          <div className="py-4">
-            <div className="mx-auto flex aspect-square w-full max-w-45 items-center justify-center rounded-2xl bg-[#F3F6FA] px-4 text-center">
-              <div className="text-[12px] leading-5 text-(--color-text-3)">无法显示微信二维码</div>
+          <div className="py-1">
+            <div
+              className="mx-auto flex aspect-square w-full max-w-52 items-center justify-center rounded-3xl px-4 text-center"
+              style={{
+                background: isDarkTheme ? 'rgba(255,255,255,0.04)' : '#F4F7FB',
+                boxShadow: isDarkTheme ? '0 10px 24px rgba(0, 0, 0, 0.18)' : '0 10px 24px rgba(148, 163, 184, 0.10)',
+              }}
+            >
+              <div className="text-[11px] leading-5 text-(--color-text-3)">无法显示二维码</div>
             </div>
           </div>
         ) : (
-          <div>
+          <div className="py-1">
             <div
               id="bk-lite-wechat-inline-login-container"
               ref={containerRef}
-              className="mx-auto flex items-center justify-center rounded-2xl border border-[#E3EAF0] bg-white px-4 py-5"
-              style={{ minHeight: '340px' }}
+              className="mx-auto flex items-center justify-center rounded-3xl px-4 py-5"
+              style={{
+                minHeight: '320px',
+                background: isDarkTheme ? 'rgba(255,255,255,0.03)' : '#ffffff',
+                boxShadow: isDarkTheme ? '0 14px 30px rgba(0, 0, 0, 0.22)' : '0 14px 30px rgba(148, 163, 184, 0.10)',
+              }}
             />
-            <div className="mt-3 text-center text-[11px] leading-5 text-(--color-text-3)">
-              扫码成功后会自动返回当前页面。
-            </div>
           </div>
         )}
       </div>

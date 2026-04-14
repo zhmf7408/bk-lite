@@ -23,23 +23,6 @@ export type PieChartData = ChartDataItem[];
  * 支持多种数据格式转换为图表数据
  */
 export class ChartDataTransformer {
-
-  /**
-   * 标准化 namespace.data 字段
-   * 兼容两种格式：
-   *   旧格式（提取后）: namespace.data 直接是数组 [[key, value], ...]
-   *   新格式（直传）:   namespace.data 是 NATS 原始对象 { result, data: [...], message }
-   */
-  static normalizeNamespaceData(data: any): any[] {
-    if (Array.isArray(data)) {
-      return data;
-    }
-    if (data && typeof data === 'object' && Array.isArray(data.data)) {
-      return data.data;
-    }
-    return [];
-  }
-
   /**
    * 将归一化后的 nsData 数组转换为 { [category]: value } 映射
    * 支持 [{name, value}] 和 [[key, value]] 两种格式
@@ -111,13 +94,15 @@ export class ChartDataTransformer {
       ) {
         const allCategoriesSet = new Set<string>();
         rawData.forEach((namespace: any) => {
-          const nsData = this.normalizeNamespaceData(namespace.data);
+          const nsData = Array.isArray(namespace.data) ? namespace.data : [];
           Object.keys(this.nsDataToMap(nsData)).forEach((k) => allCategoriesSet.add(k));
         });
         const categories = Array.from(allCategoriesSet).sort();
 
         const series = rawData.map((namespace: any) => {
-          const dataMap = this.nsDataToMap(this.normalizeNamespaceData(namespace.data));
+          const dataMap = this.nsDataToMap(
+            Array.isArray(namespace.data) ? namespace.data : [],
+          );
           return {
             name: namespace.namespace_id,
             data: categories.map((category) => dataMap[category] || 0),
@@ -135,7 +120,9 @@ export class ChartDataTransformer {
 
     // 处理单个namespace的情况
     if (rawData && rawData.namespace_id && rawData.data) {
-      const dataMap = this.nsDataToMap(this.normalizeNamespaceData(rawData.data));
+      const dataMap = this.nsDataToMap(
+        Array.isArray(rawData.data) ? rawData.data : [],
+      );
       const categories = Object.keys(dataMap).sort();
       return { categories, values: categories.map((k) => dataMap[k]) };
     }
@@ -153,12 +140,14 @@ export class ChartDataTransformer {
 
     // namespace 数组格式：取第一个 namespace 的数据
     if (Array.isArray(rawData) && rawData.length > 0 && rawData[0]?.namespace_id) {
-      return this.transformToPieData(this.normalizeNamespaceData(rawData[0].data).slice(0, 10));
+      const namespaceData = Array.isArray(rawData[0].data) ? rawData[0].data : [];
+      return this.transformToPieData(namespaceData.slice(0, 10));
     }
 
     // 单 namespace 对象格式
     if (!Array.isArray(rawData) && rawData.namespace_id) {
-      return this.transformToPieData(this.normalizeNamespaceData(rawData.data).slice(0, 10));
+      const namespaceData = Array.isArray(rawData.data) ? rawData.data : [];
+      return this.transformToPieData(namespaceData.slice(0, 10));
     }
 
     // 直接是数组
@@ -246,7 +235,7 @@ export class ChartDataTransformer {
    */
   static validatePieData(rawData: any, errorMessage?: string): { isValid: boolean; message?: string } {
     // 数据为空时图表组件会显示 Empty 状态，不需要校验
-    if (!rawData) {
+    if (!rawData || (Array.isArray(rawData) && rawData.length === 0)) {
       return { isValid: true };
     }
 
@@ -254,7 +243,7 @@ export class ChartDataTransformer {
       const transformedData = this.transformToPieData(rawData);
 
       if (!transformedData || transformedData.length === 0) {
-        return { isValid: true }; // 空数据让图表组件自行处理
+        return { isValid: false, message: errorMessage || '数据格式不匹配' };
       }
 
       const hasValidValues = transformedData.some(item =>

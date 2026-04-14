@@ -574,3 +574,172 @@ def test_ansible_playbook_allows_file_distribution_without_playbook():
     assert captured["request_data"]["playbook_content"] is None
     assert captured["request_data"]["files"] == [{"name": "channel_add.txt", "file_key": "file-key-1"}]
     assert captured["request_data"]["file_distribution"] == {"bucket_name": "test-bucket", "target_path": "C:/deploy", "overwrite": True}
+
+
+def test_file_distribution_polls_until_ansible_task_finishes(monkeypatch):
+    monkeypatch.setattr(
+        "apps.job_mgmt.services.file_distribution_runner.Target.objects.filter",
+        lambda **kwargs: type(
+            "QuerySet",
+            (),
+            {
+                "first": staticmethod(
+                    lambda: type(
+                        "TargetObj",
+                        (),
+                        {
+                            "id": 1,
+                            "ip": "10.10.41.149",
+                            "os_type": OSType.WINDOWS,
+                            "driver": "ansible",
+                            "cloud_region_id": 11,
+                            "winrm_user": "Administrator",
+                            "winrm_password": "encrypted-winrm-password",
+                            "winrm_port": 5986,
+                            "winrm_scheme": "https",
+                            "winrm_transport": "ntlm",
+                            "winrm_cert_validation": False,
+                        },
+                    )()
+                )
+            },
+        )(),
+    )
+    monkeypatch.setattr(
+        FileDistributionRunner,
+        "decrypt_password",
+        staticmethod(lambda value: f"decrypted::{value}" if value else ""),
+    )
+    monkeypatch.setattr(
+        FileDistributionRunner,
+        "_get_ansible_node",
+        staticmethod(lambda cloud_region_id: "ansible-node-1"),
+    )
+    monkeypatch.setattr(
+        AnsibleExecutor,
+        "playbook",
+        lambda self, **kwargs: {"accepted": True, "status": "queued", "task_id": "task-running", "duplicate": False},
+    )
+    query_results = iter(
+        [
+            {
+                "task_id": "task-running",
+                "status": "running",
+                "payload": {},
+                "callback": {},
+                "result": {"started_at": "2026-04-07T10:44:08.910000+00:00"},
+            },
+            {
+                "task_id": "task-running",
+                "status": "success",
+                "payload": {},
+                "callback": {},
+                "result": {
+                    "task_id": "task-running",
+                    "task_type": "playbook",
+                    "status": "success",
+                    "success": True,
+                    "result": [
+                        {
+                            "host": "10.10.41.149",
+                            "status": "success",
+                            "raw_status": "CHANGED",
+                            "stdout": "copied",
+                            "stderr": "",
+                            "exit_code": 0,
+                            "error_message": "",
+                        }
+                    ],
+                    "error": "",
+                },
+            },
+        ]
+    )
+    monkeypatch.setattr(
+        AnsibleExecutor,
+        "task_query",
+        lambda self, task_id, timeout=10: next(query_results),
+    )
+    monkeypatch.setattr("apps.job_mgmt.services.file_distribution_runner.time.sleep", lambda _: None)
+
+    runner = FileDistributionRunner(execution_id=42)
+    result = runner.download_to_manual_target(
+        file_item={"name": "config.ini", "file_key": "abc"},
+        target_id=1,
+        target_path=r"C:\deploy",
+        timeout=60,
+        overwrite=True,
+    )
+
+    assert result["success"] is True
+    assert result["error"] == ""
+    assert result["result"][0]["host"] == "10.10.41.149"
+
+
+def test_file_distribution_raises_when_ansible_task_query_stays_running(monkeypatch):
+    monkeypatch.setattr(
+        "apps.job_mgmt.services.file_distribution_runner.Target.objects.filter",
+        lambda **kwargs: type(
+            "QuerySet",
+            (),
+            {
+                "first": staticmethod(
+                    lambda: type(
+                        "TargetObj",
+                        (),
+                        {
+                            "id": 1,
+                            "ip": "10.10.41.149",
+                            "os_type": OSType.WINDOWS,
+                            "driver": "ansible",
+                            "cloud_region_id": 11,
+                            "winrm_user": "Administrator",
+                            "winrm_password": "encrypted-winrm-password",
+                            "winrm_port": 5986,
+                            "winrm_scheme": "https",
+                            "winrm_transport": "ntlm",
+                            "winrm_cert_validation": False,
+                        },
+                    )()
+                )
+            },
+        )(),
+    )
+    monkeypatch.setattr(
+        FileDistributionRunner,
+        "decrypt_password",
+        staticmethod(lambda value: f"decrypted::{value}" if value else ""),
+    )
+    monkeypatch.setattr(
+        FileDistributionRunner,
+        "_get_ansible_node",
+        staticmethod(lambda cloud_region_id: "ansible-node-1"),
+    )
+    monkeypatch.setattr(
+        AnsibleExecutor,
+        "playbook",
+        lambda self, **kwargs: {"accepted": True, "status": "queued", "task_id": "task-running", "duplicate": False},
+    )
+    monkeypatch.setattr(
+        AnsibleExecutor,
+        "task_query",
+        lambda self, task_id, timeout=10: {
+            "task_id": task_id,
+            "status": "running",
+            "payload": {},
+            "callback": {},
+            "result": {"started_at": "2026-04-07T10:44:08.910000+00:00"},
+        },
+    )
+    monkeypatch.setattr("apps.job_mgmt.services.file_distribution_runner.time.sleep", lambda _: None)
+
+    runner = FileDistributionRunner(execution_id=42)
+
+    with pytest.raises(ValueError, match="Ansible 文件分发任务未完成: status=running"):
+        runner.download_to_manual_target(
+            file_item={"name": "config.ini", "file_key": "abc"},
+            target_id=1,
+            target_path=r"C:\deploy",
+            timeout=2,
+            overwrite=True,
+        )

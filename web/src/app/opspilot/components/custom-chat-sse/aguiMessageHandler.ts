@@ -144,7 +144,6 @@ export class AGUIMessageHandler {
    * 处理 RUN_STARTED 事件
    */
   handleRunStarted() {
-    this.isThinking = true;
     this.updateMessageContent(this.getFullContent(), undefined, undefined, this.thinkingContent, this.isThinking);
   }
 

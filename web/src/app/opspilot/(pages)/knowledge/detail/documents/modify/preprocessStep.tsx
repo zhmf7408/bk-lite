@@ -14,6 +14,7 @@ import semanticImgEn from '@/app/opspilot/img/semantic_chunk-en.png';
 import semanticImgZh from '@/app/opspilot/img/semantic_chunk-zh.png';
 import noneImg from '@/app/opspilot/img/none_chunk.png';
 import { useKnowledgeApi } from '@/app/opspilot/api/knowledge';
+import { getModelOptionText, renderModelOptionLabel } from '@/app/opspilot/utils/modelOption';
 
 const { Option } = Select;
 
@@ -91,7 +92,7 @@ const PreprocessStep: React.FC<{
   };
 
   const { previewChunk, fetchEmbeddingModels } = useKnowledgeApi();
-  const [embeddingModels, setEmbeddingModels] = useState<{ id: number; name: string }[]>([]);
+  const [embeddingModels, setEmbeddingModels] = useState<{ id: number; name: string; vendor_name?: string }[]>([]);
   const [loadingModels, setLoadingModels] = useState<boolean>(true);
 
   useEffect(() => {
@@ -235,8 +236,8 @@ const PreprocessStep: React.FC<{
                       loading={loadingModels}
                     >
                       {embeddingModels.map((model) => (
-                        <Option key={model.id} value={model.id}>
-                          {model.name}
+                        <Option key={model.id} value={model.id} title={getModelOptionText(model)}>
+                          {renderModelOptionLabel(model)}
                         </Option>
                       ))}
                     </Select>

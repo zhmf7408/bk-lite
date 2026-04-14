@@ -9,6 +9,11 @@ from apps.node_mgmt.utils.step_tracker import (
     update_last_running_step,
     update_step_by_action,
 )
+from apps.node_mgmt.utils.task_result_schema import (
+    apply_result_envelope,
+    _extract_latest_failure_from_steps,
+    normalize_task_details,
+)
 
 
 RUNNING_STATUS = 0
@@ -19,7 +24,14 @@ ACTION_TASK_TIMEOUT_SECONDS = 300
 
 def _add_step(task_node, action, status, message, details=None):
     result = task_node.result or {}
-    append_step(result, action, status, message, timestamp=now_iso(), details=details)
+    append_step(
+        result,
+        action,
+        status,
+        message,
+        timestamp=now_iso(),
+        details=normalize_task_details(details, message=message),
+    )
     task_node.result = result
 
 
@@ -30,7 +42,7 @@ def _update_step_by_action(task_node, action, status, message, details=None):
         action,
         status,
         message,
-        details=details,
+        details=normalize_task_details(details, message=message),
         timestamp=now_iso(),
     )
     task_node.result = result
@@ -43,7 +55,7 @@ def _update_last_running_step(task_node, status, message, details=None):
         result,
         status,
         message,
-        details=details,
+        details=normalize_task_details(details, message=message),
         timestamp=now_iso(),
     )
     task_node.result = result
@@ -51,8 +63,12 @@ def _update_last_running_step(task_node, status, message, details=None):
 
 def _save_node_result(task_node, node_status, overall_status, final_message):
     result = task_node.result or {}
-    result["overall_status"] = overall_status
-    result["final_message"] = final_message
+    result = apply_result_envelope(
+        result,
+        overall_status=overall_status,
+        final_message=final_message,
+        failure=_extract_latest_failure_from_steps(result.get("steps")),
+    )
     task_node.status = node_status
     task_node.result = result
     task_node.save(update_fields=["status", "result"])
@@ -80,12 +96,7 @@ def _extract_collector_message(collector_item):
 
     message_text = ""
     if isinstance(message, dict):
-        message_text = (
-            message.get("final_message")
-            or message.get("message")
-            or message.get("detail")
-            or ""
-        )
+        message_text = message.get("final_message") or message.get("message") or message.get("detail") or ""
     elif isinstance(message, str):
         message_text = message
 
@@ -129,9 +140,7 @@ def _reconcile_collector_action_tasks(task_ids):
     if running_ids:
         CollectorActionTask.objects.filter(id__in=running_ids).update(status="running")
     if finished_ids:
-        CollectorActionTask.objects.filter(id__in=finished_ids).update(
-            status="finished"
-        )
+        CollectorActionTask.objects.filter(id__in=finished_ids).update(status="finished")
 
     for task_id in task_ids:
         CollectorActionTask.objects.filter(id=task_id).update(
@@ -179,24 +188,19 @@ def converge_collector_action_task_for_node(node_id):
 
         expected_node_status = _is_expected_status(task_obj.action, collector_status)
         if expected_node_status in ["success", "error"]:
-            step_message = (
-                "Collector command execution finished"
-                if expected_node_status == "success"
-                else (collector_message or "Collector action failed")
-            )
-            final_message = (
-                "Collector action completed"
-                if expected_node_status == "success"
-                else (collector_message or "Collector action failed")
-            )
+            step_message = "Collector action completed" if expected_node_status == "success" else (collector_message or "Collector action failed")
+            final_message = "Collector action completed" if expected_node_status == "success" else (collector_message or "Collector action failed")
             _update_last_running_step(
                 task_node,
                 expected_node_status,
                 step_message,
-                details={
-                    "collector_status": collector_status,
-                    "operation": task_obj.action,
-                },
+                details=normalize_task_details(
+                    {
+                        "collector_status": collector_status,
+                        "operation": task_obj.action,
+                    },
+                    message=step_message if expected_node_status == "error" else None,
+                ),
             )
             _save_node_result(
                 task_node,
@@ -227,21 +231,27 @@ def timeout_collector_action_task(task_id):
         _update_last_running_step(
             task_node,
             "timeout",
-            "Collector command execution timeout",
-            details={"timeout": True},
+            "Collector action timed out",
+            details=normalize_task_details(
+                {"error_type": "timeout"},
+                message="Collector action timed out",
+            ),
         )
         _add_step(
             task_node,
             "callback_or_timeout",
             "timeout",
-            "Action task timeout",
-            details={"timeout": True},
+            "Collector action timeout",
+            details=normalize_task_details(
+                {"error_type": "timeout"},
+                message="Collector action timeout",
+            ),
         )
         _save_node_result(
             task_node,
             "error",
             "timeout",
-            "Collector action timeout",
+            "Collector action timed out",
         )
 
     _reconcile_collector_action_tasks({task_id})

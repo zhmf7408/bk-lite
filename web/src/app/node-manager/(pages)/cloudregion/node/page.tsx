@@ -6,7 +6,16 @@ import React, {
   useMemo,
   useCallback
 } from 'react';
-import { Button, message, Space, Modal, Tooltip, Tag, Dropdown } from 'antd';
+import {
+  Button,
+  message,
+  Space,
+  Modal,
+  Tooltip,
+  Tag,
+  Dropdown,
+  Empty
+} from 'antd';
 import { DownOutlined, ReloadOutlined } from '@ant-design/icons';
 import Icon from '@/components/icon';
 import type { MenuProps, TableProps } from 'antd';
@@ -56,6 +65,7 @@ const Node = () => {
   const commonContext = useCommon();
   const nodeStateEnum = commonContext?.nodeStateEnum || {};
   const name = searchParams.get('name') || '';
+  const notDeployed = searchParams.get('not_deployed');
   const collectorRef = useRef<ModalRef>(null);
   const controllerRef = useRef<ModalRef>(null);
   const collectorDetailRef = useRef<any>(null);
@@ -611,109 +621,121 @@ const Node = () => {
 
   return (
     <MainLayout>
-      {showNodeTable && (
-        <div className={`${nodeStyle.node} w-full h-full`}>
-          <div className="overflow-hidden">
-            <div className="flex items-center justify-between mb-4">
-              <SearchCombination
-                fieldConfigs={fieldConfigs}
-                onChange={handleSearchChange}
-                className="mr-[8px]"
-              />
-              <div className="flex">
-                <PermissionWrapper requiredPermissions={['InstallController']}>
-                  <Button
-                    type="primary"
+      {notDeployed === '1' ? (
+        <div className="flex items-center justify-center h-full">
+          <Empty
+            description={t('node-manager.cloudregion.node.notDeployedTip')}
+          />
+        </div>
+      ) : (
+        <>
+          {showNodeTable && (
+            <div className={`${nodeStyle.node} w-full h-full`}>
+              <div className="overflow-hidden">
+                <div className="flex items-center justify-between mb-4">
+                  <SearchCombination
+                    fieldConfigs={fieldConfigs}
+                    onChange={handleSearchChange}
                     className="mr-[8px]"
-                    onClick={handleInstallController}
-                  >
-                    {t('node-manager.cloudregion.node.installController')}
-                  </Button>
-                </PermissionWrapper>
-                <Dropdown
-                  className="mr-[8px]"
-                  overlayClassName="customMenu"
-                  menu={SidecarmenuProps}
-                  disabled={enableOperateController}
-                >
-                  <Button>
-                    <Space>
-                      {t('node-manager.cloudregion.node.sidecar')}
-                      <DownOutlined />
-                    </Space>
-                  </Button>
-                </Dropdown>
-                <Dropdown
-                  className="mr-[8px]"
-                  overlayClassName="customMenu"
-                  menu={CollectormenuProps}
-                  disabled={enableOperateCollecter}
-                >
-                  <Button>
-                    <Space>
-                      {t('node-manager.cloudregion.node.hostedProgram')}
-                      <DownOutlined />
-                    </Space>
-                  </Button>
-                </Dropdown>
-                <ReloadOutlined onClick={() => getNodes(searchFilters)} />
+                  />
+                  <div className="flex">
+                    <PermissionWrapper
+                      requiredPermissions={['InstallController']}
+                    >
+                      <Button
+                        type="primary"
+                        className="mr-[8px]"
+                        onClick={handleInstallController}
+                      >
+                        {t('node-manager.cloudregion.node.installController')}
+                      </Button>
+                    </PermissionWrapper>
+                    <Dropdown
+                      className="mr-[8px]"
+                      overlayClassName="customMenu"
+                      menu={SidecarmenuProps}
+                      disabled={enableOperateController}
+                    >
+                      <Button>
+                        <Space>
+                          {t('node-manager.cloudregion.node.sidecar')}
+                          <DownOutlined />
+                        </Space>
+                      </Button>
+                    </Dropdown>
+                    <Dropdown
+                      className="mr-[8px]"
+                      overlayClassName="customMenu"
+                      menu={CollectormenuProps}
+                      disabled={enableOperateCollecter}
+                    >
+                      <Button>
+                        <Space>
+                          {t('node-manager.cloudregion.node.hostedProgram')}
+                          <DownOutlined />
+                        </Space>
+                      </Button>
+                    </Dropdown>
+                    <ReloadOutlined onClick={() => getNodes(searchFilters)} />
+                  </div>
+                </div>
+                <div className={nodeStyle.table}>
+                  <CustomTable
+                    columns={tableColumns}
+                    loading={loading}
+                    dataSource={nodeList}
+                    scroll={{ y: 'calc(100vh - 380px)', x: 'max-content' }}
+                    rowSelection={rowSelection}
+                    pagination={pagination}
+                    onChange={handleTableChange}
+                  />
+                </div>
+                <CollectorModal
+                  ref={collectorRef}
+                  onSuccess={(config) => {
+                    handleCollector(config);
+                  }}
+                />
+                <ControllerUninstall
+                  ref={controllerRef}
+                  config={{
+                    os: getFirstSelectedNodeOS(),
+                    work_node: name
+                  }}
+                  onSuccess={(config) => {
+                    handleCollector(config);
+                  }}
+                />
+                <CollectorDetailDrawer
+                  ref={collectorDetailRef}
+                  nodeStateEnum={nodeStateEnum}
+                  onSuccess={() => getNodes(searchFilters)}
+                />
+                <EditNode
+                  ref={editNodeRef}
+                  onSuccess={() => getNodes(searchFilters)}
+                />
               </div>
             </div>
-            <div className={nodeStyle.table}>
-              <CustomTable
-                columns={tableColumns}
-                loading={loading}
-                dataSource={nodeList}
-                scroll={{ y: 'calc(100vh - 380px)', x: 'max-content' }}
-                rowSelection={rowSelection}
-                pagination={pagination}
-                onChange={handleTableChange}
-              />
-            </div>
-            <CollectorModal
-              ref={collectorRef}
-              onSuccess={(config) => {
-                handleCollector(config);
-              }}
-            />
-            <ControllerUninstall
-              ref={controllerRef}
+          )}
+          {showInstallController && (
+            <ControllerInstall
               config={{
-                os: getFirstSelectedNodeOS(),
-                work_node: name
+                os: getFirstSelectedNodeOS()
               }}
-              onSuccess={(config) => {
-                handleCollector(config);
-              }}
+              cancel={cancelInstall}
             />
-            <CollectorDetailDrawer
-              ref={collectorDetailRef}
-              nodeStateEnum={nodeStateEnum}
-              onSuccess={() => getNodes(searchFilters)}
+          )}
+          {showCollectorOperation && (
+            <CollectorOperation
+              operationType={collectorOperationType as any}
+              taskId={taskId}
+              collectorId={collectorId}
+              collectorPackageId={collectorPackageId}
+              cancel={cancelCollectorOperation}
             />
-            <EditNode
-              ref={editNodeRef}
-              onSuccess={() => getNodes(searchFilters)}
-            />
-          </div>
-        </div>
-      )}
-      {showInstallController && (
-        <ControllerInstall
-          config={{
-            os: getFirstSelectedNodeOS()
-          }}
-          cancel={cancelInstall}
-        />
-      )}
-      {showCollectorOperation && (
-        <CollectorOperation
-          operationType={collectorOperationType as any}
-          taskId={taskId}
-          collectorId={collectorId}
-          collectorPackageId={collectorPackageId}
-          cancel={cancelCollectorOperation}
-        />
+          )}
+        </>
       )}
     </MainLayout>
   );

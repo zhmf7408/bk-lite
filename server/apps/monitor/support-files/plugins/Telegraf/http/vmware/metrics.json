@@ -6,7 +6,7 @@
   "objects": [
     {
       "name": "vCenter",
-      "icon": "cc-cloud-plat_云平台",
+      "icon": "mm-vmware_Vmware",
       "type": "VMWare",
       "level": "base",
       "description": "",
@@ -51,7 +51,7 @@
     },
     {
       "name": "ESXI",
-      "icon": "cc-esxi-host_ESXi",
+      "icon": "mm-esxi_ESXI",
       "type": "VMWare",
       "level": "derivative",
       "description": "",
@@ -162,7 +162,7 @@
     },
     {
       "name": "DataStorage",
-      "icon": "cc-storage_存储",
+      "icon": "mm-datastorage_数据存储",
       "type": "VMWare",
       "level": "derivative",
       "description": "",
@@ -207,7 +207,7 @@
     },
     {
       "name": "VM",
-      "icon": "cc-cloud-host_云主机",
+      "icon": "mm-vm_虚拟机",
       "type": "VMWare",
       "level": "derivative",
       "description": "",

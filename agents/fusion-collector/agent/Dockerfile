@@ -35,7 +35,6 @@ ADD ./vector ./bin/vector
 
 ADD ./filebeat ./bin/filebeat
 ADD ./packetbeat ./bin/packetbeat
-ADD ./metricbeat ./bin/metricbeat
 ADD ./auditbeat ./bin/auditbeat
 ADD ./windows /opt/release/windows/fusion-collectors
 
@@ -48,4 +47,3 @@ ADD ./service.conf /etc/supervisor/conf.d/service.conf
 
 
 ENTRYPOINT [ "/opt/fusion-collectors/startup.sh" ]
-

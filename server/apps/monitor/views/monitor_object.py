@@ -26,10 +26,11 @@ class MonitorObjectViewSet(viewsets.ModelViewSet):
     pagination_class = CustomPageNumberPagination
 
     def get_queryset(self):
-        """默认只返回父对象（parent 为空的对象）"""
+        """默认返回所有对象（父+子），传 parent_only=true 时只返回父对象"""
         queryset = super().get_queryset()
-        # 如果请求参数中没有明确指定 parent，则只返回父对象
-        if 'parent' not in self.request.query_params:
+        if "parent" in self.request.query_params:
+            return queryset
+        if self.request.query_params.get("parent_only") in ["true", "True"]:
             queryset = queryset.filter(parent__isnull=True)
         return queryset
 
@@ -169,7 +170,11 @@ class MonitorObjectViewSet(viewsets.ModelViewSet):
         """创建监控对象，支持同时创建子对象"""
         data = request.data
         children = data.pop("children", [])
-        
+
+        # 父对象自动填充 instance_id_keys
+        if not data.get("instance_id_keys"):
+            data["instance_id_keys"] = ["instance_id"]
+
         # 创建父对象
         serializer = self.get_serializer(data=data)
         serializer.is_valid(raise_exception=True)
@@ -188,7 +193,8 @@ class MonitorObjectViewSet(viewsets.ModelViewSet):
                         description="",
                         level="derivative",
                         parent=parent_obj,
-                        is_visible=True
+                        is_visible=True,
+                        instance_id_keys=["instance_id", child["id"]],
                     ))
             if child_objects:
                 MonitorObject.objects.bulk_create(child_objects)
@@ -197,11 +203,15 @@ class MonitorObjectViewSet(viewsets.ModelViewSet):
 
     def update(self, request, *args, **kwargs):
         """更新监控对象，支持更新/新增子对象"""
-        partial = kwargs.pop('partial', False)
+        partial = kwargs.pop("partial", False)
         instance = self.get_object()
         data = request.data.copy()
         children = data.pop("children", None)
-        
+
+        # 父对象自动补充 instance_id_keys
+        if not instance.instance_id_keys and "instance_id_keys" not in data:
+            data["instance_id_keys"] = ["instance_id"]
+
         # 更新父对象
         serializer = self.get_serializer(instance, data=data, partial=partial)
         serializer.is_valid(raise_exception=True)
@@ -235,7 +245,8 @@ class MonitorObjectViewSet(viewsets.ModelViewSet):
                         description="",
                         level="derivative",
                         parent=instance,
-                        is_visible=True
+                        is_visible=True,
+                        instance_id_keys=["instance_id", child_id],
                     ))
             
             if new_children:

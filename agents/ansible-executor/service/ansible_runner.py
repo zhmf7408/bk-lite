@@ -1,7 +1,6 @@
 import asyncio
 import importlib
 import json
-import logging
 import os
 import re
 import shlex
@@ -9,20 +8,60 @@ import shutil
 import ssl
 import stat
 import uuid
+from codecs import decode as codecs_decode
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
 import yaml
-from core.config import ServiceConfig
+from core.config import ServiceConfig, logger
 from service.runtime import current_entrypoint_command
 
-logging.basicConfig(
-    level=os.getenv("LOG_LEVEL", "INFO").upper(),
-    format="%(asctime)s %(levelname)s [ansible-executor] %(message)s",
-)
-logger = logging.getLogger(__name__)
 BASE_TASK_DIR = Path(os.getenv("ANSIBLE_WORK_DIR", "/tmp/ansible-executor"))
+
+_SENSITIVE_INVENTORY_PATTERNS = (
+    "ansible_password",
+    "ansible_ssh_passphrase",
+    "ansible_become_password",
+)
+
+
+def _looks_like_utf16le(output: bytes) -> bool:
+    if b"\x00" not in output:
+        return False
+    zero_count = sum(1 for idx in range(1, len(output), 2) if output[idx] == 0)
+    return zero_count >= len(output) // 4
+
+
+def _decode_utf16le_output(output: bytes) -> str | None:
+    if len(output) < 2:
+        return None
+    candidate = output
+    has_bom = candidate.startswith(b"\xff\xfe")
+    if has_bom:
+        candidate = candidate[2:]
+    if len(candidate) < 2 or len(candidate) % 2 != 0:
+        return None
+    if not has_bom and not _looks_like_utf16le(candidate):
+        return None
+    try:
+        return candidate.decode("utf-16-le")
+    except UnicodeDecodeError:
+        return None
+
+
+def decode_command_output(output: bytes) -> tuple[str, str]:
+    utf16_decoded = _decode_utf16le_output(output)
+    if utf16_decoded is not None:
+        return utf16_decoded, "utf16le"
+    try:
+        return output.decode("utf-8"), "utf-8"
+    except UnicodeDecodeError:
+        pass
+    try:
+        return codecs_decode(output, "gbk"), "gbk"
+    except UnicodeDecodeError:
+        return output.decode("utf-8", errors="replace"), "utf-8-replace"
 
 
 @dataclass
@@ -82,13 +121,9 @@ def to_adhoc_request(payload: dict[str, Any]) -> AdhocRequest:
     if inventory_content is not None and not isinstance(inventory_content, str):
         raise ValueError("inventory_content must be string")
     if not inventory and not inventory_content and not host_credentials:
-        raise ValueError(
-            "inventory or inventory_content or host_credentials is required"
-        )
+        raise ValueError("inventory or inventory_content or host_credentials is required")
     if inventory and host_credentials and not inventory_content:
-        raise ValueError(
-            "inventory path with host_credentials is ambiguous, use inventory_content or only host_credentials"
-        )
+        raise ValueError("inventory path with host_credentials is ambiguous, use inventory_content or only host_credentials")
 
     timeout = int(payload.get("execute_timeout", 60))
     if timeout < 1 or timeout > 3600:
@@ -102,9 +137,7 @@ def to_adhoc_request(payload: dict[str, Any]) -> AdhocRequest:
     if private_key_content is not None and not isinstance(private_key_content, str):
         raise ValueError("private_key_content must be string")
     private_key_passphrase = payload.get("private_key_passphrase")
-    if private_key_passphrase is not None and not isinstance(
-        private_key_passphrase, str
-    ):
+    if private_key_passphrase is not None and not isinstance(private_key_passphrase, str):
         raise ValueError("private_key_passphrase must be string")
 
     return AdhocRequest(
@@ -140,64 +173,16 @@ def to_playbook_request(payload: dict[str, Any]) -> PlaybookRequest:
     if file_distribution is not None and not isinstance(file_distribution, dict):
         raise ValueError("file_distribution must be object")
 
-    logger.info(
-        "to_playbook_request payload check1: "
-        "task_id=%s "
-        "playbook_path=%r "
-        "playbook_content_is_none=%s "
-        "inventory=%r "
-        "inventory_content_is_none=%s "
-        "host_credentials_count=%s "
-        "files_count=%s "
-        "file_distribution=%r "
-        "payload_keys=%s",
-        payload.get("task_id", ""),
-        playbook_path,
-        playbook_content is None,
-        inventory,
-        inventory_content is None,
-        len(host_credentials),
-        len(files),
-        file_distribution,
-        sorted(payload.keys()),
-    )
-
     no_playbook_path = not playbook_path
     no_playbook_content = not playbook_content
     no_file_distribution = not file_distribution
 
-    logger.info(
-        "to_playbook_request validation booleans2: "
-        "task_id=%s "
-        "no_playbook_path=%s "
-        "no_playbook_content=%s "
-        "no_file_distribution=%s",
-        payload.get("task_id", ""),
-        no_playbook_path,
-        no_playbook_content,
-        no_file_distribution,
-    )
-
     if no_playbook_path and no_playbook_content and no_file_distribution:
-        logger.error(
-            "to_playbook_request validation failed: "
-            "missing playbook_path/playbook_content/file_distribution "
-            "task_id=%s "
-            "raw_file_distribution=%r "
-            "raw_payload=%r",
-            payload.get("task_id", ""),
-            payload.get("file_distribution"),
-            payload,
-        )
         raise ValueError("playbook_path or playbook_content is required")
     if not inventory and not inventory_content and not host_credentials:
-        raise ValueError(
-            "inventory or inventory_content or host_credentials is required"
-        )
+        raise ValueError("inventory or inventory_content or host_credentials is required")
     if inventory and host_credentials and not inventory_content:
-        raise ValueError(
-            "inventory path with host_credentials is ambiguous, use inventory_content or only host_credentials"
-        )
+        raise ValueError("inventory path with host_credentials is ambiguous, use inventory_content or only host_credentials")
 
     timeout = int(payload.get("execute_timeout", 600))
     if timeout < 1 or timeout > 7200:
@@ -211,9 +196,7 @@ def to_playbook_request(payload: dict[str, Any]) -> PlaybookRequest:
     if private_key_content is not None and not isinstance(private_key_content, str):
         raise ValueError("private_key_content must be string")
     private_key_passphrase = payload.get("private_key_passphrase")
-    if private_key_passphrase is not None and not isinstance(
-        private_key_passphrase, str
-    ):
+    if private_key_passphrase is not None and not isinstance(private_key_passphrase, str):
         raise ValueError("private_key_passphrase must be string")
 
     return PlaybookRequest(
@@ -233,35 +216,13 @@ def to_playbook_request(payload: dict[str, Any]) -> PlaybookRequest:
     )
 
 
-async def download_object_to_workspace(
-    config: ServiceConfig, workspace: Path, bucket_name: str, file_item: dict[str, Any]
-) -> str:
+async def download_object_to_workspace(config: ServiceConfig, workspace: Path, bucket_name: str, file_item: dict[str, Any]) -> str:
     file_key = str(file_item.get("file_key", "")).strip()
     file_name = str(file_item.get("name", "")).strip() or Path(file_key).name
     if not file_key:
         raise ValueError("file_key is required")
     if not file_name:
         raise ValueError("file name is required")
-
-    logger.info(
-        "download_object_to_workspace config: "
-        "task_file=%s "
-        "bucket_name=%s "
-        "nats_servers=%r "
-        "nats_protocol=%s "
-        "nats_conn_timeout=%s "
-        "has_nats_username=%s "
-        "has_nats_password=%s "
-        "has_nats_tls_ca_file=%s",
-        file_name,
-        bucket_name,
-        list(config.nats_servers),
-        config.nats_protocol,
-        config.nats_conn_timeout,
-        bool(config.nats_username),
-        bool(config.nats_password),
-        bool(config.nats_tls_ca_file),
-    )
 
     nats_client_module = importlib.import_module("nats.aio.client")
     nc = nats_client_module.Client()
@@ -309,9 +270,7 @@ def _join_windows_target_path(target_path: str, file_name: str) -> str:
     return f"{_normalize_windows_target_path(target_path)}/{file_name}"
 
 
-def _build_windows_file_distribution_playbook(
-    downloaded_files: list[dict[str, Any]], target_path: str, overwrite: bool
-) -> str:
+def _build_windows_file_distribution_playbook(downloaded_files: list[dict[str, Any]], target_path: str, overwrite: bool) -> str:
     normalized_target_path = _normalize_windows_target_path(target_path)
     tasks = []
     for file_item in downloaded_files:
@@ -324,9 +283,7 @@ def _build_windows_file_distribution_playbook(
                 "name": f"Copy {file_name} to Windows host",
                 "ansible.windows.win_copy": {
                     "src": local_path,
-                    "dest": _join_windows_target_path(
-                        normalized_target_path, file_name
-                    ),
+                    "dest": _join_windows_target_path(normalized_target_path, file_name),
                     "force": bool(overwrite),
                 },
             }
@@ -357,6 +314,13 @@ def _quote_inventory_value(value: Any) -> str:
     return escaped
 
 
+def _mask_sensitive_inventory_content(content: str) -> str:
+    masked = str(content)
+    for key in _SENSITIVE_INVENTORY_PATTERNS:
+        masked = re.sub(rf"({key}=)(\S+)", r"\1***", masked)
+    return masked
+
+
 def _get_password_auth_ssh_common_args(item: dict[str, Any]) -> str:
     explicit_args = item.get("ansible_ssh_common_args") or item.get("ssh_common_args")
     if explicit_args:
@@ -371,14 +335,10 @@ def _normalize_ansible_host_status(raw_status: str) -> str:
     return "failed"
 
 
-def _build_parsed_host_result(
-    host: str, raw_status: str, exit_code: int | None, output_lines: list[str]
-) -> dict[str, Any]:
+def _build_parsed_host_result(host: str, raw_status: str, exit_code: int | None, output_lines: list[str]) -> dict[str, Any]:
     output = "\n".join(output_lines).strip()
     status = _normalize_ansible_host_status(raw_status)
-    final_exit_code = (
-        exit_code if exit_code is not None else (0 if status == "success" else 1)
-    )
+    final_exit_code = exit_code if exit_code is not None else (0 if status == "success" else 1)
     stdout = output if status == "success" else ""
     stderr = "" if status == "success" else output
     return {
@@ -393,9 +353,7 @@ def _build_parsed_host_result(
 
 
 def parse_ansible_output_per_host(output: str) -> list[dict[str, Any]]:
-    host_line_pattern = re.compile(
-        r"^(\S+)\s+\|\s+(SUCCESS|CHANGED|FAILED|UNREACHABLE!?|SKIPPED)(?:\s+\|\s+rc=(-?\d+))?\s+(>>|=>)\s*(.*)$"
-    )
+    host_line_pattern = re.compile(r"^(\S+)\s+\|\s+(SUCCESS|CHANGED|FAILED|UNREACHABLE!?|SKIPPED)(?:\s+\|\s+rc=(-?\d+))?\s+(>>|=>)\s*(.*)$")
     results: list[dict[str, Any]] = []
     current_host: str | None = None
     current_status: str | None = None
@@ -444,9 +402,7 @@ def parse_ansible_output_per_host(output: str) -> list[dict[str, Any]]:
     return results
 
 
-def _build_host_credentials_inventory(
-    workspace: Path, host_credentials: list[dict[str, Any]]
-) -> str:
+def _build_host_credentials_inventory(workspace: Path, host_credentials: list[dict[str, Any]]) -> str:
     lines: list[str] = []
     for idx, item in enumerate(host_credentials):
         host = str(item.get("host", "")).strip()
@@ -466,15 +422,11 @@ def _build_host_credentials_inventory(
             if str(connection).strip().lower() == "winrm":
                 winrm_scheme = item.get("winrm_scheme")
                 if winrm_scheme:
-                    parts.append(
-                        f"ansible_winrm_scheme={_quote_inventory_value(winrm_scheme)}"
-                    )
+                    parts.append(f"ansible_winrm_scheme={_quote_inventory_value(winrm_scheme)}")
 
                 winrm_transport = item.get("winrm_transport")
                 if winrm_transport:
-                    parts.append(
-                        f"ansible_winrm_transport={_quote_inventory_value(winrm_transport)}"
-                    )
+                    parts.append(f"ansible_winrm_transport={_quote_inventory_value(winrm_transport)}")
 
                 if item.get("winrm_cert_validation") is False:
                     parts.append("ansible_winrm_server_cert_validation=ignore")
@@ -483,10 +435,7 @@ def _build_host_credentials_inventory(
         if password:
             parts.append(f"ansible_password={_quote_inventory_value(password)}")
             if str(connection).strip().lower() == "ssh":
-                parts.append(
-                    "ansible_ssh_common_args="
-                    f"{_quote_inventory_value(_get_password_auth_ssh_common_args(item))}"
-                )
+                parts.append(f"ansible_ssh_common_args={_quote_inventory_value(_get_password_auth_ssh_common_args(item))}")
 
         private_key_file = item.get("private_key_file")
         private_key_content = item.get("private_key_content")
@@ -496,9 +445,7 @@ def _build_host_credentials_inventory(
             os.chmod(key_file, stat.S_IRUSR | stat.S_IWUSR)
             private_key_file = str(key_file)
         if private_key_file:
-            parts.append(
-                f"ansible_ssh_private_key_file={_quote_inventory_value(private_key_file)}"
-            )
+            parts.append(f"ansible_ssh_private_key_file={_quote_inventory_value(private_key_file)}")
 
         passphrase = item.get("private_key_passphrase")
         if passphrase:
@@ -506,7 +453,9 @@ def _build_host_credentials_inventory(
 
         lines.append(" ".join(parts))
 
-    return "\n".join(lines) + ("\n" if lines else "")
+    if not lines:
+        return ""
+    return "[all]\n" + "\n".join(lines) + "\n"
 
 
 def _sanitize_task_id(task_id: str | None) -> str:
@@ -546,14 +495,10 @@ def prepare_adhoc_execution(payload: AdhocRequest) -> tuple[list[str], Path]:
     extra_vars = dict(payload.extra_vars or {})
 
     if payload.private_key_content and not payload.host_credentials:
-        private_key_path = _materialize_private_key(
-            workspace, payload.private_key_content
-        )
+        private_key_path = _materialize_private_key(workspace, payload.private_key_content)
         extra_vars.setdefault("ansible_ssh_private_key_file", private_key_path)
         if payload.private_key_passphrase:
-            extra_vars.setdefault(
-                "ansible_ssh_passphrase", payload.private_key_passphrase
-            )
+            extra_vars.setdefault("ansible_ssh_passphrase", payload.private_key_passphrase)
 
     if payload.inventory_content or payload.host_credentials:
         inventory_file = workspace / "inventory.ini"
@@ -561,14 +506,8 @@ def prepare_adhoc_execution(payload: AdhocRequest) -> tuple[list[str], Path]:
         if payload.inventory_content:
             parts.append(payload.inventory_content.rstrip("\n"))
         if payload.host_credentials:
-            parts.append(
-                _build_host_credentials_inventory(
-                    workspace, payload.host_credentials
-                ).rstrip("\n")
-            )
-        inventory_file.write_text(
-            "\n".join([p for p in parts if p]) + "\n", encoding="utf-8"
-        )
+            parts.append(_build_host_credentials_inventory(workspace, payload.host_credentials).rstrip("\n"))
+        inventory_file.write_text("\n".join([p for p in parts if p]) + "\n", encoding="utf-8")
         inventory_value = str(inventory_file)
 
     cmd = build_adhoc_command(
@@ -593,19 +532,15 @@ def prepare_adhoc_execution(payload: AdhocRequest) -> tuple[list[str], Path]:
 async def prepare_playbook_execution(
     config: ServiceConfig,
     payload: PlaybookRequest,
-) -> tuple[list[str], Path]:
+) -> tuple[list[str], Path, PlaybookRequest]:
     workspace = create_task_workspace(payload.task_id)
     extra_vars = dict(payload.extra_vars or {})
 
     if payload.private_key_content and not payload.host_credentials:
-        private_key_path = _materialize_private_key(
-            workspace, payload.private_key_content
-        )
+        private_key_path = _materialize_private_key(workspace, payload.private_key_content)
         extra_vars.setdefault("ansible_ssh_private_key_file", private_key_path)
         if payload.private_key_passphrase:
-            extra_vars.setdefault(
-                "ansible_ssh_passphrase", payload.private_key_passphrase
-            )
+            extra_vars.setdefault("ansible_ssh_passphrase", payload.private_key_passphrase)
 
     playbook_path = payload.playbook_path
     playbook_content = payload.playbook_content
@@ -620,13 +555,9 @@ async def prepare_playbook_execution(
 
         downloaded_files: list[dict[str, Any]] = []
         for file_item in payload.files or []:
-            local_path = await download_object_to_workspace(
-                config, workspace, bucket_name, file_item
-            )
+            local_path = await download_object_to_workspace(config, workspace, bucket_name, file_item)
             downloaded_files.append({**file_item, "local_path": local_path})
-        playbook_content = _build_windows_file_distribution_playbook(
-            downloaded_files, target_path, overwrite
-        )
+        playbook_content = _build_windows_file_distribution_playbook(downloaded_files, target_path, overwrite)
 
     if playbook_content:
         playbook_file = workspace / "playbook.yml"
@@ -640,34 +571,27 @@ async def prepare_playbook_execution(
         if payload.inventory_content:
             parts.append(payload.inventory_content.rstrip("\n"))
         if payload.host_credentials:
-            parts.append(
-                _build_host_credentials_inventory(
-                    workspace, payload.host_credentials
-                ).rstrip("\n")
-            )
-        inventory_file.write_text(
-            "\n".join([p for p in parts if p]) + "\n", encoding="utf-8"
-        )
+            parts.append(_build_host_credentials_inventory(workspace, payload.host_credentials).rstrip("\n"))
+        inventory_file.write_text("\n".join([p for p in parts if p]) + "\n", encoding="utf-8")
         inventory_value = str(inventory_file)
 
-    cmd = build_playbook_command(
-        PlaybookRequest(
-            playbook_path=playbook_path,
-            playbook_content=None,
-            inventory=inventory_value,
-            inventory_content=None,
-            extra_vars=extra_vars,
-            execute_timeout=payload.execute_timeout,
-            task_id=payload.task_id,
-            callback=payload.callback,
-            private_key_content=None,
-            private_key_passphrase=None,
-            host_credentials=None,
-            files=None,
-            file_distribution=None,
-        )
+    prepared_payload = PlaybookRequest(
+        playbook_path=playbook_path,
+        playbook_content=None,
+        inventory=inventory_value,
+        inventory_content=None,
+        extra_vars=extra_vars,
+        execute_timeout=payload.execute_timeout,
+        task_id=payload.task_id,
+        callback=payload.callback,
+        private_key_content=None,
+        private_key_passphrase=None,
+        host_credentials=None,
+        files=None,
+        file_distribution=None,
     )
-    return cmd, workspace
+    cmd = build_playbook_command(prepared_payload)
+    return cmd, workspace, prepared_payload
 
 
 def build_adhoc_command(payload: AdhocRequest) -> list[str]:
@@ -703,11 +627,10 @@ def build_playbook_command(payload: PlaybookRequest) -> list[str]:
         payload.playbook_path,
         "-i",
         payload.inventory,
+        "-vvv",
     ]
     if payload.extra_vars:
-        cli_args.extend(
-            ["--extra-vars", json.dumps(payload.extra_vars, ensure_ascii=False)]
-        )
+        cli_args.extend(["--extra-vars", json.dumps(payload.extra_vars, ensure_ascii=False)])
     return [
         *current_entrypoint_command(),
         "--internal-ansible-cli",
@@ -717,8 +640,45 @@ def build_playbook_command(payload: PlaybookRequest) -> list[str]:
     ]
 
 
+def build_playbook_list_hosts_command(payload: PlaybookRequest) -> list[str]:
+    cli_args = [
+        payload.playbook_path,
+        "-i",
+        payload.inventory,
+        "--list-hosts",
+        "-vvv",
+    ]
+    if payload.extra_vars:
+        cli_args.extend(["--extra-vars", json.dumps(payload.extra_vars, ensure_ascii=False)])
+    return [
+        *current_entrypoint_command(),
+        "--internal-ansible-cli",
+        "playbook",
+        "--",
+        *cli_args,
+    ]
+
+
+def build_playbook_winrm_preflight_command(payload: PlaybookRequest) -> list[str]:
+    cli_args = [
+        "all",
+        "-i",
+        payload.inventory,
+        "-m",
+        "ansible.windows.win_ping",
+    ]
+    if payload.extra_vars:
+        cli_args.extend(["--extra-vars", json.dumps(payload.extra_vars, ensure_ascii=False)])
+    return [
+        *current_entrypoint_command(),
+        "--internal-ansible-cli",
+        "adhoc",
+        "--",
+        *cli_args,
+    ]
+
+
 async def run_command(cmd: list[str], timeout: int) -> tuple[int, str]:
-    logger.info("execute command: %s", " ".join(shlex.quote(part) for part in cmd))
     proc = await asyncio.create_subprocess_exec(
         *cmd,
         stdout=asyncio.subprocess.PIPE,
@@ -729,5 +689,16 @@ async def run_command(cmd: list[str], timeout: int) -> tuple[int, str]:
     except asyncio.TimeoutError:
         proc.kill()
         await proc.wait()
+        logger.error("command timed out: %s", " ".join(shlex.quote(part) for part in cmd))
         return 124, "command timed out"
-    return proc.returncode or 0, stdout.decode("utf-8", errors="replace")
+    output, decode_strategy = decode_command_output(stdout)
+    exit_code = proc.returncode or 0
+    logger.info(
+        "command output decode: exit_code=%s strategy=%s bytes=%s raw_prefix=%s decoded_prefix=%r",
+        exit_code,
+        decode_strategy,
+        len(stdout),
+        stdout[:32].hex(),
+        output[:120],
+    )
+    return exit_code, output

@@ -10,6 +10,7 @@ import ChunkPreviewModal from './chunkPreviewModal';
 import Icon from '@/components/icon';
 import type { DocumentItem, QAPairFormProps } from '@/app/opspilot/types/knowledge';
 import { getDocumentTypeLabel } from '@/app/opspilot/utils/knowledgeBaseUtils';
+import { filterModelOption, getModelOptionText, renderModelOptionLabel } from '@/app/opspilot/utils/modelOption';
 
 const { TabPane } = Tabs;
 const { TextArea } = Input;
@@ -583,13 +584,11 @@ const QAPairForm = forwardRef<any, QAPairFormProps>(({
                 placeholder={t('knowledge.qaPairs.selectQuestionLlmModel')}
                 loading={llmModelsLoading}
                 showSearch
-                filterOption={(input, option) =>
-                  typeof option?.children === 'string' && (option.children as string).toLowerCase().includes(input.toLowerCase())
-                }
+                filterOption={filterModelOption}
               >
                 {llmModels.map(model => (
-                  <Select.Option key={model.id} value={model.id}>
-                    {model.name}
+                  <Select.Option key={model.id} value={model.id} title={getModelOptionText(model)}>
+                    {renderModelOptionLabel(model)}
                   </Select.Option>
                 ))}
               </Select>
@@ -616,13 +615,11 @@ const QAPairForm = forwardRef<any, QAPairFormProps>(({
                 placeholder={t('knowledge.qaPairs.selectAnswerLlmModel')}
                 loading={llmModelsLoading}
                 showSearch
-                filterOption={(input, option) =>
-                  typeof option?.children === 'string' && (option.children as string).toLowerCase().includes(input.toLowerCase())
-                }
+                filterOption={filterModelOption}
               >
                 {llmModels.map(model => (
-                  <Select.Option key={model.id} value={model.id}>
-                    {model.name}
+                  <Select.Option key={model.id} value={model.id} title={getModelOptionText(model)}>
+                    {renderModelOptionLabel(model)}
                   </Select.Option>
                 ))}
               </Select>

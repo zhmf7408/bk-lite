@@ -1,6 +1,7 @@
 'use client';
 import React, { useEffect, useState, useRef, useMemo } from 'react';
-import { Button, Tag, notification, Modal, Alert } from 'antd';
+import { Button, Tag, notification, Modal, Alert, Progress } from 'antd';
+import type { TableColumnsType } from 'antd';
 import {
   CheckCircleOutlined,
   CheckCircleFilled,
@@ -22,6 +23,20 @@ import InstallGuidance from '@/app/node-manager/(pages)/cloudregion/node/control
 import RetryInstallModal from '@/app/node-manager/(pages)/cloudregion/node/controllerInstall/installing/retryInstallModal';
 import OperationGuidance from '@/app/node-manager/(pages)/cloudregion/node/controllerInstall/installing/operationGuidance';
 import Icon from '@/components/icon';
+import {
+  ControllerInstallProgressRow,
+  ControllerManualInstallStatusItem
+} from '@/app/node-manager/types/controller';
+import {
+  getInstallerFailureGuidance,
+  getInstallerProgressPercent,
+  getInstallerProgressText,
+  getInstallerStepInfo,
+  getInstallerSummaryLabel,
+  normalizeControllerInstallResult,
+  normalizeControllerInstallRows,
+  normalizeInstallerStatus
+} from '@/app/node-manager/utils/installerProgress';
 
 // 操作类型
 export type OperationType =
@@ -51,6 +66,43 @@ export interface OperationProgressProps {
   cancel: () => void;
 }
 
+const renderInstallerProgressSummary = (
+  summaryLabel: string | null,
+  stepInfo: string | null,
+  progressText: string | null,
+  progressPercent: number | null
+) => {
+  if (!summaryLabel && !stepInfo && !progressText && progressPercent === null) {
+    return null;
+  }
+
+  return (
+    <div className="mt-[8px] min-w-0 max-w-[240px]">
+      {summaryLabel && (
+        <div className="truncate text-[12px] text-[var(--color-text-2)]">
+          {summaryLabel}
+        </div>
+      )}
+      {(stepInfo || progressText) && (
+        <div className="mt-[2px] flex flex-wrap items-center gap-[8px] text-[12px] text-[var(--color-text-3)]">
+          {stepInfo && <span>{stepInfo}</span>}
+          {progressText && <span>{progressText}</span>}
+        </div>
+      )}
+      {progressPercent !== null && (
+        <div className="mt-[6px]">
+          <Progress percent={progressPercent} size="small" showInfo={false} />
+        </div>
+      )}
+    </div>
+  );
+};
+
+const DEFAULT_POLL_INTERVAL = 5000;
+const CONTROLLER_INSTALL_ACTIVE_POLL_INTERVAL = 2000;
+const CONTROLLER_INSTALL_CONNECTIVITY_POLL_INTERVAL = 3000;
+const AUTO_ADVANCE_DELAY = 5000;
+
 const OperationProgress: React.FC<OperationProgressProps> = ({
   operationType,
   taskIds,
@@ -79,10 +131,10 @@ const OperationProgress: React.FC<OperationProgressProps> = ({
   const operationGuidanceRef = useRef<ModalRef>(null);
   const timerRef = useRef<NodeJS.Timeout | null>(null);
   const [pageLoading, setPageLoading] = useState<boolean>(false);
-  const [tableData, setTableData] = useState<TableDataItem[]>([]);
+  const [tableData, setTableData] = useState<ControllerInstallProgressRow[]>([]);
   // 使用 ref 保存 currentViewingNode 的最新值，避免闭包问题
-  const currentViewingNodeRef = useRef<TableDataItem | null>(null);
-  const [copyingNodeIds, setCopyingNodeIds] = useState<number[]>([]);
+  const currentViewingNodeRef = useRef<ControllerInstallProgressRow | null>(null);
+  const [copyingNodeIds, setCopyingNodeIds] = useState<Array<string | number>>([]);
   const [retryingNodeIds, setRetryingNodeIds] = useState<string[]>([]);
 
   // 是否是安装控制器操作
@@ -91,6 +143,46 @@ const OperationProgress: React.FC<OperationProgressProps> = ({
   const isUninstallController = operationType === 'uninstallController';
   // 是否是控制器相关操作（安装或卸载）
   const isControllerOperation = isInstallController || isUninstallController;
+
+  const controllerInstallSummary = useMemo(() => {
+    if (!isInstallController || tableData.length === 0) {
+      return null;
+    }
+
+    const summary = tableData.reduce(
+      (acc, item) => {
+        if (['success', 'installed'].includes(item.status || '')) {
+          acc.success += 1;
+        } else if (item.status === 'error') {
+          acc.error += 1;
+        } else if (item.status === 'timeout') {
+          acc.timeout += 1;
+        } else {
+          acc.running += 1;
+        }
+
+        return acc;
+      },
+      {
+        total: tableData.length,
+        success: 0,
+        error: 0,
+        timeout: 0,
+        running: 0
+      }
+    );
+
+    const completed = summary.success + summary.error + summary.timeout;
+
+    return {
+      ...summary,
+      completed,
+      percent:
+        summary.total > 0
+          ? Math.round((completed / summary.total) * 100)
+          : 0
+    };
+  }, [isInstallController, tableData]);
 
   // 获取默认文案配置
   const defaultTextConfig: OperationTextConfig = useMemo(() => {
@@ -219,8 +311,8 @@ const OperationProgress: React.FC<OperationProgressProps> = ({
     };
   }, [t, installMethod, getStatusTextByOperation]);
 
-  const columns: any = useMemo(() => {
-    const baseColumns: any[] = [
+  const columns = useMemo<TableColumnsType<ControllerInstallProgressRow>>(() => {
+    const baseColumns: TableColumnsType<ControllerInstallProgressRow> = [
       {
         title: t('node-manager.cloudregion.node.ipAdrress'),
         dataIndex: 'ip',
@@ -289,23 +381,67 @@ const OperationProgress: React.FC<OperationProgressProps> = ({
     baseColumns.push({
       title: mergedTextConfig.statusColumn,
       dataIndex: 'status',
-      width: 150,
+      width: 240,
       key: 'status',
       ellipsis: true,
-      render: (value: string) => {
-        const status = statusMap[value as keyof typeof statusMap];
+      render: (value: string, row: ControllerInstallProgressRow) => {
+        const normalizedStatus = normalizeInstallerStatus(value);
+        const status = statusMap[normalizedStatus as keyof typeof statusMap];
         if (!status) {
           return <span>--</span>;
         }
+
+        const installerProgress =
+          isInstallController && installMethod === 'remoteInstall'
+            ? row.result?.installer_progress
+            : undefined;
+        const summaryLabel = getInstallerSummaryLabel(t, installerProgress);
+        const stepInfo = getInstallerStepInfo(
+          installerProgress?.step_index,
+          installerProgress?.step_total
+        );
+        const progressText = getInstallerProgressText(
+          installerProgress?.progress
+        );
+        const progressPercent = getInstallerProgressPercent(
+          installerProgress?.progress
+        );
+        const failureGuidance = getInstallerFailureGuidance(t, row.result);
+
         return (
-          <Tag
-            color={status.color}
-            bordered={false}
-            icon={status.icon}
-            className="flex items-center gap-1 w-fit"
-          >
-            <span>{status.text}</span>
-          </Tag>
+          <div>
+            <Tag
+              color={status.color}
+              bordered={false}
+              icon={status.icon}
+              className="flex items-center gap-1 w-fit"
+            >
+              <span>{status.text}</span>
+            </Tag>
+            {renderInstallerProgressSummary(
+              summaryLabel,
+              stepInfo,
+              progressText,
+              progressPercent
+            )}
+            {['error', 'timeout'].includes(normalizedStatus) &&
+              (failureGuidance.reason || failureGuidance.suggestion) && (
+                <div className="mt-[8px] max-w-[240px] rounded-[4px] bg-[var(--color-fill-1)] p-[8px] text-[12px]">
+                  {failureGuidance.reason && (
+                    <div className="text-[var(--color-error)] line-clamp-2">
+                      {t('node-manager.cloudregion.node.failureReason')}:
+                      {' '}
+                      {failureGuidance.reason}
+                    </div>
+                  )}
+                  <div className="mt-[4px] text-[var(--color-text-2)] line-clamp-2">
+                    {t('node-manager.cloudregion.node.nextAction')}:
+                    {' '}
+                    {failureGuidance.suggestion}
+                  </div>
+                </div>
+            )}
+          </div>
         );
       }
     });
@@ -317,7 +453,7 @@ const OperationProgress: React.FC<OperationProgressProps> = ({
       width: 200,
       fixed: 'right',
       key: 'action',
-      render: (value: string, row: TableDataItem) => {
+      render: (value: string, row: ControllerInstallProgressRow) => {
         const isManualInstall = installMethod === 'manualInstall';
         const isWindows = row.os === 'windows';
         const nodeId = row.node_id || row.id;
@@ -393,31 +529,63 @@ const OperationProgress: React.FC<OperationProgressProps> = ({
   useEffect(() => {
     if (taskIds && !isLoading) {
       getNodeList('refresh');
-      timerRef.current = setInterval(() => {
-        getNodeList('timer');
-      }, 5000);
+      schedulePolling();
       return () => {
         clearTimer();
       };
     }
-  }, [taskIds, isLoading]);
+  }, [taskIds, isLoading, isInstallController, installMethod]);
 
   const clearTimer = () => {
     if (timerRef.current) clearInterval(timerRef.current);
     timerRef.current = null;
   };
 
-  // 重新启动轮询（重试成功后调用）
-  const restartPolling = () => {
-    clearTimer();
-    getNodeList('refresh');
-    timerRef.current = setInterval(() => {
-      getNodeList('timer');
-    }, 5000);
+  const getPollingInterval = (rows?: ControllerInstallProgressRow[]) => {
+    if (!isInstallController || installMethod !== 'remoteInstall') {
+      return DEFAULT_POLL_INTERVAL;
+    }
+
+    const currentRows = rows ?? tableData;
+    const runningRows = currentRows.filter((item) => item.status === 'running');
+
+    if (runningRows.length === 0) {
+      return DEFAULT_POLL_INTERVAL;
+    }
+
+    const hasActiveInstallerStep = runningRows.some((item) => {
+      const normalizedResult = normalizeControllerInstallResult(item.result);
+      const installerProgress = normalizedResult?.installer_progress;
+
+      if (installerProgress?.current_status === 'running') {
+        return true;
+      }
+
+      const steps = normalizedResult?.steps || [];
+      const runningStep = [...steps].reverse().find((step) => step.status === 'running');
+      return !!runningStep && runningStep.action !== 'connectivity_check';
+    });
+
+    return hasActiveInstallerStep
+      ? CONTROLLER_INSTALL_ACTIVE_POLL_INTERVAL
+      : CONTROLLER_INSTALL_CONNECTIVITY_POLL_INTERVAL;
   };
 
-  const checkDetail = (type: string, row: TableDataItem) => {
-    const logs = row.result?.steps || [];
+  const schedulePolling = (rows?: ControllerInstallProgressRow[]) => {
+    clearTimer();
+    timerRef.current = setInterval(() => {
+      getNodeList('timer');
+    }, getPollingInterval(rows));
+  };
+
+  // 重新启动轮询（重试成功后调用）
+  const restartPolling = () => {
+    getNodeList('refresh');
+    schedulePolling();
+  };
+
+  const checkDetail = (type: string, row: ControllerInstallProgressRow) => {
+    const logs = normalizeControllerInstallResult(row.result)?.steps || [];
     currentViewingNodeRef.current = row;
     guidance.current?.showModal({
       title: t('node-manager.cloudregion.node.viewLog'),
@@ -433,7 +601,7 @@ const OperationProgress: React.FC<OperationProgressProps> = ({
   const getNodeList = async (refreshType: string) => {
     try {
       setPageLoading(refreshType !== 'timer');
-      let data: TableDataItem[] = [];
+      let data: ControllerInstallProgressRow[] = [];
       let taskStatus: string = 'running';
       let taskSummary: {
         total: number;
@@ -456,12 +624,13 @@ const OperationProgress: React.FC<OperationProgressProps> = ({
             });
             data = manualTaskList.map((item: TableDataItem) => {
               const statusInfo = statusData.find(
-                (status: any) => status.node_id === item.node_id
+                (status: ControllerManualInstallStatusItem) =>
+                  status.node_id === item.node_id
               );
               return {
                 ...item,
-                status: statusInfo?.status || null,
-                result: statusInfo?.result || null
+                status: normalizeInstallerStatus(statusInfo?.status),
+                result: normalizeControllerInstallResult(statusInfo?.result)
               };
             });
           }
@@ -485,11 +654,17 @@ const OperationProgress: React.FC<OperationProgressProps> = ({
         }
       }
 
-      const newTableData = data.map((item: TableDataItem, index: number) => ({
-        ...item,
-        id: index
-      }));
+      const newTableData = normalizeControllerInstallRows(
+        data.map((item, index: number) => ({
+          ...item,
+          id: item.id ?? index
+        }))
+      );
       setTableData(newTableData);
+
+      if (refreshType === 'timer' || refreshType === 'refresh') {
+        schedulePolling(newTableData);
+      }
 
       // 如果弹窗正在查看某个节点的日志,实时更新该节点的日志（仅远程安装模式）
       // 使用 ref 获取最新值，避免闭包问题
@@ -499,8 +674,8 @@ const OperationProgress: React.FC<OperationProgressProps> = ({
         const currentTaskNodeId = viewingNode.task_node_id;
         const currentNodeId = viewingNode.node_id;
         const currentIp = viewingNode.ip;
-        const updatedNode: any = newTableData.find(
-          (item: TableDataItem) =>
+        const updatedNode = newTableData.find(
+          (item) =>
             (currentTaskNodeId && item.task_node_id === currentTaskNodeId) ||
             (currentNodeId && item.node_id === currentNodeId) ||
             (currentIp && item.ip === currentIp)
@@ -509,25 +684,28 @@ const OperationProgress: React.FC<OperationProgressProps> = ({
           // 更新当前查看的节点引用
           currentViewingNodeRef.current = updatedNode;
           // 更新弹窗中的日志和节点信息
-          guidance.current?.updateLogs?.(updatedNode.result?.steps || [], {
-            ip: updatedNode.ip,
-            nodeName: updatedNode.node_name
-          });
+          guidance.current?.updateLogs?.(
+            normalizeControllerInstallResult(updatedNode.result)?.steps || [],
+            {
+              ip: updatedNode.ip,
+              nodeName: updatedNode.node_name
+            }
+          );
         }
       }
 
       // 检查是否完成并自动进入下一步
       if (isControllerOperation) {
         // 控制器操作（安装或卸载）：检查所有节点都操作成功
-        const allSuccess = newTableData.every((item: TableDataItem) =>
-          ['success', 'installed'].includes(item.status)
+        const allSuccess = newTableData.every((item) =>
+          ['success', 'installed'].includes(item.status || '')
         );
         if (allSuccess && newTableData.length > 0) {
           clearTimer();
-          // 延迟2秒再跳转
+          // 延迟5秒再跳转
           setTimeout(() => {
             onNext();
-          }, 2000);
+          }, AUTO_ADVANCE_DELAY);
         }
       } else {
         // 组件操作：根据返回的 status 和 summary 判断
@@ -540,10 +718,10 @@ const OperationProgress: React.FC<OperationProgressProps> = ({
             taskSummary.total === taskSummary.success &&
             taskSummary.total > 0
           ) {
-            // 延迟2秒再跳转
+            // 延迟5秒再跳转
             setTimeout(() => {
               onNext();
-            }, 2000);
+            }, AUTO_ADVANCE_DELAY);
           }
         }
       }
@@ -635,8 +813,12 @@ const OperationProgress: React.FC<OperationProgressProps> = ({
     });
   };
 
-  const handleCopyInstallCommand = async (row: any) => {
+  const handleCopyInstallCommand = async (row: ControllerInstallProgressRow) => {
     try {
+      if (row.id === undefined) {
+        return;
+      }
+
       setCopyingNodeIds((prev) => [...prev, row.id]);
       const isLinux = row?.os === 'linux';
       const result = await getInstallCommand(row);
@@ -673,7 +855,7 @@ const OperationProgress: React.FC<OperationProgressProps> = ({
     }
   };
 
-  const handleRetry = (row: TableDataItem) => {
+  const handleRetry = (row: ControllerInstallProgressRow) => {
     retryModalRef.current?.showModal({
       type: 'retryInstall',
       ...row,
@@ -682,7 +864,7 @@ const OperationProgress: React.FC<OperationProgressProps> = ({
   };
 
   // 组件操作重试
-  const handleCollectorRetry = async (row: TableDataItem) => {
+  const handleCollectorRetry = async (row: ControllerInstallProgressRow) => {
     const nodeId = row.node_id || row.id;
     if (!nodeId) return;
 
@@ -733,7 +915,7 @@ const OperationProgress: React.FC<OperationProgressProps> = ({
     }
   };
 
-  const handleOperationGuidance = async (row: TableDataItem) => {
+  const handleOperationGuidance = async (row: ControllerInstallProgressRow) => {
     operationGuidanceRef.current?.showModal({
       type: 'edit',
       form: row
@@ -749,6 +931,41 @@ const OperationProgress: React.FC<OperationProgressProps> = ({
     <div>
       <div>
         <div className="mb-[10px] font-bold">{mergedTextConfig.listTitle}</div>
+        {controllerInstallSummary && (
+          <Alert
+            className="mb-[12px]"
+            type={
+              controllerInstallSummary.error > 0 || controllerInstallSummary.timeout > 0
+                ? 'warning'
+                : 'info'
+            }
+            showIcon
+            message={
+              <div className="flex flex-wrap items-center gap-[8px]">
+                <span>{t('node-manager.cloudregion.node.installProgressSummary')}</span>
+                <Tag bordered={false} color="default">
+                  {t('node-manager.cloudregion.node.summaryTotal')}: {controllerInstallSummary.total}
+                </Tag>
+                <Tag bordered={false} color="processing">
+                  {t('node-manager.cloudregion.node.summaryRunning')}: {controllerInstallSummary.running}
+                </Tag>
+                <Tag bordered={false} color="success">
+                  {t('node-manager.cloudregion.node.summarySuccess')}: {controllerInstallSummary.success}
+                </Tag>
+                <Tag bordered={false} color="error">
+                  {t('node-manager.cloudregion.node.summaryFailed')}:
+                  {' '}
+                  {controllerInstallSummary.error + controllerInstallSummary.timeout}
+                </Tag>
+              </div>
+            }
+            description={
+              <div className="pt-[4px]">
+                <Progress percent={controllerInstallSummary.percent} size="small" />
+              </div>
+            }
+          />
+        )}
         <CustomTable
           scroll={{ x: 'calc(100vw - 320px)' }}
           rowKey="id"

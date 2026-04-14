@@ -55,9 +55,22 @@ def update_last_running_step(result, status, message, details=None, timestamp=No
     return False
 
 
-def update_step_by_action(
-    result, action, status, message, details=None, timestamp=None
-):
+def update_first_running_step(result, status, message, details=None, timestamp=None):
+    steps = result.get("steps", [])
+    for step in steps:
+        if step.get("status") != "running":
+            continue
+        step["status"] = status
+        step["message"] = message
+        step["timestamp"] = timestamp or now_iso()
+        if details:
+            step["details"] = details
+        result["steps"] = steps
+        return True
+    return False
+
+
+def update_step_by_action(result, action, status, message, details=None, timestamp=None):
     steps = result.get("steps", [])
     for step in steps:
         if step.get("action") != action:
@@ -72,11 +85,24 @@ def update_step_by_action(
     return False
 
 
-def advance_step(
-    result, status, message, details=None, next_steps=None, timestamp=None
-):
+def update_latest_step_by_action(result, action, status, message, details=None, timestamp=None):
+    steps = result.get("steps", [])
+    for step in reversed(steps):
+        if step.get("action") != action:
+            continue
+        step["status"] = status
+        step["message"] = message
+        step["timestamp"] = timestamp or now_iso()
+        if details:
+            step["details"] = details
+        result["steps"] = steps
+        return True
+    return False
+
+
+def advance_step(result, status, message, details=None, next_steps=None, timestamp=None):
     prepared_timestamp = timestamp or now_iso()
-    update_last_running_step(
+    update_first_running_step(
         result,
         status,
         message,

@@ -261,9 +261,9 @@
     <div class="main-container">
         <div class="content-wrapper">
             <div class="settings-page-tabs" aria-label="设置页签">
-                <a class="settings-page-tab" href="../组织/组织架构.html#settings">密钥</a>
                 <a class="settings-page-tab" href="./门户.html">门户</a>
-                <a class="settings-page-tab active" href="./许可管理.html" aria-current="page">许可</a>
+                <a class="settings-page-tab" href="../组织/组织架构.html#settings">密钥</a>
+                <a class="settings-page-tab active" href="./许可.html" aria-current="page">许可</a>
             </div>
 
             <div class="section-card intro-card">
@@ -305,6 +305,18 @@
 
                 <div id="notificationSettingsPanel" class="notification-settings-panel">
                     <div class="notification-settings-content config-reminder-content">
+                        <div class="settings-row">
+                            <div class="settings-item">
+                                <div class="settings-label">
+                                    <span class="label-icon" aria-hidden="true"></span>
+                                    <span class="label-text">通知渠道</span>
+                                </div>
+                                <div class="settings-value">
+                                    <div class="notice-channel-group" id="defaultChannelPicker"></div>
+                                </div>
+                            </div>
+                        </div>
+
                         <div class="settings-row">
                             <div class="settings-item">
                                 <div class="settings-label">
@@ -358,7 +370,7 @@
                         </div>
 
                         <div class="settings-hint">
-                            <span class="hint-text">系统将在许可到期前按设定天数向通知人员发送邮件提醒，可在“配置提醒”中为单个许可单独设置</span>
+                            <span class="hint-text">系统将在许可到期前按设定天数通过所选通知渠道向通知人员发送提醒，可在“配置提醒”中为单个许可单独设置</span>
                         </div>
                     </div>
                     <input type="hidden" id="inlineReminderDays" value="30">
@@ -634,7 +646,7 @@
             <div class="modal-body">
                 <div class="config-license-summary">
                     <div class="config-license-label" id="configLicenseLabel">许可编号：LIC-2025-0430-A</div>
-                    <p class="config-license-desc">当前许可默认继承全局提醒策略，你可以在这里为这张许可设置单独的提醒人员和提醒时间。</p>
+                    <p class="config-license-desc">当前许可默认继承全局提醒策略，你可以在这里为这张许可单独设置提醒人员、通知渠道和提醒时间。</p>
                 </div>
                 <div class="config-mode-switch" role="radiogroup" aria-label="提醒策略">
                     <button class="config-mode-option active" id="configModeFollowBtn" type="button" onclick="setConfigStrategy('follow')">跟随默认</button>
@@ -642,6 +654,18 @@
                 </div>
                 <div class="config-follow-summary" id="configFollowSummary"></div>
                 <div class="notification-settings-content config-reminder-content" id="configCustomSettings">
+                    <div class="settings-row">
+                        <div class="settings-item">
+                            <div class="settings-label">
+                                <span class="label-icon" aria-hidden="true"></span>
+                                <span class="label-text">通知渠道</span>
+                            </div>
+                            <div class="settings-value">
+                                <div class="notice-channel-group" id="licenseChannelPicker"></div>
+                            </div>
+                        </div>
+                    </div>
+
                     <div class="settings-row">
                         <div class="settings-item">
                             <div class="settings-label">
@@ -945,31 +969,7 @@
                         <h4 class="node-reminder-panel-title">默认提醒</h4>
                     </div>
                     <div class="notification-settings-content node-reminder-settings">
-                        <div class="settings-row">
-                            <div class="settings-item">
-                                <div class="settings-label">
-                                    <span class="label-icon" aria-hidden="true"></span>
-                                    <span class="label-text">默认通知人员</span>
-                                </div>
-                                <div class="settings-value">
-                                    <div class="user-multiselect" data-user-picker="nodeDefault">
-                                        <div class="user-multiselect-control" onclick="activateUserPicker(event, 'nodeDefault')">
-                                            <div class="user-multiselect-tags" id="nodeDefaultUserPickerTags"></div>
-                                            <input
-                                                id="nodeDefaultUserPickerInput"
-                                                class="user-multiselect-input"
-                                                type="text"
-                                                placeholder="搜索并添加通知人员"
-                                                onfocus="openUserPicker(event, 'nodeDefault')"
-                                                oninput="handleUserPickerSearch(event, 'nodeDefault')"
-                                            />
-                                            <button class="user-multiselect-toggle" type="button" aria-label="展开默认通知人员下拉" onclick="toggleUserPicker(event, 'nodeDefault')">▾</button>
-                                        </div>
-                                        <div class="user-multiselect-dropdown" id="nodeDefaultUserPickerDropdown"></div>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
+                        <div class="config-follow-summary" id="nodeReminderDefaultSummary" style="display:block;"></div>
 
                         <div class="settings-row node-reminder-threshold-row">
                             <div class="settings-item">
@@ -1017,28 +1017,47 @@
                     <div class="node-reminder-panel-header">
                         <h4 class="node-reminder-panel-title">容量提醒</h4>
                     </div>
+                    <div class="config-mode-switch" role="radiogroup" aria-label="日志容量提醒策略">
+                        <button class="config-mode-option active" id="logMemoryModeFollowBtn" type="button" onclick="setLogMemoryReminderMode('follow')">跟随默认</button>
+                        <button class="config-mode-option" id="logMemoryModeCustomBtn" type="button" onclick="setLogMemoryReminderMode('custom')">单独配置</button>
+                    </div>
+                    <div class="config-follow-summary" id="logMemoryFollowSummary"></div>
                     <div class="notification-settings-content node-reminder-settings log-memory-reminder-settings">
-                        <div class="settings-row">
-                            <div class="settings-item">
-                                <div class="settings-label">
-                                    <span class="label-icon" aria-hidden="true"></span>
-                                    <span class="label-text">通知人员</span>
+                        <div id="logMemoryCustomSettings">
+                            <div class="settings-row">
+                                <div class="settings-item">
+                                    <div class="settings-label">
+                                        <span class="label-icon" aria-hidden="true"></span>
+                                        <span class="label-text">通知渠道</span>
+                                    </div>
+                                    <div class="settings-value">
+                                        <div class="notice-channel-group" id="logMemoryChannelPicker"></div>
+                                    </div>
                                 </div>
-                                <div class="settings-value">
-                                    <div class="user-multiselect" data-user-picker="logMemory">
-                                        <div class="user-multiselect-control" onclick="activateUserPicker(event, 'logMemory')">
-                                            <div class="user-multiselect-tags" id="logMemoryUserPickerTags"></div>
-                                            <input
-                                                id="logMemoryUserPickerInput"
-                                                class="user-multiselect-input"
-                                                type="text"
-                                                placeholder="搜索并添加通知人员"
-                                                onfocus="openUserPicker(event, 'logMemory')"
-                                                oninput="handleUserPickerSearch(event, 'logMemory')"
-                                            />
-                                            <button class="user-multiselect-toggle" type="button" aria-label="展开日志容量通知人员下拉" onclick="toggleUserPicker(event, 'logMemory')">▾</button>
+                            </div>
+
+                            <div class="settings-row">
+                                <div class="settings-item">
+                                    <div class="settings-label">
+                                        <span class="label-icon" aria-hidden="true"></span>
+                                        <span class="label-text">通知人员</span>
+                                    </div>
+                                    <div class="settings-value">
+                                        <div class="user-multiselect" data-user-picker="logMemory">
+                                            <div class="user-multiselect-control" onclick="activateUserPicker(event, 'logMemory')">
+                                                <div class="user-multiselect-tags" id="logMemoryUserPickerTags"></div>
+                                                <input
+                                                    id="logMemoryUserPickerInput"
+                                                    class="user-multiselect-input"
+                                                    type="text"
+                                                    placeholder="搜索并添加通知人员"
+                                                    onfocus="openUserPicker(event, 'logMemory')"
+                                                    oninput="handleUserPickerSearch(event, 'logMemory')"
+                                                />
+                                                <button class="user-multiselect-toggle" type="button" aria-label="展开日志容量通知人员下拉" onclick="toggleUserPicker(event, 'logMemory')">▾</button>
+                                            </div>
+                                            <div class="user-multiselect-dropdown" id="logMemoryUserPickerDropdown"></div>
                                         </div>
-                                        <div class="user-multiselect-dropdown" id="logMemoryUserPickerDropdown"></div>
                                     </div>
                                 </div>
                             </div>
@@ -3448,11 +3467,22 @@
             min-width: 0;
         }
 
+        .log-memory-reminder-settings #logMemoryCustomSettings {
+            margin-bottom: 18px;
+        }
+
+        .log-memory-reminder-settings #logMemoryCustomSettings + .settings-row {
+            padding-top: 6px;
+            border-top: 1px solid #edf2f8;
+        }
+
         .log-memory-threshold-field {
             display: inline-flex;
             align-items: center;
             gap: 8px;
             flex-wrap: wrap;
+            width: 100%;
+            max-width: 760px;
         }
 
         .log-memory-threshold-prefix,
@@ -4693,6 +4723,170 @@
             color: #5f6d82;
         }
 
+        .notice-channel-group {
+            display: grid;
+            grid-template-columns: repeat(3, minmax(0, 1fr));
+            gap: 12px;
+            width: 100%;
+            max-width: 760px;
+        }
+
+        .notice-channel-card {
+            appearance: none;
+            -webkit-appearance: none;
+            position: relative;
+            display: flex;
+            align-items: flex-start;
+            gap: 12px;
+            width: 100%;
+            min-height: 88px;
+            margin: 0;
+            padding: 14px 38px 14px 14px;
+            border: 1px solid #dbe4f0;
+            border-radius: 12px;
+            background: #ffffff;
+            box-shadow: 0 6px 18px rgba(31, 56, 95, 0.08);
+            text-align: left;
+            cursor: pointer;
+            font: inherit;
+            line-height: 1.4;
+            color: inherit;
+            transition: border-color 0.2s ease, box-shadow 0.2s ease, background-color 0.2s ease;
+        }
+
+        .notice-channel-card:hover {
+            border-color: #b9d3ff;
+            box-shadow: 0 8px 20px rgba(47, 125, 244, 0.1);
+        }
+
+        .notice-channel-card.active {
+            border-color: #3a84ff;
+            background: linear-gradient(180deg, #f9fbff 0%, #f2f7ff 100%);
+            box-shadow: 0 0 0 1px rgba(58, 132, 255, 0.12), 0 8px 22px rgba(47, 125, 244, 0.12);
+        }
+
+        .notice-channel-card::after {
+            content: '';
+            position: absolute;
+            inset: 0;
+            border-radius: 12px;
+            pointer-events: none;
+        }
+
+        .notice-channel-card.active::after {
+            box-shadow: inset 0 0 0 1px rgba(58, 132, 255, 0.14);
+        }
+
+        .notice-channel-icon {
+            width: 26px;
+            height: 26px;
+            border-radius: 50%;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            flex: 0 0 26px;
+            margin-top: 2px;
+            font-size: 12px;
+            font-weight: 700;
+            color: #ffffff;
+        }
+
+        .notice-channel-icon.email {
+            background: linear-gradient(135deg, #ffb400 0%, #ff8a00 100%);
+        }
+
+        .notice-channel-icon.group,
+        .notice-channel-icon.monitor {
+            background: linear-gradient(135deg, #4f7cff 0%, #2f7df4 100%);
+        }
+
+        .notice-channel-body {
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            gap: 4px;
+            min-width: 0;
+            flex: 1;
+            padding-right: 2px;
+        }
+
+        .notice-channel-title-row {
+            display: flex;
+            align-items: center;
+            min-width: 0;
+        }
+
+        .notice-channel-title {
+            font-size: 14px;
+            font-weight: 600;
+            color: #24324a;
+            line-height: 1.2;
+            word-break: break-word;
+        }
+
+        .notice-channel-badge-row {
+            display: flex;
+            align-items: center;
+            min-width: 0;
+        }
+
+        .notice-channel-badge {
+            display: inline-flex;
+            align-items: center;
+            height: 20px;
+            padding: 0 8px;
+            border-radius: 999px;
+            border: 1px solid #cfe0ff;
+            background: #edf4ff;
+            color: #2f7df4;
+            font-size: 11px;
+            font-weight: 500;
+            white-space: nowrap;
+        }
+
+        .notice-channel-desc {
+            font-size: 12px;
+            color: #6a7890;
+            line-height: 1.35;
+            word-break: break-word;
+        }
+
+        .notice-channel-check {
+            position: absolute;
+            top: 12px;
+            right: 12px;
+            width: 18px;
+            height: 18px;
+            border-radius: 50%;
+            border: 1px solid #cfd9e8;
+            background: #ffffff;
+            color: transparent;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 11px;
+            font-weight: 700;
+            transition: all 0.2s ease;
+        }
+
+        .notice-channel-card.active .notice-channel-check {
+            border-color: #3a84ff;
+            background: #3a84ff;
+            color: #ffffff;
+        }
+
+        @media (max-width: 960px) {
+            .notice-channel-group {
+                grid-template-columns: repeat(2, minmax(0, 1fr));
+            }
+        }
+
+        @media (max-width: 768px) {
+            .notice-channel-group {
+                grid-template-columns: 1fr;
+            }
+        }
+
         .reminder-time-editor {
             display: inline-flex;
             align-items: center;
@@ -4784,7 +4978,7 @@
         .user-multiselect {
             position: relative;
             width: 100%;
-            max-width: 560px;
+            max-width: 760px;
         }
 
         .user-multiselect-control {
@@ -5905,6 +6099,8 @@
             display: inline-flex;
             align-items: center;
             gap: 8px;
+            width: 100%;
+            max-width: 760px;
         }
 
         .node-reminder-custom-list {
@@ -5976,15 +6172,20 @@
         }
 
         .node-reminder-select {
-              width: 100%;
-              max-width: 560px;
-              min-width: 0;
+                        width: 100%;
+                        max-width: 760px;
+                        min-width: 0;
             height: 40px;
             padding-right: 36px;
         }
 
         .node-reminder-item-settings {
             gap: 12px;
+        }
+
+        .node-reminder-item-settings .settings-value {
+            width: 100%;
+            max-width: 760px;
         }
 
         .node-reminder-item-settings .user-multiselect-control {
@@ -6196,10 +6397,11 @@ window._iconfont_svg_string_4665624='<svg><symbol id="icon-winlogbeat1" viewBox=
                 },
                 reminder: {
                     defaultUsers: ['zhangsan', 'lisi', 'duty'],
+                    defaultChannels: ['email', 'observable-group'],
                 },
                 items: [
                     { name: 'Oracle 节点', used: 96, quota: 200, color: '#7f6cf6', thresholdMode: 'follow', reminderMode: 'follow' },
-                    { name: 'MySQL 节点', used: 104, quota: 100, color: '#4f7cff', thresholdMode: 'custom', reminderMode: 'custom', threshold: 15, reminderUsers: ['admin', 'duty'] },
+                    { name: 'MySQL 节点', used: 104, quota: 100, color: '#4f7cff', thresholdMode: 'custom', reminderMode: 'custom', threshold: 15, reminderUsers: ['admin', 'duty'], reminderChannels: ['observable-monitor'] },
                     { name: 'ES 节点', used: 80, quota: 80, color: '#5b9dff', thresholdMode: 'follow', reminderMode: 'follow' },
                     { name: 'Redis 节点', used: 28, quota: 60, color: '#5cbcff', thresholdMode: 'follow', reminderMode: 'follow' },
                     { name: 'Mongo 节点', used: 30, quota: 40, color: '#9dc5ff', thresholdMode: 'follow', reminderMode: 'follow' },
@@ -6221,10 +6423,11 @@ window._iconfont_svg_string_4665624='<svg><symbol id="icon-winlogbeat1" viewBox=
                 },
                 reminder: {
                     defaultUsers: ['zhangsan', 'wangwu'],
+                    defaultChannels: ['email'],
                 },
                 items: [
                     { name: '数据库节点', used: 101, quota: 160, color: '#7f6cf6', thresholdMode: 'follow', reminderMode: 'follow' },
-                    { name: '主机节点', used: 121, quota: 120, color: '#4f7cff', thresholdMode: 'custom', reminderMode: 'custom', threshold: 15, reminderUsers: ['admin', 'duty'] },
+                    { name: '主机节点', used: 121, quota: 120, color: '#4f7cff', thresholdMode: 'custom', reminderMode: 'custom', threshold: 15, reminderUsers: ['admin', 'duty'], reminderChannels: ['observable-group'] },
                     { name: 'K8s 节点', used: 90, quota: 90, color: '#5bb0ff', thresholdMode: 'follow', reminderMode: 'follow' },
                     { name: '中间件节点', used: 60, quota: 70, color: '#6a94ff', thresholdMode: 'follow', reminderMode: 'follow' },
                     { name: '网络节点', used: 22, quota: 40, color: '#9ac4ff', thresholdMode: 'follow', reminderMode: 'follow' },
@@ -6317,6 +6520,13 @@ window._iconfont_svg_string_4665624='<svg><symbol id="icon-winlogbeat1" viewBox=
             return userPickerState.default.selected.slice();
         }
 
+        function getNodeDefaultChannels(config) {
+            if (config && config.reminder && Array.isArray(config.reminder.defaultChannels) && config.reminder.defaultChannels.length) {
+                return config.reminder.defaultChannels.slice();
+            }
+            return channelPickerState.default.selected.slice();
+        }
+
         function getDedicatedReminderMode(item) {
             if (!item) {
                 return 'follow';
@@ -6336,6 +6546,13 @@ window._iconfont_svg_string_4665624='<svg><symbol id="icon-winlogbeat1" viewBox=
                 return item.reminderUsers.slice();
             }
             return getNodeDefaultUsers(config);
+        }
+
+        function getEffectiveDedicatedChannels(config, item) {
+            if (item && getDedicatedReminderMode(item) === 'custom' && Array.isArray(item.reminderChannels) && item.reminderChannels.length) {
+                return item.reminderChannels.slice();
+            }
+            return getNodeDefaultChannels(config);
         }
 
         function getQuotaStatusMeta(used, quota, threshold) {
@@ -6482,13 +6699,16 @@ window._iconfont_svg_string_4665624='<svg><symbol id="icon-winlogbeat1" viewBox=
             var config = moduleObjectQuotaMap[moduleKey];
             var sourceItem = findDedicatedQuotaItem(moduleKey, itemName);
             nodeReminderCustomItemSeq += 1;
+            var draftIndex = 'custom-' + nodeReminderCustomItemSeq;
 
             return {
-                key: 'custom-' + nodeReminderCustomItemSeq,
+                key: draftIndex,
                 name: itemName || '',
                 threshold: String(sourceItem ? getEffectiveDedicatedThreshold(config, sourceItem) : getNodeDefaultThreshold(config)),
                 users: sourceItem ? getEffectiveDedicatedUsers(config, sourceItem) : getNodeDefaultUsers(config),
-                pickerScope: getNodeReminderPickerScope(moduleKey, 'custom-' + nodeReminderCustomItemSeq),
+                channels: sourceItem ? getEffectiveDedicatedChannels(config, sourceItem) : getNodeDefaultChannels(config),
+                pickerScope: getNodeReminderPickerScope(moduleKey, draftIndex),
+                channelScope: getNodeReminderPickerScope(moduleKey, 'channel-' + draftIndex),
             };
         }
 
@@ -6521,6 +6741,7 @@ window._iconfont_svg_string_4665624='<svg><symbol id="icon-winlogbeat1" viewBox=
             return {
                 moduleKey: moduleKey,
                 defaultUsers: getNodeDefaultUsers(config),
+                defaultChannels: getNodeDefaultChannels(config),
                 defaultThreshold: String(getNodeDefaultThreshold(config)),
                 customItems: getDedicatedQuotaItems(config).filter(function(item) {
                     return getDedicatedReminderMode(item) === 'custom';
@@ -6833,6 +7054,17 @@ window._iconfont_svg_string_4665624='<svg><symbol id="icon-winlogbeat1" viewBox=
                             '<div class="settings-item">' +
                                 '<div class="settings-label">' +
                                     '<span class="label-icon" aria-hidden="true"></span>' +
+                                    '<span class="label-text">通知渠道</span>' +
+                                '</div>' +
+                                '<div class="settings-value">' +
+                                    '<div class="notice-channel-group" id="' + item.channelScope + 'ChannelPicker"></div>' +
+                                '</div>' +
+                            '</div>' +
+                        '</div>' +
+                        '<div class="settings-row">' +
+                            '<div class="settings-item">' +
+                                '<div class="settings-label">' +
+                                    '<span class="label-icon" aria-hidden="true"></span>' +
                                     '<span class="label-text">通知人员</span>' +
                                 '</div>' +
                                 '<div class="settings-value">' +
@@ -6868,6 +7100,7 @@ window._iconfont_svg_string_4665624='<svg><symbol id="icon-winlogbeat1" viewBox=
 
             nodeReminderDraft.customItems.forEach(function(item) {
                 renderUserPicker(item.pickerScope);
+                renderChannelPicker(item.channelScope);
             });
         }
 
@@ -6888,13 +7121,15 @@ window._iconfont_svg_string_4665624='<svg><symbol id="icon-winlogbeat1" viewBox=
                 defaultThresholdInput.max = String(getNodeReminderDefaultThresholdLimit(config));
             }
 
-            if (!userPickerState.nodeDefault) {
-                userPickerState.nodeDefault = { open: false, search: '', selected: [] };
+            var summaryNode = document.getElementById('nodeReminderDefaultSummary');
+            if (summaryNode) {
+                var defaultNames = userPickerState.default.selected.map(function(userId) {
+                    var user = getReminderUserById(userId);
+                    return user ? user.name : '';
+                }).filter(Boolean);
+                var defaultChannels = getChannelDisplayNames(channelPickerState.default.selected);
+                summaryNode.textContent = '通知人员将沿用默认提醒：' + (defaultNames.length ? defaultNames.join('、') : '暂无通知人员') + '；通知渠道：' + (defaultChannels.length ? defaultChannels.join('、') : '暂无通知渠道') + '。';
             }
-            userPickerState.nodeDefault.selected = nodeReminderDraft.defaultUsers.slice();
-            userPickerState.nodeDefault.search = '';
-            userPickerState.nodeDefault.open = false;
-            renderUserPicker('nodeDefault');
             renderNodeReminderCustomList();
         }
 
@@ -6916,6 +7151,7 @@ window._iconfont_svg_string_4665624='<svg><symbol id="icon-winlogbeat1" viewBox=
                 userPickerState[item.pickerScope].selected = item.users.slice();
                 userPickerState[item.pickerScope].search = '';
                 userPickerState[item.pickerScope].open = false;
+                channelPickerState[item.channelScope] = { selected: item.channels.slice() };
             });
 
             renderNodeReminderModal();
@@ -6933,6 +7169,7 @@ window._iconfont_svg_string_4665624='<svg><symbol id="icon-winlogbeat1" viewBox=
             if (nodeReminderDraft) {
                 nodeReminderDraft.customItems.forEach(function(item) {
                     closeUserPicker(item.pickerScope);
+                    delete channelPickerState[item.channelScope];
                 });
             }
             currentNodeReminderModuleKey = null;
@@ -6955,6 +7192,7 @@ window._iconfont_svg_string_4665624='<svg><symbol id="icon-winlogbeat1" viewBox=
             userPickerState[newItem.pickerScope].selected = newItem.users.slice();
             userPickerState[newItem.pickerScope].search = '';
             userPickerState[newItem.pickerScope].open = false;
+            channelPickerState[newItem.channelScope] = { selected: newItem.channels.slice() };
             nodeReminderDraft.customItems.push(newItem);
             renderNodeReminderCustomList();
         }
@@ -6966,6 +7204,7 @@ window._iconfont_svg_string_4665624='<svg><symbol id="icon-winlogbeat1" viewBox=
             var item = nodeReminderDraft.customItems[index];
             closeUserPicker(item.pickerScope);
             delete userPickerState[item.pickerScope];
+            delete channelPickerState[item.channelScope];
             nodeReminderDraft.customItems.splice(index, 1);
             renderNodeReminderCustomList();
         }
@@ -6992,12 +7231,14 @@ window._iconfont_svg_string_4665624='<svg><symbol id="icon-winlogbeat1" viewBox=
             item.name = value;
             item.threshold = String(getEffectiveDedicatedThreshold(moduleObjectQuotaMap[nodeReminderDraft.moduleKey], findDedicatedQuotaItem(nodeReminderDraft.moduleKey, value)));
             item.users = getEffectiveDedicatedUsers(moduleObjectQuotaMap[nodeReminderDraft.moduleKey], findDedicatedQuotaItem(nodeReminderDraft.moduleKey, value));
+            item.channels = getEffectiveDedicatedChannels(moduleObjectQuotaMap[nodeReminderDraft.moduleKey], findDedicatedQuotaItem(nodeReminderDraft.moduleKey, value));
             if (!userPickerState[item.pickerScope]) {
                 userPickerState[item.pickerScope] = { open: false, search: '', selected: [] };
             }
             userPickerState[item.pickerScope].selected = item.users.slice();
             userPickerState[item.pickerScope].search = '';
             userPickerState[item.pickerScope].open = false;
+            channelPickerState[item.channelScope] = { selected: item.channels.slice() };
             renderNodeReminderCustomList();
         }
 
@@ -7037,14 +7278,27 @@ window._iconfont_svg_string_4665624='<svg><symbol id="icon-winlogbeat1" viewBox=
             config.thresholds.shared = Number(defaultValue);
             config.thresholds.dedicatedDefault = Number(defaultValue);
             config.reminder = config.reminder || {};
-            config.reminder.defaultUsers = userPickerState.nodeDefault ? userPickerState.nodeDefault.selected.slice() : [];
+            config.reminder.defaultUsers = userPickerState.default.selected.slice();
+            config.reminder.defaultChannels = channelPickerState.default.selected.slice();
 
             getDedicatedQuotaItems(config).forEach(function(item) {
                 item.reminderMode = 'follow';
                 item.thresholdMode = 'follow';
                 delete item.threshold;
                 delete item.reminderUsers;
+                delete item.reminderChannels;
             });
+
+            var invalidChannelItem = nodeReminderDraft.customItems.find(function(draftItem) {
+                var channels = channelPickerState[draftItem.channelScope]
+                    ? channelPickerState[draftItem.channelScope].selected.slice()
+                    : draftItem.channels.slice();
+                return !channels.length;
+            });
+            if (invalidChannelItem) {
+                alert('请至少为“' + invalidChannelItem.name + '”选择一个通知渠道');
+                return;
+            }
 
             nodeReminderDraft.customItems.forEach(function(draftItem) {
                 var targetItem = findDedicatedQuotaItem(currentNodeReminderModuleKey, draftItem.name);
@@ -7057,6 +7311,9 @@ window._iconfont_svg_string_4665624='<svg><symbol id="icon-winlogbeat1" viewBox=
                 targetItem.reminderUsers = userPickerState[draftItem.pickerScope]
                     ? userPickerState[draftItem.pickerScope].selected.slice()
                     : draftItem.users.slice();
+                targetItem.reminderChannels = channelPickerState[draftItem.channelScope]
+                    ? channelPickerState[draftItem.channelScope].selected.slice()
+                    : draftItem.channels.slice();
             });
 
             renderNodeUsageDrawer(currentNodeReminderModuleKey);
@@ -7413,6 +7670,19 @@ window._iconfont_svg_string_4665624='<svg><symbol id="icon-winlogbeat1" viewBox=
             closeAppLauncher();
         });
 
+        document.addEventListener('click', function(e) {
+            var channelCard = e.target.closest('.notice-channel-card');
+            if (!channelCard) {
+                return;
+            }
+            var scope = channelCard.getAttribute('data-channel-scope');
+            var channelId = channelCard.getAttribute('data-channel-id');
+            if (!scope || !channelId) {
+                return;
+            }
+            toggleChannelPickerOption(e, scope, channelId);
+        });
+
         function showNodeUsageDrawer(title) {
             if (title && renderNodeUsageDrawer(title)) {
                 document.getElementById('nodeUsageDrawer').classList.add('show');
@@ -7601,6 +7871,11 @@ window._iconfont_svg_string_4665624='<svg><symbol id="icon-winlogbeat1" viewBox=
             { id: 'admin', name: '平台管理员', email: 'admin@example.com' },
             { id: 'duty', name: '值班同学', email: 'duty@example.com' },
         ];
+        const reminderChannelOptions = [
+            { id: 'email', title: '邮件服务器', badge: '电子邮件', desc: 'eeeee', icon: '✉', type: 'email' },
+            { id: 'observable-group', title: '可观测群', badge: '群聊小助手', desc: '可观测群', icon: '◔', type: 'group' },
+            { id: 'observable-monitor', title: '可观测群monitor', badge: '群聊小助手', desc: 'monitor', icon: '◔', type: 'monitor' },
+        ];
         const userPickerState = {
             default: {
                 open: false,
@@ -7623,6 +7898,20 @@ window._iconfont_svg_string_4665624='<svg><symbol id="icon-winlogbeat1" viewBox=
                 selected: ['admin', 'duty'],
             },
         };
+        const channelPickerState = {
+            default: {
+                selected: ['email'],
+            },
+            nodeDefault: {
+                selected: ['email'],
+            },
+            license: {
+                selected: ['email'],
+            },
+            logMemory: {
+                selected: ['email'],
+            },
+        };
         const licenseReminderConfigMap = {
             1: {
                 code: 'LIC-2025-0430-A',
@@ -7631,6 +7920,7 @@ window._iconfont_svg_string_4665624='<svg><symbol id="icon-winlogbeat1" viewBox=
                 text: '到期前 30 天',
                 mode: 'follow',
                 users: ['zhangsan', 'lisi', 'wangwu'],
+                channels: ['email'],
             },
             2: {
                 code: 'LIC-2026-0301-B',
@@ -7639,6 +7929,7 @@ window._iconfont_svg_string_4665624='<svg><symbol id="icon-winlogbeat1" viewBox=
                 text: '到期前 45 天',
                 mode: 'custom',
                 users: ['zhangsan', 'lisi'],
+                channels: ['observable-group', 'observable-monitor'],
             },
         };
         const logMemoryReminderConfig = {
@@ -7646,7 +7937,9 @@ window._iconfont_svg_string_4665624='<svg><symbol id="icon-winlogbeat1" viewBox=
             used: 128,
             quota: 500,
             threshold: '100',
+            mode: 'custom',
             users: ['admin', 'duty'],
+            channels: ['email', 'observable-monitor'],
         };
         let logMemoryReminderDraft = null;
 
@@ -7654,6 +7947,91 @@ window._iconfont_svg_string_4665624='<svg><symbol id="icon-winlogbeat1" viewBox=
             return reminderUserOptions.find(function(user) {
                 return user.id === userId;
             });
+        }
+
+        function getReminderChannelById(channelId) {
+            return reminderChannelOptions.find(function(channel) {
+                return channel.id === channelId;
+            });
+        }
+
+        function getChannelDisplayNames(channelIds) {
+            return (channelIds || []).map(function(channelId) {
+                var channel = getReminderChannelById(channelId);
+                return channel ? channel.title : '';
+            }).filter(Boolean);
+        }
+
+        function renderChannelPicker(scope) {
+            var state = channelPickerState[scope];
+            var container = document.getElementById(scope + 'ChannelPicker');
+            if (!state || !container) {
+                return;
+            }
+
+            container.innerHTML = reminderChannelOptions.map(function(channel) {
+                var active = state.selected.indexOf(channel.id) !== -1;
+                return '<button class="notice-channel-card' + (active ? ' active' : '') + '" type="button" aria-pressed="' + (active ? 'true' : 'false') + '" data-channel-scope="' + scope + '" data-channel-id="' + channel.id + '">' +
+                    '<span class="notice-channel-icon ' + channel.type + '">' + channel.icon + '</span>' +
+                    '<span class="notice-channel-body">' +
+                        '<span class="notice-channel-title-row">' +
+                            '<span class="notice-channel-title">' + channel.title + '</span>' +
+                        '</span>' +
+                        '<span class="notice-channel-badge-row">' +
+                            '<span class="notice-channel-badge">' + channel.badge + '</span>' +
+                        '</span>' +
+                        '<span class="notice-channel-desc">' + channel.desc + '</span>' +
+                    '</span>' +
+                    '<span class="notice-channel-check" aria-hidden="true">✓</span>' +
+                '</button>';
+            }).join('');
+        }
+
+        function syncChannelSelection(scope) {
+            if (scope === 'default') {
+                updateFollowSummary();
+                return;
+            }
+            if (scope === 'nodeDefault' && nodeReminderDraft) {
+                nodeReminderDraft.defaultChannels = channelPickerState.nodeDefault.selected.slice();
+                return;
+            }
+            if (scope === 'logMemory' && logMemoryReminderDraft) {
+                logMemoryReminderDraft.channels = channelPickerState.logMemory.selected.slice();
+                return;
+            }
+            if (scope.indexOf('nodeDedicated') === 0 && nodeReminderDraft) {
+                var channelDraftItem = nodeReminderDraft.customItems.find(function(item) {
+                    return item.channelScope === scope;
+                });
+                if (channelDraftItem) {
+                    channelDraftItem.channels = channelPickerState[scope].selected.slice();
+                }
+                return;
+            }
+            if (scope === 'license' && currentLicenseId !== null && licenseReminderConfigMap[currentLicenseId]) {
+                licenseReminderConfigMap[currentLicenseId].channels = channelPickerState.license.selected.slice();
+            }
+        }
+
+        function toggleChannelPickerOption(event, scope, channelId) {
+            if (event) {
+                event.stopPropagation();
+            }
+            var state = channelPickerState[scope];
+            if (!state) {
+                return;
+            }
+
+            var currentIndex = state.selected.indexOf(channelId);
+            if (currentIndex === -1) {
+                state.selected.push(channelId);
+            } else {
+                state.selected.splice(currentIndex, 1);
+            }
+
+            syncChannelSelection(scope);
+            renderChannelPicker(scope);
         }
 
         function getLogMemoryRemaining(config) {
@@ -7723,6 +8101,45 @@ window._iconfont_svg_string_4665624='<svg><symbol id="icon-winlogbeat1" viewBox=
                 thresholdInput.value = logMemoryReminderDraft.threshold;
             }
             renderUserPicker('logMemory');
+            renderChannelPicker('logMemory');
+            updateLogMemoryFollowSummary();
+            setLogMemoryReminderMode(logMemoryReminderDraft.mode || 'follow', true);
+        }
+
+        function updateLogMemoryFollowSummary() {
+            var summaryNode = document.getElementById('logMemoryFollowSummary');
+            if (!summaryNode) {
+                return;
+            }
+            var names = userPickerState.default.selected.map(function(userId) {
+                var user = getReminderUserById(userId);
+                return user ? user.name : '';
+            }).filter(Boolean);
+            var channels = getChannelDisplayNames(channelPickerState.default.selected);
+            summaryNode.textContent = '通知人员将沿用默认提醒：' + (names.length ? names.join('、') : '暂无通知人员') + '；通知渠道：' + (channels.length ? channels.join('、') : '暂无通知渠道') + '。';
+        }
+
+        function setLogMemoryReminderMode(mode, skipPersist) {
+            var followBtn = document.getElementById('logMemoryModeFollowBtn');
+            var customBtn = document.getElementById('logMemoryModeCustomBtn');
+            var followSummary = document.getElementById('logMemoryFollowSummary');
+            var customSettings = document.getElementById('logMemoryCustomSettings');
+
+            if (followBtn) {
+                followBtn.classList.toggle('active', mode === 'follow');
+            }
+            if (customBtn) {
+                customBtn.classList.toggle('active', mode === 'custom');
+            }
+            if (followSummary) {
+                followSummary.style.display = mode === 'follow' ? 'block' : 'none';
+            }
+            if (customSettings) {
+                customSettings.style.display = mode === 'custom' ? 'block' : 'none';
+            }
+            if (!skipPersist && logMemoryReminderDraft) {
+                logMemoryReminderDraft.mode = mode;
+            }
         }
 
         function openLogMemoryReminderModal(event) {
@@ -7732,12 +8149,15 @@ window._iconfont_svg_string_4665624='<svg><symbol id="icon-winlogbeat1" viewBox=
 
             logMemoryReminderDraft = {
                 users: logMemoryReminderConfig.users.slice(),
+                channels: logMemoryReminderConfig.channels.slice(),
                 threshold: String(logMemoryReminderConfig.threshold || '100'),
+                mode: logMemoryReminderConfig.mode || 'follow',
             };
 
             userPickerState.logMemory.selected = logMemoryReminderDraft.users.slice();
             userPickerState.logMemory.search = '';
             userPickerState.logMemory.open = false;
+            channelPickerState.logMemory.selected = logMemoryReminderDraft.channels.slice();
 
             renderLogMemoryReminderModal();
             document.getElementById('logMemoryReminderModal').classList.add('show');
@@ -7760,6 +8180,7 @@ window._iconfont_svg_string_4665624='<svg><symbol id="icon-winlogbeat1" viewBox=
             var thresholdInput = document.getElementById('logMemoryThresholdInput');
             var thresholdValue = thresholdInput ? String(Number(thresholdInput.value || 0)) : '0';
             var quota = Number(logMemoryReminderConfig.quota || 0) || 0;
+            var mode = logMemoryReminderDraft.mode || 'follow';
 
             if (!thresholdInput || !/^([1-9]\d{0,4})$/.test(thresholdValue) || Number(thresholdValue) >= quota) {
                 alert('请输入 1 到 ' + Math.max(quota - 1, 1) + ' 之间的剩余容量阈值');
@@ -7771,15 +8192,29 @@ window._iconfont_svg_string_4665624='<svg><symbol id="icon-winlogbeat1" viewBox=
 
             logMemoryReminderDraft.threshold = thresholdValue;
             logMemoryReminderConfig.threshold = thresholdValue;
-            logMemoryReminderConfig.users = userPickerState.logMemory.selected.slice();
+            logMemoryReminderConfig.mode = mode;
 
-            var selectedNames = logMemoryReminderConfig.users.map(function(userId) {
-                var user = getReminderUserById(userId);
-                return user ? user.name : '';
-            }).filter(Boolean);
+            if (mode === 'custom') {
+                logMemoryReminderConfig.users = userPickerState.logMemory.selected.slice();
+                logMemoryReminderConfig.channels = channelPickerState.logMemory.selected.slice();
+
+                if (!logMemoryReminderConfig.channels.length) {
+                    alert('请至少为日志容量提醒选择一个通知渠道');
+                    return;
+                }
+            }
 
             renderLogMemorySummary(document.querySelector('[data-log-memory-summary]'));
-            alert('已为日志中心设置容量提醒，通知人员：' + (selectedNames.join('、') || '暂无') + '，剩余低于 ' + thresholdValue + ' GB 时提醒');
+            if (mode === 'follow') {
+                alert('已为日志中心设置为跟随默认通知配置，剩余低于 ' + thresholdValue + ' GB 时提醒');
+            } else {
+                var selectedNames = logMemoryReminderConfig.users.map(function(userId) {
+                    var user = getReminderUserById(userId);
+                    return user ? user.name : '';
+                }).filter(Boolean);
+                var selectedChannels = getChannelDisplayNames(logMemoryReminderConfig.channels);
+                alert('已为日志中心设置容量提醒，通知人员：' + (selectedNames.join('、') || '暂无') + '，通知渠道：' + (selectedChannels.join('、') || '暂无') + '，剩余低于 ' + thresholdValue + ' GB 时提醒');
+            }
             closeLogMemoryReminderModal();
         }
 
@@ -7966,7 +8401,8 @@ window._iconfont_svg_string_4665624='<svg><symbol id="icon-winlogbeat1" viewBox=
             }).filter(Boolean);
             const defaultDays = document.getElementById('inlineReminderDays');
             const days = defaultDays ? defaultDays.value : '30';
-            summaryNode.textContent = '将沿用默认通知人员：' + (names.length ? names.join('、') : '暂无通知人员') + '；提醒时间：到期前 ' + days + ' 天。';
+            const channels = getChannelDisplayNames(channelPickerState.default.selected);
+            summaryNode.textContent = '将沿用默认通知人员：' + (names.length ? names.join('、') : '暂无通知人员') + '；通知渠道：' + (channels.length ? channels.join('、') : '暂无通知渠道') + '；提醒时间：到期前 ' + days + ' 天。';
         }
 
         function formatReminderDaysText(days) {
@@ -8210,7 +8646,9 @@ window._iconfont_svg_string_4665624='<svg><symbol id="icon-winlogbeat1" viewBox=
             userPickerState.license.selected = (config.users || []).slice();
             userPickerState.license.search = '';
             userPickerState.license.open = false;
+            channelPickerState.license.selected = (config.channels || channelPickerState.default.selected || []).slice();
             renderUserPicker('license');
+            renderChannelPicker('license');
             updateFollowSummary();
             setConfigStrategy(config.mode || 'follow');
 
@@ -8238,11 +8676,16 @@ window._iconfont_svg_string_4665624='<svg><symbol id="icon-winlogbeat1" viewBox=
             if (mode === 'follow') {
                 alert(`已为许可 ${config.code} 设置为跟随默认提醒`);
             } else {
+                const selectedChannels = getChannelDisplayNames(channelPickerState.license.selected);
+                if (!selectedChannels.length) {
+                    alert('请至少选择一个通知渠道');
+                    return;
+                }
                 const selectedNames = userPickerState.license.selected.map(function(userId) {
                     const user = getReminderUserById(userId);
                     return user ? user.name : '';
                 }).filter(Boolean);
-                alert(`已为许可 ${config.code} 单独配置提醒，通知人员：${selectedNames.join('、') || '暂无'}，提醒时间：到期前 ${days} 天`);
+                alert(`已为许可 ${config.code} 单独配置提醒，通知人员：${selectedNames.join('、') || '暂无'}，通知渠道：${selectedChannels.join('、')}，提醒时间：到期前 ${days} 天`);
             }
             if (currentLicenseId !== null) {
                 updateLicenseReminderDisplay(String(currentLicenseId));
@@ -8309,6 +8752,10 @@ window._iconfont_svg_string_4665624='<svg><symbol id="icon-winlogbeat1" viewBox=
         renderUserPicker('nodeDefault');
         renderUserPicker('license');
         renderUserPicker('logMemory');
+        renderChannelPicker('default');
+        renderChannelPicker('nodeDefault');
+        renderChannelPicker('license');
+        renderChannelPicker('logMemory');
         syncDefaultReminderDisplay();
         syncConfigReminderDisplay('30');
         updateFollowSummary();

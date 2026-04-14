@@ -14,6 +14,7 @@ import { SelectTool } from '@/app/opspilot/types/tool';
 import ToolSelector from '@/app/opspilot/components/skill/toolSelector';
 import { useSkillApi } from '@/app/opspilot/api/skill';
 import { useSkill } from '@/app/opspilot/context/skillContext';
+import { getModelOptionText, renderModelOptionLabel } from '@/app/opspilot/utils/modelOption';
 
 const { Option } = Select;
 const { TextArea } = Input;
@@ -37,7 +38,7 @@ const SkillSettingsPage: React.FC = () => {
   const [ragStrictMode, setRagStrictMode] = useState(false);
   const [ragSources, setRagSources] = useState<KnowledgeBaseRagSource[]>([]);
   const [selectedKnowledgeBases, setSelectedKnowledgeBases] = useState<number[]>([]);
-  const [llmModels, setLlmModels] = useState<{ id: number, name: string, enabled: boolean, llm_model_type: string }[]>([]);
+  const [llmModels, setLlmModels] = useState<{ id: number, name: string, enabled: boolean, llm_model_type: string, vendor_name?: string }[]>([]);
   const [knowledgeBases, setKnowledgeBases] = useState<KnowledgeBase[]>([]);
   const [pageLoading, setPageLoading] = useState({
     llmModelsLoading: true,
@@ -109,7 +110,7 @@ const SkillSettingsPage: React.FC = () => {
           fetchLlmModels(),
           fetchKnowledgeBases()
         ]);
-        setLlmModels(llmModelsData as { id: number; name: string; enabled: boolean; llm_model_type: string; }[]);
+        setLlmModels(llmModelsData as { id: number; name: string; enabled: boolean; llm_model_type: string; vendor_name?: string; }[]);
         setKnowledgeBases(knowledgeBasesData);
         fetchFormData(knowledgeBasesData);
       } catch (error) {
@@ -347,7 +348,9 @@ const SkillSettingsPage: React.FC = () => {
                         }}
                       >
                         {llmModels.map(model => (
-                          <Option key={model.id} value={model.id} disabled={!model.enabled}>{model.name}</Option>
+                          <Option key={model.id} value={model.id} disabled={!model.enabled} title={getModelOptionText(model)}>
+                            {renderModelOptionLabel(model)}
+                          </Option>
                         ))}
                       </Select>
                     </Form.Item>
@@ -476,7 +479,9 @@ const SkillSettingsPage: React.FC = () => {
                               placeholder={t('common.select')}
                             >
                               {llmModels.map(model => (
-                                <Option key={model.id} value={model.id} disabled={!model.enabled}>{model.name}</Option>
+                                <Option key={model.id} value={model.id} disabled={!model.enabled} title={getModelOptionText(model)}>
+                                  {renderModelOptionLabel(model)}
+                                </Option>
                               ))}
                             </Select>
                           </Form.Item>

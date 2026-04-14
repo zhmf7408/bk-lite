@@ -17,7 +17,7 @@ import nats_client
 from apps.core.constants import VERIFY_TOKEN_USER_NOT_FOUND_CODE, VERIFY_TOKEN_USER_NOT_FOUND_MESSAGE
 from apps.core.logger import system_mgmt_logger as logger
 from apps.core.utils.loader import LanguageLoader
-from apps.core.utils.permission_cache import clear_users_permission_cache
+from apps.core.utils.permission_cache import clear_users_permission_cache, get_cached_token_info, set_cached_token_info
 from apps.system_mgmt.guest_menus import CMDB_MENUS, MONITOR_MENUS, OPSPILOT_GUEST_MENUS
 from apps.system_mgmt.models import (
     App,
@@ -51,24 +51,50 @@ from apps.system_mgmt.utils.password_validator import PasswordValidator
 
 def get_user_all_roles(user):
     """
-    获取用户的所有角色（个人角色 + 组角色）
+    获取用户的所有角色（个人角色 + 组角色，含完整继承链）
+
+    继承规则：沿 parent_id 链向上追溯，只要父级 allow_inherit_roles=True，
+    就收集该父级的角色并继续向上，直到某层 allow_inherit_roles=False 或到达根节点为止。
+
     :param user: User实例
     :return: 包含所有角色ID的列表
     """
     # 用户直接授权的角色
     personal_role_ids = set(user.role_list)
 
-    # 用户所属组织的角色（只包含直接所属组织，不递归子组）
     group_role_ids = set()
     if user.group_list:
-        # 使用prefetch_related避免N+1查询
-        groups = Group.objects.filter(id__in=user.group_list).prefetch_related("roles")
-        for group in groups:
-            group_role_ids.update(role.id for role in group.roles.all())
+        # 单次查询所有组织，内存中完成递归，避免 N+1
+        all_groups = {g.id: g for g in Group.objects.prefetch_related("roles").all()}
+
+        visited = set()
+
+        def collect_roles(group_id):
+            """收集 group_id 自身角色，并沿 parent_id 链递归收集继承角色"""
+            if group_id in visited:
+                return
+            visited.add(group_id)
+
+            group = all_groups.get(group_id)
+            if not group:
+                return
+
+            # 收集自身角色
+            for role in group.roles.all():
+                group_role_ids.add(role.id)
+
+            # 向上追溯：父级 allow_inherit_roles=True 才继续继承
+            parent_id = group.parent_id
+            if parent_id:
+                parent = all_groups.get(parent_id)
+                if parent and parent.allow_inherit_roles:
+                    collect_roles(parent_id)
+
+        for gid in user.group_list:
+            collect_roles(gid)
 
     # 合并去重
-    all_role_ids = list(personal_role_ids | group_role_ids)
-    return all_role_ids
+    return list(personal_role_ids | group_role_ids)
 
 
 def _verify_token(token):
@@ -138,6 +164,11 @@ def verify_token(token):
             return_data["error_code"] = VERIFY_TOKEN_USER_NOT_FOUND_CODE
         return return_data
 
+    # 命中缓存直接返回，跳过全量数据库查询
+    cached = get_cached_token_info(user.username, user.domain)
+    if cached is not None:
+        return cached
+
     # 获取用户所有角色（个人角色 + 组角色）
     all_role_ids = get_user_all_roles(user)
 
@@ -170,7 +201,7 @@ def verify_token(token):
 
         cache.set(f"menus-user:{user.id}", menus, 60)
 
-    return {
+    result = {
         "result": True,
         "data": {
             "username": user.username,
@@ -181,12 +212,14 @@ def verify_token(token):
             "group_list": groups,
             "group_tree": groups_data,
             "roles": role_names,
-            "role_ids": all_role_ids,  # 返回所有角色ID（个人+组）
+            "role_ids": all_role_ids,
             "locale": user.locale,
             "permission": menus,
             "timezone": user.timezone,
         },
     }
+    set_cached_token_info(user.username, user.domain, result)
+    return result
 
 
 @nats_client.register

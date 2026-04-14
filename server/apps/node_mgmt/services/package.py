@@ -17,6 +17,10 @@ from apps.node_mgmt.constants.package import PackageConstants
 
 class PackageService:
     @staticmethod
+    def build_file_path(package_obj) -> str:
+        return f"{package_obj.os}/{package_obj.object}/{package_obj.version}/{package_obj.name}"
+
+    @staticmethod
     def parse_package_info(filename: str):
         """从包文件名中解析版本号"""
         # 移除常见文件扩展名（如果存在）
@@ -47,9 +51,7 @@ class PackageService:
         }
 
     @staticmethod
-    def validate_package(
-        filename: str, expected_type: str, expected_os: str, expected_object: str
-    ):
+    def validate_package(filename: str, expected_type: str, expected_os: str, expected_object: str):
         """校验上传的包是否合格"""
         # 解析文件名
         parsed_info = PackageService.parse_package_info(filename)
@@ -59,9 +61,7 @@ class PackageService:
         # 获取期望的包名称
         expected_package_name = expected_object
         if expected_type == PackageConstants.TYPE_COLLECTOR:
-            collector = Collector.objects.filter(
-                name=expected_object, node_operating_system=expected_os
-            ).first()
+            collector = Collector.objects.filter(name=expected_object, node_operating_system=expected_os).first()
             if collector and collector.package_name:
                 expected_package_name = collector.package_name
         elif expected_type == PackageConstants.TYPE_CONTROLLER:
@@ -80,17 +80,13 @@ class PackageService:
             return False, error_msg, None
 
         # 检查版本是否已存在
-        existing_package = PackageVersion.objects.filter(
-            os=expected_os, object=expected_object, version=parsed_info["version"]
-        ).first()
+        existing_package = PackageVersion.objects.filter(os=expected_os, object=expected_object, version=parsed_info["version"]).first()
 
         if existing_package:
             if parsed_info["version"] == PackageConstants.VERSION_LATEST:
                 parsed_info["existing_package"] = existing_package
                 return True, "", parsed_info
-            error_msg = PackageConstants.ERROR_MSG_VERSION_EXISTS.format(
-                version=parsed_info["version"]
-            )
+            error_msg = PackageConstants.ERROR_MSG_VERSION_EXISTS.format(version=parsed_info["version"])
             return False, error_msg, None
 
         return True, "", parsed_info
@@ -102,12 +98,12 @@ class PackageService:
 
     @staticmethod
     def download_file(package_obj):
-        s3_file_path = f"{package_obj.os}/{package_obj.object}/{package_obj.version}/{package_obj.name}"
+        s3_file_path = PackageService.build_file_path(package_obj)
         return async_to_sync(download_file_by_s3)(s3_file_path)
 
     @staticmethod
     def delete_file(package_obj):
-        s3_file_path = f"{package_obj.os}/{package_obj.object}/{package_obj.version}/{package_obj.name}"
+        s3_file_path = PackageService.build_file_path(package_obj)
         async_to_sync(delete_s3_file)(s3_file_path)
 
     @staticmethod
@@ -128,10 +124,8 @@ class PackageService:
     async def stream_download_file(
         package_obj,
     ) -> AsyncGenerator[tuple[bytes, str, int], None]:
-        s3_file_path = f"{package_obj.os}/{package_obj.object}/{package_obj.version}/{package_obj.name}"
-        async for chunk, filename, total_size in stream_download_file_by_s3(
-            s3_file_path
-        ):
+        s3_file_path = PackageService.build_file_path(package_obj)
+        async for chunk, filename, total_size in stream_download_file_by_s3(s3_file_path):
             yield chunk, filename, total_size
 
     @staticmethod
@@ -143,7 +137,7 @@ class PackageService:
         import tempfile
         from apps.rpc.jetstream import JetStreamService
 
-        s3_file_path = f"{package_obj.os}/{package_obj.object}/{package_obj.version}/{package_obj.name}"
+        s3_file_path = PackageService.build_file_path(package_obj)
 
         async def _download_to_tempfile():
             jetstream = JetStreamService()

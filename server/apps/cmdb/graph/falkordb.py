@@ -1120,6 +1120,34 @@ class FalkorDBClient:
         else:
             self._execute_query(f"MATCH ()-[n]->() WHERE ID(n) = {validated_id} DELETE n")
 
+    def set_edge_properties(self, edge_id: int, properties: dict):
+        validated_id = CQLValidator.validate_id(edge_id)
+        if not properties:
+            raise BaseAppException("properties is empty")
+
+        if self.ENABLE_PARAMETERIZATION:
+            set_parts = []
+            params = {"id": validated_id}
+
+            for i, (key, value) in enumerate(properties.items()):
+                validated_field = CQLValidator.validate_field(key)
+                param_name = f"val{i}"
+                set_parts.append(f"e.{validated_field} = ${param_name}")
+                params[param_name] = value
+
+            query = f"MATCH ()-[e]->() WHERE ID(e) = $id SET {', '.join(set_parts)} RETURN e"
+            edge = self._execute_query(query, params=params)
+        else:
+            properties_str = self.format_properties_set(properties).replace("n.", "e.")
+            edge = self._execute_query(
+                f"MATCH ()-[e]->() WHERE ID(e) = {validated_id} SET {properties_str} RETURN e"
+            )
+
+        result = self.edge_to_dict(edge)
+        if not result:
+            raise BaseAppException("edge not found")
+        return result
+
     def entity_objs(self, label: str, params: list, permission_params: str = ""):
         validated_label = CQLValidator.validate_label(label) if label else ""
         label_str = f":{validated_label}" if validated_label else ""

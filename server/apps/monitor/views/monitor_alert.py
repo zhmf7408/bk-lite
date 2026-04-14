@@ -26,6 +26,7 @@ from apps.monitor.models import (
 from apps.monitor.filters.monitor_alert import MonitorAlertFilter
 from apps.monitor.serializers.monitor_alert import MonitorAlertSerializer
 from apps.monitor.serializers.monitor_policy import MonitorPolicySerializer
+from apps.monitor.services.alert_lifecycle_notify import AlertLifecycleNotifier
 from apps.monitor.services.policy_baseline import PolicyBaselineService
 from apps.monitor.utils.pagination import parse_page_params
 from config.drf.pagination import CustomPageNumberPagination
@@ -65,11 +66,7 @@ class MonitorAlertViewSet(
             return []
 
         # 一次性获取所有策略及其关联组织，减少SQL查询
-        all_policies = (
-            MonitorPolicy.objects.select_related("monitor_object")
-            .prefetch_related("policyorganization_set")
-            .all()
-        )
+        all_policies = MonitorPolicy.objects.select_related("monitor_object").prefetch_related("policyorganization_set").all()
 
         accessible_policy_ids = []
 
@@ -79,14 +76,10 @@ class MonitorAlertViewSet(
             policy_id = policy_obj.id
 
             # 获取策略关联的组织
-            teams = {
-                org.organization for org in policy_obj.policyorganization_set.all()
-            }
+            teams = {org.organization for org in policy_obj.policyorganization_set.all()}
 
             # 使用通用权限检查函数
-            if check_instance_permission(
-                monitor_object_id, policy_id, teams, policy_permissions, cur_team
-            ):
+            if check_instance_permission(monitor_object_id, policy_id, teams, policy_permissions, cur_team):
                 accessible_policy_ids.append(policy_id)
 
         return accessible_policy_ids
@@ -126,14 +119,10 @@ class MonitorAlertViewSet(
             # 执行序列化
             serializer = self.get_serializer(queryset, many=True)
             # 返回成功响应
-            return WebUtils.response_success(
-                dict(count=queryset.count(), results=serializer.data)
-            )
+            return WebUtils.response_success(dict(count=queryset.count(), results=serializer.data))
 
         # 获取分页参数
-        page, page_size = parse_page_params(
-            request.GET, default_page=1, default_page_size=10
-        )
+        page, page_size = parse_page_params(request.GET, default_page=1, default_page_size=10)
 
         # 计算分页的起始位置
         start = (page - 1) * page_size
@@ -170,17 +159,11 @@ class MonitorAlertViewSet(
             # 补充instance_id_values
 
             try:
-                alert["instance_id_values"] = [
-                    i for i in ast.literal_eval(alert["monitor_instance_id"])
-                ]
+                alert["instance_id_values"] = [i for i in ast.literal_eval(alert["monitor_instance_id"])]
             except (ValueError, SyntaxError):
                 alert["instance_id_values"] = [alert["monitor_instance_id"]]
             # 在 results 字典中添加完整的 policy 和 monitor_instance 信息
-            alert["policy"] = (
-                MonitorPolicySerializer(policy_dict.get(alert["policy_id"])).data
-                if alert["policy_id"]
-                else None
-            )
+            alert["policy"] = MonitorPolicySerializer(policy_dict.get(alert["policy_id"])).data if alert["policy_id"] else None
 
         # 返回成功响应
         return WebUtils.response_success(dict(count=queryset.count(), results=results))
@@ -188,6 +171,7 @@ class MonitorAlertViewSet(
     def update(self, request, *args, **kwargs):
         partial = kwargs.pop("partial", False)
         instance = self.get_object()
+        old_status = instance.status
         serializer = self.get_serializer(instance, data=request.data, partial=partial)
         serializer.is_valid(raise_exception=True)
 
@@ -218,6 +202,17 @@ class MonitorAlertViewSet(
                     ).delete()
 
         self.perform_update(serializer)
+        instance.refresh_from_db()
+
+        if old_status == "new" and instance.status == "closed":
+            policy = MonitorPolicy.objects.filter(id=instance.policy_id).first()
+            if policy:
+                AlertLifecycleNotifier(policy).notify_alerts(
+                    [instance],
+                    action="closed",
+                    operator=request.user.username,
+                    reason="manual",
+                )
 
         if getattr(instance, "_prefetched_objects_cache", None):
             instance._prefetched_objects_cache = {}

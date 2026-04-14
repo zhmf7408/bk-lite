@@ -367,7 +367,7 @@ export function getIconUrl(tex: ModelIconItem) {
 
     // 如果显示图标存在，直接返回相应的图标路径
     if (showIcon) {
-      return `/app/assets/assetModelIcon/${showIcon.url}.svg`;
+      return `/assets/icons/${showIcon.url}.svg`;
     }
 
     // 查找内置模型和对应图标
@@ -380,11 +380,11 @@ export function getIconUrl(tex: ModelIconItem) {
     const iconUrl = builtIcon?.url || 'cc-default_默认';
 
     // 返回图标路径
-    return `/app/assets/assetModelIcon/${iconUrl}.svg`;
+    return `/assets/icons/${iconUrl}.svg`;
   } catch (e) {
     // 记录错误日志并返回默认图标
     console.error('Error in getIconUrl:', e);
-    return 'app/assets/assetModelIcon/cc-default_默认.svg';
+    return '/assets/icons/cc-default_默认.svg';
   }
 }
 

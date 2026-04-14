@@ -78,8 +78,9 @@ export const getNewAuthSourceFormFields = ({
         selectedKeys={selectedRoles}
         disabled={isBuiltIn}
         onChange={newKeys => {
-          setSelectedRoles(newKeys);
-          dynamicForm.setFieldsValue({ default_roles: newKeys });
+          const nextRoleIds = newKeys.map((key) => Number(key));
+          setSelectedRoles(nextRoleIds);
+          dynamicForm.setFieldsValue({ default_roles: nextRoleIds });
         }}
       />
     ),
@@ -195,8 +196,9 @@ export const getBluekingFormFields = ({
         selectedKeys={selectedRoles}
         disabled={isBuiltIn}
         onChange={newKeys => {
-          setSelectedRoles(newKeys);
-          dynamicForm.setFieldsValue({ default_roles: newKeys });
+          const nextRoleIds = newKeys.map((key) => Number(key));
+          setSelectedRoles(nextRoleIds);
+          dynamicForm.setFieldsValue({ default_roles: nextRoleIds });
         }}
       />
     ),

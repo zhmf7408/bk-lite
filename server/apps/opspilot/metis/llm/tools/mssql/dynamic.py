@@ -9,6 +9,18 @@ from langchain_core.tools import tool
 from apps.opspilot.metis.llm.tools.mssql.utils import execute_readonly_query, format_size, safe_json_dumps
 
 
+def _is_broad_select_without_constraints(sql: str) -> bool:
+    sql_lower = " ".join(sql.lower().split())
+
+    if not sql_lower.startswith("select"):
+        return False
+    if " top " in f" {sql_lower} ":
+        return False
+
+    constraint_tokens = [" where ", " group by ", " having ", " join ", " order by ", " distinct "]
+    return not any(token in f" {sql_lower} " for token in constraint_tokens)
+
+
 def validate_sql_safety(sql: str) -> tuple[bool, str]:
     """
     验证SQL语句的安全性
@@ -257,6 +269,11 @@ def execute_safe_select(sql: str, limit: int = 100, database: Optional[str] = No
     """
     执行安全的SELECT查询,支持聚合统计、多表关联等复杂查询
 
+    **使用原则:**
+    - 优先使用结构化工具,如get_table_schema_details、search_tables_by_keyword、get_sample_data等
+    - 只有在现有结构化工具无法直接表达目标查询时,才使用本工具
+    - 如果必须执行更宽松的只读SQL兜底查询,使用execute_fallback_readonly_sql
+
     **⚠️ 安全要求 - 构建SQL时必须遵守:**
     1. **禁止SELECT ***: 必须明确列出需要的列名
     2. **避免敏感字段**: 不要查询password, secret, token, key, hash等敏感字段
@@ -354,6 +371,81 @@ def execute_safe_select(sql: str, limit: int = 100, database: Optional[str] = No
 
     except Exception as e:
         return safe_json_dumps({"error": f"查询执行失败: {str(e)}", "sql": sql})
+
+
+@tool()
+def execute_fallback_readonly_sql(sql: str, limit: int = 100, database: Optional[str] = None, config: RunnableConfig = None):
+    """
+    执行更宽松的只读SQL兜底查询,用于结构化工具无法覆盖的场景。
+
+    **使用原则:**
+    - 这是兜底工具,仅在结构化工具无法覆盖时使用
+    - 能用get_table_schema_details、search_tables_by_keyword、get_sample_data、execute_safe_select解决时,不要优先使用本工具
+    - 使用时仍应尽量限制返回行数和扫描范围
+
+    **适用场景:**
+    - 现有MSSQL工具无法直接回答问题时的兜底查询
+    - 需要临时执行复杂只读查询、CTE、多表关联、窗口函数
+    - 需要保留原始SQL表达能力,但仍必须遵守只读安全边界
+
+    **安全边界:**
+    - 仍只允许单条只读SQL(SELECT/WITH)
+    - 仍禁止任何写操作、DDL、存储过程、注释注入
+    - 允许SELECT *
+    - 如果是普通SELECT且未显式指定TOP,自动补TOP
+    - 如果是WITH查询,必须显式包含TOP,否则拒绝执行
+
+    Args:
+        sql (str): 只读SQL语句
+        limit (int): 最大返回行数,默认100,最大1000
+        database (str, optional): 数据库名,不填则使用默认数据库
+        config (RunnableConfig): 工具配置
+
+    Returns:
+        JSON格式,包含执行结果
+    """
+    is_safe, error_msg = validate_sql_safety(sql)
+    if not is_safe:
+        return safe_json_dumps({"error": f"SQL安全检查失败: {error_msg}", "sql": sql})
+
+    limit = min(max(1, limit), 1000)
+    sql = sql.rstrip().rstrip(";")
+    sql_lower = sql.lower()
+
+    if sql_lower.startswith("with") and " top " not in f" {sql_lower} ":
+        return safe_json_dumps(
+            {
+                "guardrail": "with_query_requires_top",
+                "error": "SQL安全检查失败: WITH查询必须显式包含TOP以限制结果集",
+                "sql": sql,
+                "suggestion": "请在最终SELECT中显式添加TOP，例如: WITH cte AS (...) SELECT TOP 100 * FROM cte",
+            }
+        )
+
+    if _is_broad_select_without_constraints(sql):
+        return safe_json_dumps(
+            {
+                "guardrail": "broad_scan_without_top",
+                "error": "SQL安全检查失败: 兜底只读SQL对于无过滤的大范围SELECT必须显式包含TOP",
+                "sql": sql,
+                "suggestion": "请显式添加TOP，或增加WHERE/GROUP BY/JOIN等范围约束。例如: SELECT TOP 100 * FROM dbo.users WHERE id = 1",
+            }
+        )
+
+    if sql_lower.startswith("select") and " top " not in f" {sql_lower} ":
+        sql = re.sub(r"\bselect\b", f"SELECT TOP {limit}", sql, count=1, flags=re.IGNORECASE)
+    elif sql_lower.startswith("select"):
+        top_match = re.search(r"top\s+\((\d+)\)|top\s+(\d+)", sql_lower)
+        if top_match:
+            existing_top = int(top_match.group(1) or top_match.group(2))
+            if existing_top > limit:
+                sql = re.sub(r"top\s+\(\d+\)|top\s+\d+", f"TOP {limit}", sql, count=1, flags=re.IGNORECASE)
+
+    try:
+        results = execute_readonly_query(sql, config=config, database=database)
+        return safe_json_dumps({"success": True, "row_count": len(results), "limit": limit, "sql": sql, "data": results, "mode": "fallback_readonly"})
+    except Exception as e:
+        return safe_json_dumps({"error": f"查询执行失败: {str(e)}", "sql": sql, "mode": "fallback_readonly"})
 
 
 @tool()

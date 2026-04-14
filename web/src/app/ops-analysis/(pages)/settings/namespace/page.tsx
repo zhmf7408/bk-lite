@@ -4,22 +4,28 @@ import React, { useState, useEffect } from 'react';
 import OperateModal from './operateModal';
 import CustomTable from '@/components/custom-table';
 import PermissionWrapper from '@/components/permission';
-import { Button, Input, Card, message, Modal, Tag } from 'antd';
+import { Button, Input, Card, message, Modal, Tag, Space } from 'antd';
+import { UploadOutlined } from '@ant-design/icons';
 import { useTranslation } from '@/utils/i18n';
 import { NamespaceItem } from '@/app/ops-analysis/types/namespace';
 import { useNamespaceApi } from '@/app/ops-analysis/api/namespace';
 import { useOpsAnalysis } from '@/app/ops-analysis/context/common';
+import { useImportExportApi } from '@/app/ops-analysis/api/importExport';
+import { ImportModal } from '@/app/ops-analysis/components/importExport';
 
 const Namespace: React.FC = () => {
   const { t } = useTranslation();
   const { getNamespaceList, deleteNamespace } = useNamespaceApi();
   const { refreshNamespaces } = useOpsAnalysis();
+  const { exportObjects, downloadYaml } = useImportExportApi();
   const [searchKey, setSearchKey] = useState('');
   const [searchValue, setSearchValue] = useState('');
   const [filteredList, setFilteredList] = useState<NamespaceItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [modalVisible, setModalVisible] = useState(false);
   const [currentRow, setCurrentRow] = useState<any>(null);
+  const [importModalVisible, setImportModalVisible] = useState(false);
+  const [exportLoading, setExportLoading] = useState<number | null>(null);
   const [pagination, setPagination] = useState({
     current: 1,
     total: 0,
@@ -112,6 +118,24 @@ const Namespace: React.FC = () => {
     });
   };
 
+  const handleExport = async (row: NamespaceItem) => {
+    try {
+      setExportLoading(row.id);
+      const response = await exportObjects({
+        object_type: 'namespace',
+        object_ids: [row.id],
+      });
+      if (response.yaml_content) {
+        downloadYaml(response.yaml_content, `namespace_${row.name}_export`);
+        message.success(t('common.exportSuccess'));
+      }
+    } catch (error: any) {
+      message.error(error?.message || t('common.exportFailed'));
+    } finally {
+      setExportLoading(null);
+    }
+  };
+
   const handleTableChange = (pg: any) => {
     const newPagination = {
       current: pg.current || 1,
@@ -171,7 +195,7 @@ const Namespace: React.FC = () => {
     {
       title: t('common.actions'),
       key: 'operation',
-      width: 100,
+      width: 150,
       render: (_: any, row: NamespaceItem) => (
         <div className="space-x-4">
           <PermissionWrapper requiredPermissions={['Edit']}>
@@ -181,6 +205,16 @@ const Namespace: React.FC = () => {
               onClick={() => handleEdit('edit', row)}
             >
               {t('common.edit')}
+            </Button>
+          </PermissionWrapper>
+          <PermissionWrapper requiredPermissions={['View']}>
+            <Button
+              type="link"
+              size="small"
+              loading={exportLoading === row.id}
+              onClick={() => handleExport(row)}
+            >
+              {t('common.export')}
             </Button>
           </PermissionWrapper>
           <PermissionWrapper requiredPermissions={['Delete']}>
@@ -230,11 +264,21 @@ const Namespace: React.FC = () => {
               }}
             />
           </div>
-          <PermissionWrapper requiredPermissions={['Add']}>
-            <Button type="primary" onClick={() => handleEdit('add')}>
-              {t('common.addNew')}
-            </Button>
-          </PermissionWrapper>
+          <Space>
+            <PermissionWrapper requiredPermissions={['Add']}>
+              <Button
+                icon={<UploadOutlined />}
+                onClick={() => setImportModalVisible(true)}
+              >
+                {t('common.import')}
+              </Button>
+            </PermissionWrapper>
+            <PermissionWrapper requiredPermissions={['Add']}>
+              <Button type="primary" onClick={() => handleEdit('add')}>
+                {t('common.addNew')}
+              </Button>
+            </PermissionWrapper>
+          </Space>
         </div>
         <CustomTable
           size="middle"
@@ -253,6 +297,14 @@ const Namespace: React.FC = () => {
           onSuccess={() => {
             setModalVisible(false);
             void refreshNamespaces();
+            fetchNamespaces();
+          }}
+        />
+        <ImportModal
+          visible={importModalVisible}
+          onCancel={() => setImportModalVisible(false)}
+          targetDirectoryId={null}
+          onSuccess={() => {
             fetchNamespaces();
           }}
         />

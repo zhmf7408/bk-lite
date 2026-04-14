@@ -3,7 +3,7 @@
 from langchain_core.runnables import RunnableConfig
 from langchain_core.tools import tool
 
-from apps.opspilot.metis.llm.tools.mssql.utils import execute_readonly_query, format_duration, format_size, safe_json_dumps
+from apps.opspilot.metis.llm.tools.mssql.utils import execute_readonly_query, format_size, safe_json_dumps
 
 
 @tool()
@@ -62,11 +62,8 @@ def diagnose_slow_queries(threshold_ms: int = 1000, limit: int = 20, config: Run
         threshold_us = threshold_ms * 1000
         results = execute_readonly_query(query, params=(threshold_us,), config=config)
 
-        # 格式化时间
+        # 格式化时间字段
         for row in results:
-            row["total_time_formatted"] = format_duration(row["total_time_ms"])
-            row["avg_time_formatted"] = format_duration(row["avg_time_ms"])
-            row["max_time_formatted"] = format_duration(row["max_time_ms"])
             row["creation_time"] = str(row["creation_time"]) if row["creation_time"] else None
             row["last_execution_time"] = str(row["last_execution_time"]) if row["last_execution_time"] else None
 
@@ -102,7 +99,7 @@ def diagnose_lock_conflicts(config: RunnableConfig = None):
         r.session_id as blocked_session_id,
         r.blocking_session_id,
         r.wait_type,
-        r.wait_time / 1000 as wait_time_ms,
+        r.wait_time as wait_time_ms,
         r.wait_resource,
         r.status as blocked_status,
         blocked_sql.text as blocked_query,
@@ -126,10 +123,6 @@ def diagnose_lock_conflicts(config: RunnableConfig = None):
 
     try:
         results = execute_readonly_query(query, config=config)
-
-        # 格式化等待时间
-        for row in results:
-            row["wait_time_formatted"] = format_duration(row["wait_time_ms"])
 
         return safe_json_dumps({"total_blocked_queries": len(results), "lock_conflicts": results, "has_conflicts": len(results) > 0})
     except Exception as e:
@@ -189,12 +182,12 @@ def diagnose_connection_issues(config: RunnableConfig = None):
         DB_NAME(r.database_id) as database_name,
         r.status,
         st.text as query,
-        r.total_elapsed_time / 1000 as duration_ms,
+        r.total_elapsed_time as duration_ms,
         r.start_time
     FROM sys.dm_exec_requests r
     INNER JOIN sys.dm_exec_sessions s ON r.session_id = s.session_id
     CROSS APPLY sys.dm_exec_sql_text(r.sql_handle) st
-    WHERE r.total_elapsed_time > 300000000  -- 5分钟以上(微秒)
+    WHERE r.total_elapsed_time > 300000  -- 5分钟以上(毫秒)
     ORDER BY r.total_elapsed_time DESC;
     """  # noqa
 
@@ -208,9 +201,8 @@ def diagnose_connection_issues(config: RunnableConfig = None):
         max_connections = max_conn[0]["max_connections"] if max_conn[0]["max_connections"] > 0 else 32767
         usage_percent = round((total_connections / max_connections) * 100, 2)
 
-        # 格式化长时间运行的查询
+        # 格式化长时间运行的查询时间戳
         for row in long_running:
-            row["duration_formatted"] = format_duration(row["duration_ms"])
             row["start_time"] = str(row["start_time"]) if row["start_time"] else None
 
         return safe_json_dumps(
@@ -257,7 +249,7 @@ def check_database_health(config: RunnableConfig = None):
         (SELECT COUNT(*) FROM sys.dm_exec_requests WHERE status = 'running') as active_queries,
         (SELECT COUNT(*) FROM sys.dm_exec_requests WHERE status = 'suspended') as suspended_queries,
         (SELECT COUNT(*) FROM sys.dm_exec_requests WHERE blocking_session_id > 0) as blocked_queries,
-        (SELECT COUNT(*) FROM sys.dm_exec_requests WHERE total_elapsed_time > 3600000000) as long_running_queries;
+        (SELECT COUNT(*) FROM sys.dm_exec_requests WHERE total_elapsed_time > 3600000) as long_running_queries;
     """
 
     # 数据库状态检查
@@ -331,7 +323,6 @@ def check_database_health(config: RunnableConfig = None):
 
         # 格式化磁盘空间
         for row in disk_space:
-            row["size_formatted"] = format_size(row["size_mb"] * 1024 * 1024)
             row["used_formatted"] = format_size(row["used_mb"] * 1024 * 1024) if row["used_mb"] else "N/A"
             row["free_formatted"] = format_size(row["free_mb"] * 1024 * 1024) if row["free_mb"] else "N/A"
 
@@ -424,8 +415,6 @@ def check_replication_lag(config: RunnableConfig = None):
 
         # 格式化数据
         for row in results:
-            row["log_send_queue_formatted"] = format_size(row["log_send_queue_kb"] * 1024) if row["log_send_queue_kb"] else "0 B"
-            row["redo_queue_formatted"] = format_size(row["redo_queue_kb"] * 1024) if row["redo_queue_kb"] else "0 B"
             row["last_commit_time"] = str(row["last_commit_time"]) if row["last_commit_time"] else None
 
         return safe_json_dumps({"has_replication": True, "replica_count": len(results), "replicas": results})

@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"errors"
+	"io"
 	"strings"
 	"testing"
 
@@ -16,6 +17,38 @@ type stubResponseMsg struct {
 	respond func(payload []byte) error
 }
 
+type subscriberStubSSHSession struct {
+	run    func(cmd string) error
+	signal func(sig gossh.Signal) error
+	close  func() error
+	stdout io.Writer
+	stderr io.Writer
+}
+
+func (s *subscriberStubSSHSession) Run(cmd string) error {
+	if s.run == nil {
+		return nil
+	}
+	return s.run(cmd)
+}
+
+func (s *subscriberStubSSHSession) Signal(sig gossh.Signal) error {
+	if s.signal == nil {
+		return nil
+	}
+	return s.signal(sig)
+}
+
+func (s *subscriberStubSSHSession) Close() error {
+	if s.close == nil {
+		return nil
+	}
+	return s.close()
+}
+
+func (s *subscriberStubSSHSession) SetStdout(w io.Writer) { s.stdout = w }
+func (s *subscriberStubSSHSession) SetStderr(w io.Writer) { s.stderr = w }
+
 func (s stubResponseMsg) Respond(payload []byte) error {
 	if s.respond == nil {
 		return nil
@@ -24,7 +57,7 @@ func (s stubResponseMsg) Respond(payload []byte) error {
 }
 
 func TestHandleSSHExecuteMessageRejectsMalformedJSON(t *testing.T) {
-	response, ok := handleSSHExecuteMessage([]byte("bad-json"), "instance-1")
+	response, ok := handleSSHExecuteMessage([]byte("bad-json"), "instance-1", nil)
 	if !ok {
 		t.Fatal("expected malformed payload to return explicit error response")
 	}
@@ -45,13 +78,13 @@ func TestHandleSSHExecuteMessageReturnsExecutionResponse(t *testing.T) {
 	original := sshDialFn
 	sshDialFn = func(network, addr string, config *gossh.ClientConfig) (sshClient, error) {
 		return stubSSHClient{newSession: func() (sshSession, error) {
-			return &stubSSHSession{run: func(cmd string) error { return nil }, stdout: &bytes.Buffer{}, stderr: &bytes.Buffer{}}, nil
+			return &subscriberStubSSHSession{run: func(cmd string) error { return nil }, stdout: &bytes.Buffer{}, stderr: &bytes.Buffer{}}, nil
 		}}, nil
 	}
 	defer func() { sshDialFn = original }()
 
 	payload := []byte(`{"args":[{"command":"uptime","execute_timeout":5,"host":"10.0.0.1","port":22,"user":"root","password":"x"}],"kwargs":{}}`)
-	response, ok := handleSSHExecuteMessage(payload, "instance-1")
+	response, ok := handleSSHExecuteMessage(payload, "instance-1", nil)
 	if !ok {
 		t.Fatal("expected execute response")
 	}
@@ -75,7 +108,7 @@ func TestRespondSSHExecuteMessageSendsExecutionResponse(t *testing.T) {
 	original := sshDialFn
 	sshDialFn = func(network, addr string, config *gossh.ClientConfig) (sshClient, error) {
 		return stubSSHClient{newSession: func() (sshSession, error) {
-			return &stubSSHSession{run: func(cmd string) error { return nil }, stdout: &bytes.Buffer{}, stderr: &bytes.Buffer{}}, nil
+			return &subscriberStubSSHSession{run: func(cmd string) error { return nil }, stdout: &bytes.Buffer{}, stderr: &bytes.Buffer{}}, nil
 		}}, nil
 	}
 	defer func() { sshDialFn = original }()
@@ -86,7 +119,7 @@ func TestRespondSSHExecuteMessageSendsExecutionResponse(t *testing.T) {
 		return json.Unmarshal(response, &got)
 	}}
 
-	if ok := respondSSHExecuteMessage(msg, payload, "instance-1"); !ok {
+	if ok := respondSSHExecuteMessage(msg, payload, "instance-1", nil); !ok {
 		t.Fatal("expected SSH response to be sent successfully")
 	}
 	if !got.Success || got.InstanceId != "instance-1" {
@@ -98,7 +131,7 @@ func TestRespondSSHExecuteMessageReturnsFalseWhenRespondFails(t *testing.T) {
 	original := sshDialFn
 	sshDialFn = func(network, addr string, config *gossh.ClientConfig) (sshClient, error) {
 		return stubSSHClient{newSession: func() (sshSession, error) {
-			return &stubSSHSession{run: func(cmd string) error { return nil }, stdout: &bytes.Buffer{}, stderr: &bytes.Buffer{}}, nil
+			return &subscriberStubSSHSession{run: func(cmd string) error { return nil }, stdout: &bytes.Buffer{}, stderr: &bytes.Buffer{}}, nil
 		}}, nil
 	}
 	defer func() { sshDialFn = original }()
@@ -108,7 +141,7 @@ func TestRespondSSHExecuteMessageReturnsFalseWhenRespondFails(t *testing.T) {
 		return errors.New("nats unavailable")
 	}}
 
-	if ok := respondSSHExecuteMessage(msg, payload, "instance-1"); ok {
+	if ok := respondSSHExecuteMessage(msg, payload, "instance-1", nil); ok {
 		t.Fatal("expected respond failure to return false")
 	}
 }
@@ -360,13 +393,13 @@ func TestSSHExecuteResponseIncludesExecutionFailureCode(t *testing.T) {
 	original := sshDialFn
 	sshDialFn = func(network, addr string, config *gossh.ClientConfig) (sshClient, error) {
 		return stubSSHClient{newSession: func() (sshSession, error) {
-			return &stubSSHSession{run: func(cmd string) error { return errors.New("remote exec failed") }, stdout: &bytes.Buffer{}, stderr: &bytes.Buffer{}}, nil
+			return &subscriberStubSSHSession{run: func(cmd string) error { return errors.New("remote exec failed") }, stdout: &bytes.Buffer{}, stderr: &bytes.Buffer{}}, nil
 		}}, nil
 	}
 	defer func() { sshDialFn = original }()
 
 	payload := []byte(`{"args":[{"command":"uptime","execute_timeout":5,"host":"10.0.0.1","port":22,"user":"root","password":"x"}],"kwargs":{}}`)
-	response, ok := handleSSHExecuteMessage(payload, "instance-1")
+	response, ok := handleSSHExecuteMessage(payload, "instance-1", nil)
 	if !ok {
 		t.Fatal("expected execute response")
 	}

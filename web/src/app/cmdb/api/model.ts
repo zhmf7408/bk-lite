@@ -47,6 +47,29 @@ export const useModelApi = () => {
   const deleteModelUniqueRule = (modelId: string, ruleId: string) =>
     del(`/cmdb/api/model/${modelId}/unique_rules/${ruleId}/`);
 
+  const getModelAutoAssociationRules = (modelId: string) =>
+    get(`/cmdb/api/model/${modelId}/auto_association_rules/`);
+
+  const createModelAutoAssociationRule = (modelId: string, params: {
+    model_asst_id: string;
+    enabled: boolean;
+    match_pairs: Array<{
+      src_field_id: string;
+      dst_field_id: string;
+    }>;
+  }) => post(`/cmdb/api/model/${modelId}/auto_association_rules/`, params);
+
+  const updateModelAutoAssociationRule = (modelId: string, modelAsstId: string, ruleId: string, params: {
+    enabled: boolean;
+    match_pairs: Array<{
+      src_field_id: string;
+      dst_field_id: string;
+    }>;
+  }) => put(`/cmdb/api/model/${modelId}/auto_association_rules/${modelAsstId}/${ruleId}/`, params);
+
+  const deleteModelAutoAssociationRule = (modelId: string, modelAsstId: string, ruleId: string) =>
+    del(`/cmdb/api/model/${modelId}/auto_association_rules/${modelAsstId}/${ruleId}/`);
+
   // 获取模型关联列表
   const getModelAssociations = (modelId: string) =>
     get(`/cmdb/api/model/${modelId}/association/`);
@@ -199,6 +222,10 @@ export const useModelApi = () => {
     createModelUniqueRule,
     updateModelUniqueRule,
     deleteModelUniqueRule,
+    getModelAutoAssociationRules,
+    createModelAutoAssociationRule,
+    updateModelAutoAssociationRule,
+    deleteModelAutoAssociationRule,
     getModelAssociations,
     createModelAssociation,
     deleteModelAssociation,

@@ -18,7 +18,7 @@ interface ModalProps {
 interface ModalConfig {
   type: 'add' | 'edit';
   userId?: string;
-  groupKeys?: number[];
+  groupKeys?: React.Key[];
 }
 
 export interface ModalRef {
@@ -38,15 +38,17 @@ const UserModal = forwardRef<ModalRef, ModalProps>(({ onSuccess, treeData }, ref
     roleTreeData,
     selectedGroups,
     selectedRoles,
+    personalRoleIds,
     groupRules,
     organizationRoleIds,
+    organizationRoleSourceMap,
     isSuperuser,
-    setSelectedRoles,
     setIsSuperuser,
     showModal,
     handleCancel,
     handleConfirm,
     handleGroupChange,
+    handleRoleChange,
     handleChangeRule,
   } = useUserModalData();
 
@@ -58,11 +60,6 @@ const UserModal = forwardRef<ModalRef, ModalProps>(({ onSuccess, treeData }, ref
     () => (treeData ? transformTreeDataForSelect(treeData) : []),
     [treeData]
   );
-
-  const handleRoleChange = (newKeys: number[]) => {
-    setSelectedRoles(newKeys);
-    formRef.current?.setFieldsValue({ roles: newKeys });
-  };
 
   const handleSuperuserChange = (value: boolean) => {
     setIsSuperuser(value);
@@ -145,9 +142,8 @@ const UserModal = forwardRef<ModalRef, ModalProps>(({ onSuccess, treeData }, ref
             </Select>
           </Form.Item>
           <Form.Item
-            name="groups"
             label={t('system.user.form.group')}
-            rules={[{ required: !isSuperuser, message: t('common.inputRequired') }]}
+            required={!isSuperuser}
           >
             <RoleTransfer
               mode="group"
@@ -160,10 +156,9 @@ const UserModal = forwardRef<ModalRef, ModalProps>(({ onSuccess, treeData }, ref
             />
           </Form.Item>
           <Form.Item
-            name="roles"
             label={t('system.user.form.role')}
             tooltip={t('system.user.form.rolePermissionTip')}
-            rules={[{ required: !isSuperuser, message: t('common.inputRequired') }]}
+            required={!isSuperuser}
           >
             <Form.Item name="is_superuser" style={{ marginBottom: 8 }}>
               <Radio.Group onChange={(e) => handleSuperuserChange(e.target.value)}>
@@ -176,9 +171,11 @@ const UserModal = forwardRef<ModalRef, ModalProps>(({ onSuccess, treeData }, ref
                 groupRules={groupRules}
                 treeData={roleTreeData}
                 selectedKeys={selectedRoles}
+                personalRoleIds={personalRoleIds}
                 loading={roleLoading}
                 forceOrganizationRole={false}
                 organizationRoleIds={organizationRoleIds}
+                organizationRoleSourceMap={organizationRoleSourceMap}
                 onChange={handleRoleChange}
               />
             ) : (

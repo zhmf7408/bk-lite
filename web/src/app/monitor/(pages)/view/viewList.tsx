@@ -299,8 +299,16 @@ const ViewList: React.FC<ViewListProps> = ({
                 '--',
               dataIndex: item.key,
               key: item.key,
-              sorter: (a: any, b: any) =>
-                a[item.key]?.value - b[item.key]?.value,
+              sorter: (a: any, b: any) => {
+                const va = a[item.key]?.value;
+                const vb = b[item.key]?.value;
+                const na = va == null || va === '';
+                const nb = vb == null || vb === '';
+                if (na && nb) return 0;
+                if (na) return -1;
+                if (nb) return 1;
+                return Number(va) - Number(vb);
+              },
               render: (_: unknown, record: TableDataItem) => {
                 const hasDimensions = target?.dimensions?.length > 0;
                 const size: [number, number] = hasDimensions
@@ -343,8 +351,16 @@ const ViewList: React.FC<ViewListProps> = ({
             }),
             ...(item.type === 'value'
               ? {
-                sorter: (a: any, b: any) =>
-                  a[item.key]?.value - b[item.key]?.value
+                sorter: (a: any, b: any) => {
+                  const va = a[item.key]?.value;
+                  const vb = b[item.key]?.value;
+                  const na = va == null || va === '';
+                  const nb = vb == null || vb === '';
+                  if (na && nb) return 0;
+                  if (na) return -1;
+                  if (nb) return 1;
+                  return Number(va) - Number(vb);
+                }
               }
               : {}),
             render: (_: unknown, record: TableDataItem) => {

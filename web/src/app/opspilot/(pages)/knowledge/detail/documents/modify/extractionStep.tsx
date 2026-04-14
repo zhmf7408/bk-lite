@@ -6,6 +6,7 @@ import CustomTable from '@/components/custom-table';
 import OperateModal from '@/components/operate-modal';
 import { useTranslation } from '@/utils/i18n';
 import { useKnowledgeApi } from '@/app/opspilot/api/knowledge';
+import { getModelOptionText, renderModelOptionLabel } from '@/app/opspilot/utils/modelOption';
 import styles from './modify.module.scss';
 import { OcrModel } from '@/app/opspilot/types/knowledge';
 import fullTextImg from '@/app/opspilot/img/full_text_extraction.png';
@@ -381,8 +382,8 @@ const ExtractionStep: React.FC<{
                       placeholder={allOcrModelsDisabled ? t('knowledge.documents.ocrModelNotConfigured') : undefined}
                     >
                       {ocrModels.map((model) => (
-                        <Option key={model.id} value={model.id} disabled={!model.enabled}>
-                          {model.name}
+                        <Option key={model.id} value={model.id} disabled={!model.enabled} title={getModelOptionText(model)}>
+                          {renderModelOptionLabel(model)}
                         </Option>
                       ))}
                     </Select>

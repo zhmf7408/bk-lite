@@ -15,6 +15,7 @@ from apps.monitor.filters.monitor_policy import MonitorPolicyFilter
 from apps.monitor.models import PolicyOrganization, MonitorAlert
 from apps.monitor.models.monitor_policy import MonitorPolicy
 from apps.monitor.serializers.monitor_policy import MonitorPolicySerializer
+from apps.monitor.services.alert_lifecycle_notify import AlertLifecycleNotifier
 from apps.monitor.services.policy import PolicyService
 from apps.monitor.services.policy_baseline import PolicyBaselineService
 from apps.monitor.utils.pagination import parse_page_params
@@ -50,9 +51,7 @@ class MonitorPolicyViewSet(viewsets.ModelViewSet):
         queryset = queryset.distinct()
 
         # 获取分页参数
-        page, page_size = parse_page_params(
-            request.GET, default_page=1, default_page_size=10
-        )
+        page, page_size = parse_page_params(request.GET, default_page=1, default_page_size=10)
 
         # 计算分页的起始位置
         start = (page - 1) * page_size
@@ -66,9 +65,7 @@ class MonitorPolicyViewSet(viewsets.ModelViewSet):
         results = serializer.data
 
         # 如果有权限规则，则添加到数据中
-        inst_permission_map = {
-            i["id"]: i["permission"] for i in permission.get("instance", [])
-        }
+        inst_permission_map = {i["id"]: i["permission"] for i in permission.get("instance", [])}
 
         for instance_info in results:
             if instance_info["id"] in inst_permission_map:
@@ -98,6 +95,7 @@ class MonitorPolicyViewSet(viewsets.ModelViewSet):
         old_enable = policy.enable if policy else None
 
         response = super().update(request, *args, **kwargs)
+        updated_policy = MonitorPolicy.objects.filter(id=policy_id).first()
 
         schedule = request.data.get("schedule")
         if schedule:
@@ -106,13 +104,11 @@ class MonitorPolicyViewSet(viewsets.ModelViewSet):
         if organizations:
             self.update_policy_organizations(policy_id, organizations)
         if "enable_alerts" in request.data:
-            self.update_policy_baselines(
-                policy_id, request.data.get("enable_alerts", [])
-            )
+            self.update_policy_baselines(policy_id, request.data.get("enable_alerts", []))
 
         # 处理 enable 字段变更
-        if "enable" in request.data and policy:
-            new_enable = request.data.get("enable")
+        if "enable" in request.data and policy and updated_policy:
+            new_enable = updated_policy.enable
             self.handle_policy_enable_change(policy_id, old_enable, new_enable)
 
         return response
@@ -126,6 +122,7 @@ class MonitorPolicyViewSet(viewsets.ModelViewSet):
         old_enable = policy.enable if policy else None
 
         response = super().partial_update(request, *args, **kwargs)
+        updated_policy = MonitorPolicy.objects.filter(id=policy_id).first()
 
         schedule = request.data.get("schedule")
         if schedule:
@@ -134,13 +131,11 @@ class MonitorPolicyViewSet(viewsets.ModelViewSet):
         if organizations:
             self.update_policy_organizations(policy_id, organizations)
         if "enable_alerts" in request.data:
-            self.update_policy_baselines(
-                policy_id, request.data.get("enable_alerts", [])
-            )
+            self.update_policy_baselines(policy_id, request.data.get("enable_alerts", []))
 
         # 处理 enable 字段变更
-        if "enable" in request.data and policy:
-            new_enable = request.data.get("enable")
+        if "enable" in request.data and policy and updated_policy:
+            new_enable = updated_policy.enable
             self.handle_policy_enable_change(policy_id, old_enable, new_enable)
 
         return response
@@ -150,6 +145,30 @@ class MonitorPolicyViewSet(viewsets.ModelViewSet):
         policy = MonitorPolicy.objects.filter(id=policy_id).first()
         if policy:
             PolicyBaselineService(policy).clear()
+            now = datetime.now(timezone.utc)
+            alerts_to_close = list(MonitorAlert.objects.filter(policy_id=policy_id, status="new"))
+            if alerts_to_close:
+                operation_log = {
+                    "action": "closed",
+                    "reason": "policy_deleted",
+                    "operator": request.user.username,
+                    "time": now.isoformat(),
+                }
+                for alert in alerts_to_close:
+                    alert.status = "closed"
+                    alert.end_event_time = now
+                    alert.operator = request.user.username
+                    alert.operation_logs = (alert.operation_logs or []) + [operation_log]
+                MonitorAlert.objects.bulk_update(
+                    alerts_to_close,
+                    fields=["status", "end_event_time", "operator", "operation_logs"],
+                )
+                AlertLifecycleNotifier(policy).notify_alerts(
+                    alerts_to_close,
+                    action="closed",
+                    operator=request.user.username,
+                    reason="policy_deleted",
+                )
         PeriodicTask.objects.filter(name=f"scan_policy_task_{policy_id}").delete()
         PolicyOrganization.objects.filter(policy_id=policy_id).delete()
         return super().destroy(request, *args, **kwargs)
@@ -171,9 +190,8 @@ class MonitorPolicyViewSet(viewsets.ModelViewSet):
 
         if old_enable and not new_enable:
             now = datetime.now(timezone.utc)
-            alerts_to_close = list(
-                MonitorAlert.objects.filter(policy_id=policy_id, status="new")
-            )
+            policy = MonitorPolicy.objects.filter(id=policy_id).first()
+            alerts_to_close = list(MonitorAlert.objects.filter(policy_id=policy_id, status="new"))
             if alerts_to_close:
                 operation_log = {
                     "action": "closed",
@@ -185,17 +203,20 @@ class MonitorPolicyViewSet(viewsets.ModelViewSet):
                     alert.status = "closed"
                     alert.end_event_time = now
                     alert.operator = "system"
-                    alert.operation_logs = (alert.operation_logs or []) + [
-                        operation_log
-                    ]
+                    alert.operation_logs = (alert.operation_logs or []) + [operation_log]
                 MonitorAlert.objects.bulk_update(
                     alerts_to_close,
                     fields=["status", "end_event_time", "operator", "operation_logs"],
                 )
+                if policy:
+                    AlertLifecycleNotifier(policy).notify_alerts(
+                        alerts_to_close,
+                        action="closed",
+                        operator="system",
+                        reason="policy_disabled",
+                    )
         elif not old_enable and new_enable:
-            MonitorPolicy.objects.filter(id=policy_id).update(
-                last_run_time=datetime.now(timezone.utc)
-            )
+            MonitorPolicy.objects.filter(id=policy_id).update(last_run_time=datetime.now(timezone.utc))
 
     def format_crontab(self, schedule):
         """
@@ -255,18 +276,11 @@ class MonitorPolicyViewSet(viewsets.ModelViewSet):
         new_set = set(organizations)
         # 删除不存在的组织
         delete_set = old_set - new_set
-        PolicyOrganization.objects.filter(
-            policy_id=policy_id, organization__in=delete_set
-        ).delete()
+        PolicyOrganization.objects.filter(policy_id=policy_id, organization__in=delete_set).delete()
         # 添加新的组织
         create_set = new_set - old_set
-        create_objs = [
-            PolicyOrganization(policy_id=policy_id, organization=org_id)
-            for org_id in create_set
-        ]
-        PolicyOrganization.objects.bulk_create(
-            create_objs, batch_size=DatabaseConstants.BULK_CREATE_BATCH_SIZE
-        )
+        create_objs = [PolicyOrganization(policy_id=policy_id, organization=org_id) for org_id in create_set]
+        PolicyOrganization.objects.bulk_create(create_objs, batch_size=DatabaseConstants.BULK_CREATE_BATCH_SIZE)
 
     @action(methods=["post"], detail=False, url_path="template")
     def template(self, request):

@@ -9,24 +9,21 @@ import { useUserApi } from '@/app/system-manager/api/user/index';
 import { useGroupApi } from '@/app/system-manager/api/group/index';
 import { useClientData } from '@/context/client';
 import {
-  type GroupRole,
   type GroupRules,
   type UserDetailResponse,
   processRoleTreeData,
   extractGroupIds,
   extractPersonalRoleIds,
-  extractOrgRoleIds,
   buildGroupRulesFromUserDetail,
   buildFormValuesFromUserDetail,
   buildUserPayload,
-  filterPersonalRoles,
   mergeRoles,
 } from '@/app/system-manager/utils/userFormUtils';
 
 interface ModalConfig {
   type: 'add' | 'edit';
   userId?: string;
-  groupKeys?: number[];
+  groupKeys?: React.Key[];
 }
 
 interface UseUserModalDataReturn {
@@ -37,20 +34,23 @@ interface UseUserModalDataReturn {
   isSubmitting: boolean;
   type: 'add' | 'edit';
   roleTreeData: TreeDataNode[];
-  selectedGroups: number[];
+  selectedGroups: React.Key[];
   selectedRoles: number[];
+  personalRoleIds: number[];
   groupRules: GroupRules;
   organizationRoleIds: number[];
+  organizationRoleSourceMap: Record<string, string>;
   isSuperuser: boolean;
   currentUserId: string;
-  setSelectedGroups: (groups: number[]) => void;
+  setSelectedGroups: (groups: React.Key[]) => void;
   setSelectedRoles: (roles: number[]) => void;
+  handleRoleChange: (newRoleIds: React.Key[]) => void;
   setGroupRules: (rules: GroupRules) => void;
   setIsSuperuser: (value: boolean) => void;
   showModal: (config: ModalConfig) => void;
   handleCancel: () => void;
   handleConfirm: (onSuccess: () => void) => Promise<void>;
-  handleGroupChange: (newGroupIds: number[]) => Promise<void>;
+  handleGroupChange: (newGroupIds: React.Key[]) => Promise<void>;
   handleChangeRule: (newKey: number, newRules: { [app: string]: number }) => void;
 }
 
@@ -66,21 +66,23 @@ export function useUserModalData(): UseUserModalDataReturn {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [type, setType] = useState<'add' | 'edit'>('add');
   const [roleTreeData, setRoleTreeData] = useState<TreeDataNode[]>([]);
-  const [selectedGroups, setSelectedGroups] = useState<number[]>([]);
+  const [selectedGroups, setSelectedGroups] = useState<React.Key[]>([]);
   const [selectedRoles, setSelectedRoles] = useState<number[]>([]);
+  const [personalRoleIds, setPersonalRoleIds] = useState<number[]>([]);
   const [groupRules, setGroupRules] = useState<GroupRules>({});
   const [organizationRoleIds, setOrganizationRoleIds] = useState<number[]>([]);
+  const [organizationRoleSourceMap, setOrganizationRoleSourceMap] = useState<Record<string, string>>({});
   const [isSuperuser, setIsSuperuser] = useState<boolean>(false);
 
   const { addUser, editUser, getUserDetail, getRoleList } = useUserApi();
-  const { getGroupRoles } = useGroupApi();
+  const { getGroupDetailWithRoles } = useGroupApi();
 
   const fetchRoleInfoWithOrgRoles = useCallback(
-    async (orgRoleIds: number[]) => {
+    async () => {
       try {
         setRoleLoading(true);
         const roleData = await getRoleList({ client_list: clientData });
-        const processedRoleData = processRoleTreeData(roleData, orgRoleIds);
+        const processedRoleData = processRoleTreeData(roleData);
         setRoleTreeData(processedRoleData);
       } catch {
         message.error(t('common.fetchFailed'));
@@ -91,26 +93,51 @@ export function useUserModalData(): UseUserModalDataReturn {
     [getRoleList, clientData, t]
   );
 
-  const fetchGroupRoles = useCallback(
-    async (groupIds: number[]): Promise<GroupRole[]> => {
+  const fetchOrganizationRoleIds = useCallback(
+    async (groupIds: React.Key[]): Promise<number[]> => {
       if (groupIds.length === 0) {
         setOrganizationRoleIds([]);
+        setOrganizationRoleSourceMap({});
         return [];
       }
 
       try {
-        const groupRoleData = await getGroupRoles({ group_ids: groupIds });
-        const orgRoleIds = extractOrgRoleIds(groupRoleData || []);
+        const groupDetails = await Promise.all(
+          groupIds.map((groupId) => getGroupDetailWithRoles({ group_id: String(groupId) }))
+        );
+
+        const orgRoleSourceMap = groupDetails.reduce<Record<string, string>>((acc, detail) => {
+          [...(detail.own_role_ids || []), ...(detail.inherited_role_ids || [])].forEach((roleId) => {
+            const roleKey = String(roleId);
+            const existingGroupNames = acc[roleKey] ? acc[roleKey].split(', ') : [];
+
+            if (!existingGroupNames.includes(detail.group_name)) {
+              acc[roleKey] = [...existingGroupNames, detail.group_name].filter(Boolean).join(', ');
+            }
+          });
+
+          return acc;
+        }, {});
+
+        const orgRoleIds = [...new Set(
+          groupDetails.flatMap((detail) => [
+            ...(detail.own_role_ids || []),
+            ...(detail.inherited_role_ids || []),
+          ])
+        )];
+
         setOrganizationRoleIds(orgRoleIds);
-        await fetchRoleInfoWithOrgRoles(orgRoleIds);
-        return groupRoleData || [];
+        setOrganizationRoleSourceMap(orgRoleSourceMap);
+        await fetchRoleInfoWithOrgRoles();
+        return orgRoleIds;
       } catch (error) {
         console.error('Failed to fetch group roles:', error);
         setOrganizationRoleIds([]);
+        setOrganizationRoleSourceMap({});
         return [];
       }
     },
-    [getGroupRoles, fetchRoleInfoWithOrgRoles]
+    [getGroupDetailWithRoles, fetchRoleInfoWithOrgRoles]
   );
 
   const fetchUserDetail = useCallback(
@@ -125,10 +152,10 @@ export function useUserModalData(): UseUserModalDataReturn {
           setSelectedGroups(userGroupIds);
 
           const personalRoles = extractPersonalRoleIds(userDetail);
-          const groupRoleData = await fetchGroupRoles(userGroupIds);
-          const orgRoleIds = extractOrgRoleIds(groupRoleData);
+          const orgRoleIds = await fetchOrganizationRoleIds(userGroupIds);
           const allRoles = mergeRoles(personalRoles, orgRoleIds);
 
+          setPersonalRoleIds(personalRoles);
           setSelectedRoles(allRoles);
           setIsSuperuser(userDetail?.is_superuser || false);
 
@@ -141,7 +168,7 @@ export function useUserModalData(): UseUserModalDataReturn {
         setLoading(false);
       }
     },
-    [clientData, getUserDetail, fetchGroupRoles, t]
+    [clientData, getUserDetail, fetchOrganizationRoleIds, t]
   );
 
   const showModal = useCallback(
@@ -153,19 +180,24 @@ export function useUserModalData(): UseUserModalDataReturn {
 
       if (modalType === 'edit' && userId) {
         setOrganizationRoleIds([]);
+        setOrganizationRoleSourceMap({});
         fetchUserDetail(userId);
-        setTimeout(() => {
-          fetchRoleInfoWithOrgRoles(organizationRoleIds);
-        }, 100);
       } else if (modalType === 'add') {
         setOrganizationRoleIds([]);
+        setOrganizationRoleSourceMap({});
         setSelectedGroups(groupKeys);
+        setPersonalRoleIds([]);
         setSelectedRoles([]);
+        setGroupRules({});
 
         if (groupKeys.length > 0) {
-          fetchGroupRoles(groupKeys);
+          void fetchOrganizationRoleIds(groupKeys).then((orgRoleIds) => {
+            const mergedRoleIds = mergeRoles([], orgRoleIds);
+            setSelectedRoles(mergedRoleIds);
+            formRef.current?.setFieldsValue({ roles: mergedRoleIds });
+          });
         } else {
-          fetchRoleInfoWithOrgRoles([]);
+          fetchRoleInfoWithOrgRoles();
         }
 
         setTimeout(() => {
@@ -178,7 +210,7 @@ export function useUserModalData(): UseUserModalDataReturn {
         }, 0);
       }
     },
-    [fetchUserDetail, fetchGroupRoles, fetchRoleInfoWithOrgRoles, organizationRoleIds]
+    [fetchUserDetail, fetchOrganizationRoleIds, fetchRoleInfoWithOrgRoles]
   );
 
   const handleCancel = useCallback(() => {
@@ -190,7 +222,28 @@ export function useUserModalData(): UseUserModalDataReturn {
       try {
         setIsSubmitting(true);
         const formData = await formRef.current?.validateFields();
-        const payload = buildUserPayload(formData, organizationRoleIds, groupRules, isSuperuser);
+
+        if (!isSuperuser && selectedGroups.length === 0) {
+          message.error(t('common.inputRequired'));
+          return;
+        }
+
+        if (!isSuperuser && selectedRoles.length === 0) {
+          message.error(t('common.inputRequired'));
+          return;
+        }
+
+        const payload = buildUserPayload(
+          {
+            ...formData,
+            groups: selectedGroups,
+            roles: selectedRoles,
+            is_superuser: isSuperuser,
+          },
+          personalRoleIds,
+          groupRules,
+          isSuperuser
+        );
 
         if (type === 'add') {
           await addUser(payload);
@@ -213,24 +266,34 @@ export function useUserModalData(): UseUserModalDataReturn {
         setIsSubmitting(false);
       }
     },
-    [organizationRoleIds, groupRules, isSuperuser, type, addUser, editUser, currentUserId, t]
+    [personalRoleIds, organizationRoleIds, groupRules, isSuperuser, type, addUser, editUser, currentUserId, selectedGroups, selectedRoles, t]
+  );
+
+  const handleRoleChange = useCallback(
+    (newRoleIds: React.Key[]) => {
+      const nextPersonalRoleIds = newRoleIds.map((roleId) => Number(roleId));
+      setPersonalRoleIds(nextPersonalRoleIds);
+
+      const mergedRoleIds = mergeRoles(nextPersonalRoleIds, organizationRoleIds);
+      setSelectedRoles(mergedRoleIds);
+      formRef.current?.setFieldsValue({ roles: mergedRoleIds });
+    },
+    [organizationRoleIds]
   );
 
   const handleGroupChange = useCallback(
-    async (newGroupIds: number[]) => {
+    async (newGroupIds: React.Key[]) => {
       setSelectedGroups(newGroupIds);
       formRef.current?.setFieldsValue({ groups: newGroupIds });
 
-      const newGroupRoleData = await fetchGroupRoles(newGroupIds);
-      const newOrgRoleIds = newGroupRoleData.map((role) => role.id);
+      const newOrgRoleIds = await fetchOrganizationRoleIds(newGroupIds);
 
-      const currentPersonalRoles = filterPersonalRoles(selectedRoles, newOrgRoleIds);
-      const updatedRoles = mergeRoles(currentPersonalRoles, newOrgRoleIds);
+      const updatedRoles = mergeRoles(personalRoleIds, newOrgRoleIds);
 
       setSelectedRoles(updatedRoles);
       formRef.current?.setFieldsValue({ roles: updatedRoles });
     },
-    [fetchGroupRoles, selectedRoles]
+    [fetchOrganizationRoleIds, personalRoleIds]
   );
 
   const handleChangeRule = useCallback(
@@ -253,12 +316,15 @@ export function useUserModalData(): UseUserModalDataReturn {
     roleTreeData,
     selectedGroups,
     selectedRoles,
+    personalRoleIds,
     groupRules,
     organizationRoleIds,
+    organizationRoleSourceMap,
     isSuperuser,
     currentUserId,
     setSelectedGroups,
     setSelectedRoles,
+    handleRoleChange,
     setGroupRules,
     setIsSuperuser,
     showModal,

@@ -1,4 +1,5 @@
 import os
+import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
 from django.utils import timezone
@@ -14,6 +15,7 @@ from apps.rpc.executor import Executor
 from config.components.nats import NATS_NAMESPACE
 
 DEFAULT_RPC_TIMEOUT = int(os.getenv("JOB_MGMT_RPC_TIMEOUT", "60"))
+ANSIBLE_TASK_POLL_INTERVAL = 1
 
 
 class FileDistributionRunner(ExecutionTaskBaseService):
@@ -214,13 +216,30 @@ class FileDistributionRunner(ExecutionTaskBaseService):
             task_id=task_id,
             timeout=timeout,
         )
-        logger.info(f"accepted data: {accepted}")
         accepted_task_id = (accepted.get("task_id") if isinstance(accepted, dict) else None) or task_id
 
-        query_result = executor.task_query(accepted_task_id, timeout=min(timeout, DEFAULT_RPC_TIMEOUT))
-        logger.info(f"query_result data: {query_result}")
+        query_timeout = min(timeout, DEFAULT_RPC_TIMEOUT)
+        start_time = time.monotonic()
+        query_result = None
+        poll_attempt = 0
+        while True:
+            poll_attempt += 1
+            elapsed = time.monotonic() - start_time
+            query_result = executor.task_query(accepted_task_id, timeout=query_timeout)
+            if not isinstance(query_result, dict):
+                raise ValueError("Ansible 文件分发返回结果格式非法")
+
+            task_status = query_result.get("status")
+            if task_status in {"success", "failed", "callback_failed"}:
+                break
+
+            elapsed = time.monotonic() - start_time
+            if elapsed >= timeout:
+                raise ValueError(f"Ansible 文件分发任务未完成: status={task_status}")
+
+            time.sleep(ANSIBLE_TASK_POLL_INTERVAL)
+
         if not isinstance(query_result, dict):
-            logger.error(f"final_result: {query_result}")
             raise ValueError("Ansible 文件分发返回结果格式非法")
 
         task_status = query_result.get("status")
@@ -229,7 +248,6 @@ class FileDistributionRunner(ExecutionTaskBaseService):
 
         task_result = query_result.get("result", {})
         if not isinstance(task_result, dict):
-            logger.error(f"final_result: {task_result}")
             raise ValueError("Ansible 文件分发返回结果格式非法")
 
         host_results = task_result.get("result")

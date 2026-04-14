@@ -28,9 +28,7 @@ class Executor(object):
         :return: 健康检查结果
         """
         request_data = {"execute_timeout": timeout}
-        return_data = self.health_check_client.run(
-            self.instance_id, request_data, _timeout=timeout
-        )
+        return_data = self.health_check_client.run(self.instance_id, request_data, _timeout=timeout)
         return return_data
 
     def execute_local(self, command, timeout=60, shell=None):
@@ -44,9 +42,7 @@ class Executor(object):
         request_data = {"command": command, "execute_timeout": timeout}
         if shell:
             request_data["shell"] = shell
-        return_data = self.local_client.run(
-            self.instance_id, request_data, _timeout=timeout
-        )
+        return_data = self.local_client.run(self.instance_id, request_data, _timeout=timeout)
         return return_data
 
     def execute_ssh(
@@ -88,10 +84,43 @@ class Executor(object):
         if passphrase:
             request_data["passphrase"] = passphrase
 
-        return_data = self.ssh_client.run(
-            self.instance_id, request_data, _timeout=timeout
-        )
+        return_data = self.ssh_client.run(self.instance_id, request_data, _timeout=timeout)
         return return_data
+
+    def execute_ssh_stream(
+        self,
+        command,
+        host,
+        username,
+        password=None,
+        private_key=None,
+        passphrase=None,
+        timeout=60,
+        port=22,
+        execution_id=None,
+        stream_log_topic=None,
+    ):
+        request_data = {
+            "command": command,
+            "host": host,
+            "port": port,
+            "user": username,
+            "execute_timeout": timeout,
+            "stream_logs": True,
+        }
+
+        if password:
+            request_data["password"] = password
+        if private_key:
+            request_data["private_key"] = private_key
+        if passphrase:
+            request_data["passphrase"] = passphrase
+        if execution_id:
+            request_data["execution_id"] = execution_id
+        if stream_log_topic:
+            request_data["stream_log_topic"] = stream_log_topic
+
+        return self.ssh_client.run(self.instance_id, request_data, _timeout=timeout)
 
     def download_to_local(self, bucket_name, file_key, file_name, target_path, timeout=60, overwrite=True):
         """
@@ -112,9 +141,7 @@ class Executor(object):
             "execute_timeout": timeout,
             "overwrite": overwrite,
         }
-        return_data = self.download_to_local_client.run(
-            self.instance_id, request_data, _timeout=timeout
-        )
+        return_data = self.download_to_local_client.run(self.instance_id, request_data, _timeout=timeout)
         return return_data
 
     def download_to_remote(
@@ -188,9 +215,7 @@ class Executor(object):
             "zip_path": file_path,
             "dest_dir": target_path,
         }
-        return_data = self.unzip_local_client.run(
-            self.instance_id, request_data, _timeout=timeout
-        )
+        return_data = self.unzip_local_client.run(self.instance_id, request_data, _timeout=timeout)
         return return_data
 
     def transfer_file_to_remote(

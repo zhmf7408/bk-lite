@@ -12,6 +12,8 @@ import { SearchTableProps } from '@/app/log/types/search';
 import { useCopy } from '@/hooks/useCopy';
 import { useLocalizedTime } from '@/hooks/useLocalizedTime';
 
+const DEFAULT_FIELDS = ['timestamp', 'message'];
+
 const SearchTable: React.FC<SearchTableProps> = ({
   dataSource,
   loading = false,
@@ -25,14 +27,8 @@ const SearchTable: React.FC<SearchTableProps> = ({
   const { convertToLocalizedTime } = useLocalizedTime();
   const [expandedRowKeys, setExpandedRowKeys] = useState<React.Key[]>([]);
 
-  const DEFAULT_FIELDS = ['timestamp', 'message'];
-
   const activeColumns = useMemo(() => {
-    const storageFileds = localStorage.getItem('logSearchFields');
-    const dependentFileds = storageFileds
-      ? JSON.parse(storageFileds || '[]')
-      : DEFAULT_FIELDS;
-    let orderedFields = fields.length ? fields : dependentFileds;
+    let orderedFields = [...fields];
 
     // 确保始终包含默认字段
     DEFAULT_FIELDS.forEach((field) => {

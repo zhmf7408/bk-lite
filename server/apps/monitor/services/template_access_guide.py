@@ -13,6 +13,12 @@ class TemplateAccessGuideService:
     DEFAULT_TIMESTAMP_MS_EXAMPLE = 1712052000000
 
     @staticmethod
+    def get_required_instance_id_keys(monitor_object: MonitorObject) -> list[str]:
+        keys = monitor_object.instance_id_keys if isinstance(monitor_object.instance_id_keys, list) else []
+        normalized_keys = [str(key) for key in keys if key not in (None, "")]
+        return normalized_keys or ["instance_id"]
+
+    @staticmethod
     def resolve_required_int(value, field_name: str) -> int:
         if value in (None, ""):
             raise BaseAppException(f"{field_name}不能为空")
@@ -72,11 +78,16 @@ class TemplateAccessGuideService:
             .values("name", "display_name", "description", "unit", "data_type", "dimensions")
         )
         endpoint = TemplateAccessGuideService.get_telegraf_listener_endpoint(cloud_region_id)
+        instance_id_keys = TemplateAccessGuideService.get_required_instance_id_keys(monitor_object)
 
         metric_name = metrics[0]["name"] if metrics else "demo_metric"
-        line_without_timestamp = (
-            f"{metric_name},organization_id={organization_id},instance_type={monitor_object.name},plugin_id={getattr(plugin, 'pk', None)} value=1"
-        )
+        tag_parts = [
+            f"organization_id={organization_id}",
+            f"instance_type={monitor_object.name}",
+            f"plugin_id={getattr(plugin, 'pk', None)}",
+        ]
+        tag_parts.extend([f"{key}=demo_{key}" for key in instance_id_keys])
+        line_without_timestamp = f"{metric_name},{','.join(tag_parts)} value=1"
         line_with_timestamp_ms = f"{line_without_timestamp} {TemplateAccessGuideService.DEFAULT_TIMESTAMP_MS_EXAMPLE}"
 
         return {
@@ -89,6 +100,7 @@ class TemplateAccessGuideService:
             "monitor_object_id": monitor_object.id,
             "instance_type": monitor_object.name,
             "monitor_object_name": monitor_object.display_name or monitor_object.name,
+            "instance_id_keys": instance_id_keys,
             "metrics": metrics,
             "endpoint": endpoint,
             "line_protocol_example": line_without_timestamp,

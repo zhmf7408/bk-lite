@@ -444,6 +444,7 @@
       "templateName": "模板名称",
       "templateId": "模板ID",
       "templateType": "模版类型",
+      "pullTemplateHint": "PULL 模板不支持父子对象联合采集，如有此类需求，请使用 PUSH 模式。",
       "templateDescription": "模版介绍",
       "noConfigData": "暂无配置数据，请检查插件配置",
       "searchRuleName": "搜索规则名称",

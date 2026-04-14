@@ -11,7 +11,7 @@
 
 import hashlib
 import os
-from typing import Dict, List, Optional
+from typing import Any, Dict, List, Optional
 
 from django.core.cache import cache
 
@@ -21,10 +21,31 @@ from apps.core.logger import logger
 # 作为兜底机制，确保即使遗漏主动失效也能在 TTL 内恢复一致性
 PERMISSION_CACHE_TTL = int(os.getenv("PERMISSION_CACHE_TTL", "600"))
 
+# verify_token 结果缓存 TTL（秒），默认 60 秒，可通过环境变量配置
+TOKEN_INFO_CACHE_TTL = int(os.getenv("TOKEN_INFO_CACHE_TTL", "60"))
+
 # 用户权限缓存键前缀（用于按用户清除）
 PERM_CACHE_PREFIX = "perm_rules:"
 # 用户缓存键索引前缀（记录用户的所有缓存键）
 USER_PERM_KEYS_PREFIX = "user_perm_keys:"
+# verify_token 结果缓存键前缀
+TOKEN_INFO_PREFIX = "token_info:"
+
+
+def _get_token_info_key(username: str, domain: str) -> str:
+    return f"{TOKEN_INFO_PREFIX}{username}:{domain}"
+
+
+def get_cached_token_info(username: str, domain: str) -> Optional[Dict[str, Any]]:
+    return cache.get(_get_token_info_key(username, domain))
+
+
+def set_cached_token_info(username: str, domain: str, data: Dict[str, Any]) -> None:
+    cache.set(_get_token_info_key(username, domain), data, TOKEN_INFO_CACHE_TTL)
+
+
+def clear_token_info_cache(username: str, domain: str = "domain.com") -> None:
+    cache.delete(_get_token_info_key(username, domain))
 
 
 def _get_cache_key(
@@ -124,7 +145,7 @@ def set_cached_permission_rules(
 
 def clear_user_permission_cache(username: str, domain: str = "domain.com") -> None:
     """
-    清除指定用户的所有权限缓存
+    清除指定用户的所有权限缓存（含 token_info 缓存）
 
     Args:
         username: 用户名
@@ -134,12 +155,13 @@ def clear_user_permission_cache(username: str, domain: str = "domain.com") -> No
     cached_keys = cache.get(user_keys_index)
 
     if cached_keys:
-        # 批量删除用户的所有权限缓存
         cache.delete_many(list(cached_keys))
         cache.delete(user_keys_index)
         logger.info(f"Cleared {len(cached_keys)} permission cache entries for user: {username}")
     else:
         logger.debug(f"No permission cache found for user: {username}")
+
+    clear_token_info_cache(username, domain)
 
 
 def clear_users_permission_cache(users: List[Dict]) -> None:

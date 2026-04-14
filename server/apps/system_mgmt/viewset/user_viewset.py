@@ -103,6 +103,16 @@ class UserViewSet(ViewSetUtils):
             i["rules"] = group_rule_map.get(i["id"], {})
         data["groups"] = groups
 
+        group_role_ids = []
+        if user.group_list:
+            user_groups = Group.objects.filter(id__in=user.group_list).prefetch_related("roles")
+            group_role_id_set = set()
+            for g in user_groups:
+                for role in g.roles.all():
+                    group_role_id_set.add(role.id)
+            group_role_ids = list(group_role_id_set)
+        data["group_role_ids"] = group_role_ids
+
         return JsonResponse({"result": True, "data": data})
 
     # @action(detail=False, methods=["GET"])
@@ -254,7 +264,7 @@ class UserViewSet(ViewSetUtils):
             log_operation(request, "update", "user", f"编辑用户: {params['username']}")
 
             # 清除权限缓存
-            clear_user_permission_cache(params["username"])
+            clear_user_permission_cache(params["username"], params.get("domain", "domain.com"))
 
         return JsonResponse({"result": True})
 

@@ -142,6 +142,12 @@ export interface TemplateAccessGuideMetricItem {
   dimensions?: any[];
 }
 
+export interface TemplateAccessGuideInstanceIdDimensionItem {
+  key: string;
+  required: boolean;
+  description: string;
+}
+
 export interface TemplateAccessGuideDoc {
   template_id: string;
   display_name: string;
@@ -153,6 +159,7 @@ export interface TemplateAccessGuideDoc {
   monitor_object_id: number;
   instance_type: string;
   monitor_object_name: string;
+  instance_id_keys: string[];
   endpoint: string;
   line_protocol_example: string;
   line_protocol_example_without_timestamp: string;

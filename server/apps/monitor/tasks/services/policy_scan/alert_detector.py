@@ -5,6 +5,7 @@ from string import Template
 from django.db.models import F
 
 from apps.monitor.models import MonitorAlert
+from apps.monitor.services.alert_lifecycle_notify import AlertLifecycleNotifier
 from apps.monitor.tasks.utils.policy_calculate import vm_to_dataframe, calculate_alerts
 from apps.monitor.utils.dimension import (
     build_dimensions,
@@ -32,9 +33,7 @@ class AlertDetector:
         self.metric_query_service = metric_query_service
 
     def detect_threshold_alerts(self):
-        vm_data = self.metric_query_service.query_aggregation_metrics(
-            self.policy.period
-        )
+        vm_data = self.metric_query_service.query_aggregation_metrics(self.policy.period)
         vm_data = self.metric_query_service.convert_metric_values(vm_data)
 
         group_by_keys = self.policy.group_by or []
@@ -44,9 +43,7 @@ class AlertDetector:
         )
 
         template_context = {
-            "monitor_object": self.policy.monitor_object.name
-            if self.policy.monitor_object
-            else "",
+            "monitor_object": self.policy.monitor_object.name if self.policy.monitor_object else "",
             "metric_name": self._get_metric_display_name(),
             "instances_map": self.instances_map,
             "instance_id_keys": group_by_keys,
@@ -55,9 +52,7 @@ class AlertDetector:
             "enum_value_map": self.metric_query_service.get_enum_value_map(),
         }
 
-        alert_events, info_events = calculate_alerts(
-            self.policy.alert_name, df, self.policy.threshold, template_context
-        )
+        alert_events, info_events = calculate_alerts(self.policy.alert_name, df, self.policy.threshold, template_context)
 
         if self.policy.source:
             alert_events = self._filter_events_by_scope(alert_events)
@@ -78,12 +73,8 @@ class AlertDetector:
         if not self.policy.no_data_period or not self.policy.source:
             return []
 
-        aggregation_metrics = self.metric_query_service.query_aggregation_metrics(
-            self.policy.no_data_period
-        )
-        aggregation_result = self.metric_query_service.format_aggregation_metrics(
-            aggregation_metrics
-        )
+        aggregation_metrics = self.metric_query_service.query_aggregation_metrics(self.policy.no_data_period)
+        aggregation_result = self.metric_query_service.format_aggregation_metrics(aggregation_metrics)
 
         events = self._build_no_data_events(aggregation_result)
 
@@ -93,12 +84,7 @@ class AlertDetector:
         return events
 
     def _filter_events_by_scope(self, events):
-        return [
-            e
-            for e in events
-            if self._extract_monitor_instance_id(e["metric_instance_id"])
-            in self.instances_map
-        ]
+        return [e for e in events if self._extract_monitor_instance_id(e["metric_instance_id"]) in self.instances_map]
 
     def _extract_monitor_instance_id(self, metric_instance_id: str) -> str:
         return extract_monitor_instance_id(metric_instance_id)
@@ -106,9 +92,7 @@ class AlertDetector:
     def _build_no_data_events(self, aggregation_result):
         events = []
         no_data_alert_name = self.policy.no_data_alert_name or "no data"
-        monitor_object_name = (
-            self.policy.monitor_object.name if self.policy.monitor_object else ""
-        )
+        monitor_object_name = self.policy.monitor_object.name if self.policy.monitor_object else ""
         metric_name = self._get_metric_display_name()
         no_data_level = self.policy.no_data_level or "warning"
 
@@ -120,17 +104,11 @@ class AlertDetector:
             if metric_instance_id in aggregation_result:
                 continue
 
-            monitor_instance_id = self.baselines_map.get(
-                metric_instance_id
-            ) or self._extract_monitor_instance_id(metric_instance_id)
-            resource_name = self.instances_map.get(
-                monitor_instance_id, monitor_instance_id
-            )
+            monitor_instance_id = self.baselines_map.get(metric_instance_id) or self._extract_monitor_instance_id(metric_instance_id)
+            resource_name = self.instances_map.get(monitor_instance_id, monitor_instance_id)
             dimensions = self._parse_dimensions(metric_instance_id)
             dimension_str = self._format_dimension_str(dimensions)
-            display_name = (
-                f"{resource_name} - {dimension_str}" if dimension_str else resource_name
-            )
+            display_name = f"{resource_name} - {dimension_str}" if dimension_str else resource_name
             group_by_keys = self.policy.group_by or []
             sub_dimension_keys = [k for k in group_by_keys if k != "instance_id"]
             dimension_value = format_dimension_value(
@@ -202,28 +180,14 @@ class AlertDetector:
     def _log_no_data_events(self, events, aggregation_metrics):
         logger.info(f"-------no data events: {events}")
         logger.info(f"-------no data events search result: {aggregation_metrics}")
-        logger.info(
-            f"-------no data events resource scope: {self.instances_map.keys()}"
-        )
+        logger.info(f"-------no data events resource scope: {self.instances_map.keys()}")
 
     def count_events(self, alert_events, info_events):
-        alerts_map = {
-            self._get_alert_metric_instance_id(alert): alert.id
-            for alert in self.active_alerts
-            if alert.alert_type == "alert"
-        }
+        alerts_map = {self._get_alert_metric_instance_id(alert): alert.id for alert in self.active_alerts if alert.alert_type == "alert"}
 
-        info_alert_ids = {
-            alerts_map[event["metric_instance_id"]]
-            for event in info_events
-            if event["metric_instance_id"] in alerts_map
-        }
+        info_alert_ids = {alerts_map[event["metric_instance_id"]] for event in info_events if event["metric_instance_id"] in alerts_map}
 
-        alert_alert_ids = {
-            alerts_map[event["metric_instance_id"]]
-            for event in alert_events
-            if event["metric_instance_id"] in alerts_map
-        }
+        alert_alert_ids = {alerts_map[event["metric_instance_id"]] for event in alert_events if event["metric_instance_id"] in alerts_map}
 
         self._increment_info_count(info_alert_ids)
         self._clear_info_count(alert_alert_ids)
@@ -241,23 +205,15 @@ class AlertDetector:
     def _increment_info_count(self, alert_ids):
         if not alert_ids:
             return
-        MonitorAlert.objects.filter(id__in=list(alert_ids)).update(
-            info_event_count=F("info_event_count") + 1
-        )
+        MonitorAlert.objects.filter(id__in=list(alert_ids)).update(info_event_count=F("info_event_count") + 1)
 
     def recover_threshold_alerts(self):
         if self.policy.recovery_condition <= 0:
             return
 
-        alert_ids = [
-            alert.id for alert in self.active_alerts if alert.alert_type == "alert"
-        ]
+        alert_ids = [alert.id for alert in self.active_alerts if alert.alert_type == "alert"]
 
-        alerts_to_recover = list(
-            MonitorAlert.objects.filter(
-                id__in=alert_ids, info_event_count__gte=self.policy.recovery_condition
-            )
-        )
+        alerts_to_recover = list(MonitorAlert.objects.filter(id__in=alert_ids, info_event_count__gte=self.policy.recovery_condition))
         if not alerts_to_recover:
             return
 
@@ -277,37 +233,28 @@ class AlertDetector:
             alerts_to_recover,
             fields=["status", "end_event_time", "operator", "operation_logs"],
         )
+        AlertLifecycleNotifier(self.policy).notify_alerts(
+            alerts_to_recover,
+            action="recovered",
+            operator="system",
+            reason="auto_recovered",
+        )
 
     def recover_no_data_alerts(self):
         if not self.policy.no_data_recovery_period:
-            logger.debug(
-                f"Policy {self.policy.id}: no_data_recovery_period not configured, skip recovery"
-            )
+            logger.debug(f"Policy {self.policy.id}: no_data_recovery_period not configured, skip recovery")
             return
 
-        aggregation_metrics = self.metric_query_service.query_aggregation_metrics(
-            self.policy.no_data_recovery_period
-        )
-        logger.debug(
-            f"Policy {self.policy.id}: no_data recovery query returned "
-            f"{len(aggregation_metrics.get('data', {}).get('result', []))} results"
-        )
+        aggregation_metrics = self.metric_query_service.query_aggregation_metrics(self.policy.no_data_recovery_period)
+        logger.debug(f"Policy {self.policy.id}: no_data recovery query returned {len(aggregation_metrics.get('data', {}).get('result', []))} results")
 
-        aggregation_result = self.metric_query_service.format_aggregation_metrics(
-            aggregation_metrics
-        )
+        aggregation_result = self.metric_query_service.format_aggregation_metrics(aggregation_metrics)
 
         metric_instance_ids_with_data = set(aggregation_result.keys())
-        logger.debug(
-            f"Policy {self.policy.id}: metric_instance_ids_with_data = {metric_instance_ids_with_data}"
-        )
+        logger.debug(f"Policy {self.policy.id}: metric_instance_ids_with_data = {metric_instance_ids_with_data}")
 
-        no_data_alerts = [
-            alert for alert in self.active_alerts if alert.alert_type == "no_data"
-        ]
-        logger.debug(
-            f"Policy {self.policy.id}: found {len(no_data_alerts)} active no_data alerts"
-        )
+        no_data_alerts = [alert for alert in self.active_alerts if alert.alert_type == "no_data"]
+        logger.debug(f"Policy {self.policy.id}: found {len(no_data_alerts)} active no_data alerts")
 
         alerts_to_recover = []
         for alert in no_data_alerts:
@@ -336,8 +283,12 @@ class AlertDetector:
                 alerts_to_recover,
                 fields=["status", "end_event_time", "operator", "operation_logs"],
             )
-            logger.info(
-                f"Policy {self.policy.id}: recovered {len(alerts_to_recover)} no_data alerts"
+            AlertLifecycleNotifier(self.policy).notify_alerts(
+                alerts_to_recover,
+                action="recovered",
+                operator="system",
+                reason="auto_recovered",
             )
+            logger.info(f"Policy {self.policy.id}: recovered {len(alerts_to_recover)} no_data alerts")
         else:
             logger.debug(f"Policy {self.policy.id}: no no_data alerts to recover")

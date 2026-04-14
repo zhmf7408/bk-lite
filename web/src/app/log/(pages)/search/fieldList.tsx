@@ -32,6 +32,7 @@ const ITEM_HEIGHT = 32;
 
 const FieldList: React.FC<FieldListProps> = ({
   fields,
+  displayFields,
   className = '',
   style = {},
   addToQuery,
@@ -41,21 +42,6 @@ const FieldList: React.FC<FieldListProps> = ({
   const { t } = useTranslation();
   const { getFieldTopStats } = useSearchApi();
   const [searchText, setSearchText] = useState<string>('');
-  const [displayFields, setDisplayFields] = useState<string[]>(() => {
-    const stored = localStorage.getItem('logSearchFields');
-    if (stored) {
-      const parsed = JSON.parse(stored);
-      // 确保始终包含默认字段
-      const result = [...parsed];
-      DEFAULT_FIELDS.forEach((field) => {
-        if (!result.includes(field)) {
-          result.unshift(field);
-        }
-      });
-      return result;
-    }
-    return DEFAULT_FIELDS;
-  });
 
   // 拖拽状态
   const [draggedIndex, setDraggedIndex] = useState<number | null>(null);
@@ -170,15 +156,15 @@ const FieldList: React.FC<FieldListProps> = ({
     (type: string, field: string) => {
       let storageFileds = cloneDeep(displayFields);
       if (type === 'add') {
-        storageFileds = [...storageFileds, field];
+        if (!storageFileds.includes(field)) {
+          storageFileds = [...storageFileds, field];
+        }
       } else {
         const index = storageFileds.findIndex((item) => item === field);
         if (index !== -1) {
           storageFileds.splice(index, 1);
         }
       }
-      setDisplayFields(storageFileds);
-      localStorage.setItem('logSearchFields', JSON.stringify(storageFileds));
       changeDisplayColumns(storageFileds);
     },
     [displayFields, changeDisplayColumns]
@@ -219,8 +205,6 @@ const FieldList: React.FC<FieldListProps> = ({
         const [removed] = newFields.splice(dragIndex, 1);
         newFields.splice(dropIndex, 0, removed);
 
-        setDisplayFields(newFields);
-        localStorage.setItem('logSearchFields', JSON.stringify(newFields));
         changeDisplayColumns(newFields);
       }
 

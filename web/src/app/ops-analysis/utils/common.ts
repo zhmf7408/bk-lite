@@ -3,7 +3,7 @@ import type { IconWithSize } from '@/app/ops-analysis/types';
 
 export const svgToBase64 = async (svgPath: string): Promise<string> => {
   try {
-    const response = await fetch(`/app/assets/assetModelIcon/${svgPath}.svg`);
+    const response = await fetch(`/assets/icons/${svgPath}.svg`);
     const svgText = await response.text();
     const base64 = btoa(unescape(encodeURIComponent(svgText)));
     return `data:image/svg+xml;base64,${base64}`;

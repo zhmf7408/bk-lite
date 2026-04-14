@@ -88,7 +88,7 @@ const EventDetail = forwardRef<ModalRef, ModalConfig>(({}, ref) => {
   const activeColumns = useMemo(() => {
     let columns: ColumnItem[] = [
       {
-        title: 'timestrap',
+        title: 'timestamp',
         dataIndex: '_time',
         key: '_time',
         width: 150,
@@ -102,7 +102,7 @@ const EventDetail = forwardRef<ModalRef, ModalConfig>(({}, ref) => {
         title: 'message',
         dataIndex: '_msg',
         key: '_msg',
-        width: 500,
+        width: 350,
         render: (val) => <>{val || '--'}</>,
       },
     ];
@@ -111,7 +111,7 @@ const EventDetail = forwardRef<ModalRef, ModalConfig>(({}, ref) => {
         title: item,
         dataIndex: item,
         key: item,
-        width: 100,
+        width: 120,
       }));
       columns = [...columns, ...displayColumns];
     }
@@ -122,7 +122,7 @@ const EventDetail = forwardRef<ModalRef, ModalConfig>(({}, ref) => {
           title: item,
           dataIndex: item,
           key: item,
-          width: 100,
+          width: 120,
         }));
     }
     return columns;
