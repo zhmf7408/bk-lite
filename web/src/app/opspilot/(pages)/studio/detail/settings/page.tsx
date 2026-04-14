@@ -19,6 +19,7 @@ import { useStudioApi } from '@/app/opspilot/api/studio';
 import ChatflowSettings from '@/app/opspilot/components/studio/chatflowSettings';
 import { useUnsavedChanges } from '@/app/opspilot/hooks/useUnsavedChanges';
 import { useStudio } from '@/app/opspilot/context/studioContext';
+import { getModelOptionText, renderModelOptionLabel } from '@/app/opspilot/utils/modelOption';
 
 const { Option } = Select;
 const { TextArea } = Input;
@@ -32,7 +33,7 @@ const StudioSettingsPage: React.FC = () => {
   const { groups } = useGroups();
   const [pageLoading, setPageLoading] = useState(true);
   const [saveLoading, setSaveLoading] = useState(false);
-  const [rasaModels, setRasaModels] = useState<{ id: number; name: string; enabled: boolean }[]>([]);
+  const [rasaModels, setRasaModels] = useState<{ id: number; name: string; enabled: boolean; vendor_name?: string }[]>([]);
   const [skills, setSkills] = useState<Skill[]>([]);
   const [channels, setChannels] = useState<{ id: number; name: string, enabled: boolean }[]>([]);
   const [selectedSkills, setSelectedSkills] = useState<number[]>([]);
@@ -612,8 +613,8 @@ const StudioSettingsPage: React.FC = () => {
                       >
                         <Select>
                           {rasaModels.map((model) => (
-                            <Option key={model.id} value={model.id}>
-                              {model.name}
+                            <Option key={model.id} value={model.id} title={getModelOptionText(model)}>
+                              {renderModelOptionLabel(model)}
                             </Option>
                           ))}
                         </Select>

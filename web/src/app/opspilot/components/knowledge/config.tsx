@@ -4,6 +4,7 @@ import { ModelOption, ConfigDataProps, ConfigProps } from '@/app/opspilot/types/
 import { QuestionCircleOutlined } from '@ant-design/icons';
 import { useTranslation } from '@/utils/i18n';
 import { useKnowledgeApi } from '@/app/opspilot/api/knowledge';
+import { filterModelOption, getModelOptionText, renderModelOptionLabel } from '@/app/opspilot/utils/modelOption';
 
 const { Option } = Select;
 
@@ -65,14 +66,12 @@ const ConfigComponent: React.FC<ConfigProps> = ({ configData, setConfigData }) =
           loading={loadingModels}
           value={configData.selectedEmbedModel}
           showSearch
-          filterOption={(input, option) =>
-            typeof option?.children === 'string' && (option.children as string).toLowerCase().includes(input.toLowerCase())
-          }
+          filterOption={filterModelOption}
           onChange={(value) => setConfigData(prevData => ({ ...prevData, selectedEmbedModel: value }))}
         >
           {modelOptions.map((model) => (
-            <Option key={model.id} value={model.id} disabled={!model.enabled}>
-              {model.name}
+            <Option key={model.id} value={model.id} disabled={!model.enabled} title={getModelOptionText(model)}>
+              {renderModelOptionLabel(model)}
             </Option>
           ))}
         </Select>
@@ -233,14 +232,12 @@ const ConfigComponent: React.FC<ConfigProps> = ({ configData, setConfigData }) =
                     loading={loadingModels}
                     value={configData.selectedRerankModel}
                     showSearch
-                    filterOption={(input, option) =>
-                      typeof option?.children === 'string' && (option.children as string).toLowerCase().includes(input.toLowerCase())
-                    }
+                    filterOption={filterModelOption}
                     onChange={(value) => setConfigData(prevData => ({ ...prevData, selectedRerankModel: value }))}
                   >
                     {rerankModelOptions.map((model) => (
-                      <Option key={model.id} value={model.id} disabled={!model.enabled}>
-                        {model.name}
+                      <Option key={model.id} value={model.id} disabled={!model.enabled} title={getModelOptionText(model)}>
+                        {renderModelOptionLabel(model)}
                       </Option>
                     ))}
                   </Select>

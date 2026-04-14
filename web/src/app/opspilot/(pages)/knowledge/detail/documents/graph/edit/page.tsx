@@ -9,6 +9,7 @@ import CustomTable from '@/components/custom-table';
 import { useKnowledgeApi } from '@/app/opspilot/api/knowledge';
 import { useSkillApi } from '@/app/opspilot/api/skill';
 import { getDocumentTypeLabel } from '@/app/opspilot/utils/knowledgeBaseUtils';
+import { filterModelOption, getModelOptionText, renderModelOptionLabel } from '@/app/opspilot/utils/modelOption';
 
 const { TabPane } = Tabs;
 
@@ -384,13 +385,11 @@ const KnowledgeGraphEditPage: React.FC = () => {
             placeholder={t('common.pleaseSelect') + t('knowledge.knowledgeGraph.llmModel')} 
             loading={llmModels.length === 0}
             showSearch
-            filterOption={(input, option) =>
-              typeof option?.children === 'string' && (option.children as string).toLowerCase().includes(input.toLowerCase())
-            }
+            filterOption={filterModelOption}
           >
             {llmModels.map(model => (
-              <Select.Option key={model.id} value={model.id}>
-                {model.name}
+              <Select.Option key={model.id} value={model.id} title={getModelOptionText(model)}>
+                {renderModelOptionLabel(model)}
               </Select.Option>
             ))}
           </Select>
@@ -405,13 +404,11 @@ const KnowledgeGraphEditPage: React.FC = () => {
             placeholder={t('common.pleaseSelect') + t('knowledge.knowledgeGraph.rerankModel')} 
             loading={rerankModels.length === 0}
             showSearch
-            filterOption={(input, option) =>
-              typeof option?.children === 'string' && (option.children as string).toLowerCase().includes(input.toLowerCase())
-            }
+            filterOption={filterModelOption}
           >
             {rerankModels.map(model => (
-              <Select.Option key={model.id} value={model.id}>
-                {model.name}
+              <Select.Option key={model.id} value={model.id} title={getModelOptionText(model)}>
+                {renderModelOptionLabel(model)}
               </Select.Option>
             ))}
           </Select>
@@ -426,13 +423,11 @@ const KnowledgeGraphEditPage: React.FC = () => {
             placeholder={t('common.pleaseSelect') + t('knowledge.form.embedModel')} 
             loading={embedModels.length === 0}
             showSearch
-            filterOption={(input, option) =>
-              typeof option?.children === 'string' && (option.children as string).toLowerCase().includes(input.toLowerCase())
-            }
+            filterOption={filterModelOption}
           >
             {embedModels.map(model => (
-              <Select.Option key={model.id} value={model.id}>
-                {model.name}
+              <Select.Option key={model.id} value={model.id} title={getModelOptionText(model)}>
+                {renderModelOptionLabel(model)}
               </Select.Option>
             ))}
           </Select>

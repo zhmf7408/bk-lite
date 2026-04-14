@@ -4,6 +4,7 @@ import type { StaticImageData } from 'next/image';
 import { useTranslation } from '@/utils/i18n';
 import { useUserInfoContext } from '@/context/userInfo';
 import GroupTreeSelect from '@/components/group-tree-select';
+import { getModelOptionText, renderModelOptionLabel } from '@/app/opspilot/utils/modelOption';
 import LatsAgent from '@/app/opspilot/img/lats_agent.png';
 import PlanAgent from '@/app/opspilot/img/plan_agent.png';
 import RagAgent from '@/app/opspilot/img/rag_agent.png';
@@ -163,8 +164,8 @@ const CommonForm: React.FC<CommonFormProps> = ({ form, modelOptions, initialValu
         >
           <Select placeholder={`${t('common.selectMsg')}${t('knowledge.form.embedModel')}`} disabled={isTraining}>
             {modelOptions.map((model) => (
-              <Option key={model.id} value={model.id} disabled={!model.enabled}>
-                {model.name}
+              <Option key={model.id} value={model.id} disabled={!model.enabled} title={getModelOptionText(model)}>
+                {renderModelOptionLabel(model)}
               </Option>
             ))}
           </Select>
