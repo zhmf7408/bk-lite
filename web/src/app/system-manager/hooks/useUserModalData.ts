@@ -188,9 +188,14 @@ export function useUserModalData(): UseUserModalDataReturn {
         setSelectedGroups(groupKeys);
         setPersonalRoleIds([]);
         setSelectedRoles([]);
+        setGroupRules({});
 
         if (groupKeys.length > 0) {
-          fetchOrganizationRoleIds(groupKeys);
+          void fetchOrganizationRoleIds(groupKeys).then((orgRoleIds) => {
+            const mergedRoleIds = mergeRoles([], orgRoleIds);
+            setSelectedRoles(mergedRoleIds);
+            formRef.current?.setFieldsValue({ roles: mergedRoleIds });
+          });
         } else {
           fetchRoleInfoWithOrgRoles();
         }
