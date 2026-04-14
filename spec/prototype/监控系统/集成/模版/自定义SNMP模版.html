@@ -1064,6 +1064,10 @@
             box-shadow: 0 4px 24px rgba(0, 0, 0, 0.15);
         }
 
+        .modal-small {
+            width: 480px;
+        }
+
         .modal-header {
             display: flex;
             align-items: center;
@@ -1175,6 +1179,12 @@
 
         .modal-form-textarea:focus {
             border-color: #3a84ff;
+        }
+
+        .modal-message {
+            font-size: 14px;
+            color: #4d4f56;
+            line-height: 1.8;
         }
 
         .modal-form-row {
@@ -1949,6 +1959,22 @@
         </div>
     </div>
 
+    <div class="modal-overlay" id="collectSaveModal">
+        <div class="modal modal-small">
+            <div class="modal-header">
+                <span class="modal-title">确认保存采集配置</span>
+                <span class="modal-close" onclick="closeCollectSaveModal()">×</span>
+            </div>
+            <div class="modal-body">
+                <div class="modal-message">保存后，已关联并正在采集的资产会立即应用最新配置。请确认当前采集配置已经检查无误，避免影响现有采集结果。</div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn-modal-cancel" onclick="closeCollectSaveModal()">取消</button>
+                <button class="btn-modal-confirm" onclick="confirmCollectSave()">确认保存</button>
+            </div>
+        </div>
+    </div>
+
     <script>
         let collectDraftValue = '';
 
@@ -2036,12 +2062,26 @@
                 return;
             }
 
-            const confirmed = window.confirm('保存后，已关联并正在采集的资产会立即应用最新配置。请确认当前采集配置已检查无误，避免影响现网采集结果。');
-            if (!confirmed) {
+            document.getElementById('collectSaveModal').classList.add('show');
+        }
+
+        function closeCollectSaveModal() {
+            const modal = document.getElementById('collectSaveModal');
+            if (!modal) {
+                return;
+            }
+
+            modal.classList.remove('show');
+        }
+
+        function confirmCollectSave() {
+            const textarea = document.getElementById('collectTextarea');
+            if (!textarea) {
                 return;
             }
 
             collectDraftValue = textarea.value;
+            closeCollectSaveModal();
             setCollectEditMode(false);
         }
 
