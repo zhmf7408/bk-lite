@@ -58,19 +58,17 @@ discover_hbase_masterserver() {
         eval $(xml_to_dict $config_file)
         tmp_dir=""
         cluster_distributed="false"
-        unsafe_stream_capability_enforce="false"
 
         for key in "${!xml_dict[@]}"; do
             [[ $key == "hbase.master.port" ]] && port=${xml_dict[$key]}
             [[ $key == "hbase.cluster.distributed" ]] && cluster_distributed=${xml_dict[$key]}
             [[ $key == "hbase.tmp.dir" ]] && tmp_dir=${xml_dict[$key]}
-            [[ $key == "hbase.unsafe.stream.capability.enforce" ]] && unsafe_stream_capability_enforce=${xml_dict[$key]}
         done
         [[ $tmp_dir == "./tmp" ]] && tmp_dir="/tmp"
         java_version=$(get_jdk_version $java_path)
         bk_inst_name="${bk_host_innerip}-hbase-${port}"
-        json_template='{"inst_name":"%s","bk_obj_id":"hbase","ip_addr":"%s","port":"%s","install_path":"%s","version":"%s","log_path":"%s","config_file":"%s","tmp_dir":"%s","cluster_distributed":"%s","unsafe_stream_capability_enforce":"%s","java_path":"%s","java_version":"%s"}'
-        echo $(printf "$json_template" "$bk_inst_name" "$bk_host_innerip" "$port" "$install_path" "$version" "$log_path" "$config_file" "$tmp_dir" "$cluster_distributed" "$unsafe_stream_capability_enforce" "$java_path" "$java_version")
+        json_template='{"inst_name":"%s","bk_obj_id":"hbase","ip_addr":"%s","port":"%s","install_path":"%s","version":"%s","log_path":"%s","config_file":"%s","tmp_dir":"%s","cluster_distributed":"%s","java_path":"%s","java_version":"%s"}'
+        echo $(printf "$json_template" "$bk_inst_name" "$bk_host_innerip" "$port" "$install_path" "$version" "$log_path" "$config_file" "$tmp_dir" "$cluster_distributed" "$java_path" "$java_version")
         break
     done
 }
