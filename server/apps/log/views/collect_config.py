@@ -290,9 +290,11 @@ class CollectInstanceViewSet(ViewSet):
             else:
                 configs.append(config.id)
         # 删除子配置
-        NodeMgmt().delete_child_configs(child_configs)
+        if child_configs:
+            NodeMgmt().delete_child_configs(child_configs)
         # 删除配置
-        NodeMgmt().delete_configs(configs)
+        if configs:
+            NodeMgmt().delete_configs(configs)
         # 删除配置对象
         config_objs.delete()
         CollectInstance.objects.filter(id__in=instance_ids).delete()

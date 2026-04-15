@@ -37,6 +37,11 @@ const SQLTask: React.FC<SQLTaskFormProps> = ({
   const localeContext = useLocale();
   const { copyTaskData, setCopyTaskData } = useAssetManageStore();
   const { model_id: modelId } = modelItem;
+  const isMssql = modelId === 'mssql';
+  const initialFormValues = {
+    ...SQL_FORM_INITIAL_VALUES,
+    ...(isMssql ? { port: '1433', database: 'master' } : {}),
+  };
 
   const {
     form,
@@ -48,7 +53,7 @@ const SQLTask: React.FC<SQLTaskFormProps> = ({
   } = useTaskForm({
     modelId,
     editId,
-    initialValues: SQL_FORM_INITIAL_VALUES,
+    initialValues: initialFormValues,
     onSuccess,
     onClose,
     formatValues: (values) => {
@@ -65,7 +70,10 @@ const SQLTask: React.FC<SQLTaskFormProps> = ({
       const ipRange = values.ipRange?.length ? values.ipRange : undefined;
       const selectedData = baseRef.current?.selectedData;
 
-      let instanceData;
+      let instanceData: {
+        ip_range: string;
+        instances: any[];
+      };
       if (collectType === 'ip') {
         instanceData = {
           ip_range: ipRange.join('-'),
@@ -86,6 +94,7 @@ const SQLTask: React.FC<SQLTaskFormProps> = ({
             user: 'user',
             password: 'password',
             port: 'port',
+            database: () => (isMssql ? values.database : undefined),
           },
           values
         ),
@@ -104,6 +113,7 @@ const SQLTask: React.FC<SQLTaskFormProps> = ({
       taskName: isCopy ? '' : values.name,
       user: credential.user || credential.username,
       password: isCopy ? '' : PASSWORD_PLACEHOLDER,
+      database: credential.database,
       organization: values.team || [],
       accessPointId: values.access_point?.[0]?.id,
     };
@@ -134,7 +144,7 @@ const SQLTask: React.FC<SQLTaskFormProps> = ({
         // 编辑任务中回填表单数据
         form.setFieldsValue(buildFormValues(values, false, ipRange));
       } else {
-        form.setFieldsValue(SQL_FORM_INITIAL_VALUES);
+        form.setFieldsValue(initialFormValues);
       }
     };
     initForm();
@@ -147,7 +157,7 @@ const SQLTask: React.FC<SQLTaskFormProps> = ({
         layout="horizontal"
         labelCol={{ span: localeContext.locale === 'en' ? 6 : 5 }}
         onFinish={onFinish}
-        initialValues={SQL_FORM_INITIAL_VALUES}
+        initialValues={initialFormValues}
       >
         <BaseTaskForm
           ref={baseRef}
@@ -219,6 +229,16 @@ const SQLTask: React.FC<SQLTaskFormProps> = ({
               >
                 <InputNumber min={1} max={65535} className="w-32" />
               </Form.Item>
+
+              {isMssql && (
+                <Form.Item
+                  label={t('Collection.database')}
+                  name="database"
+                  rules={[{ required: true, message: t('common.inputTip') }]}
+                >
+                  <Input placeholder={t('common.inputTip')} />
+                </Form.Item>
+              )}
             </Collapse.Panel>
           </Collapse>
         </BaseTaskForm>

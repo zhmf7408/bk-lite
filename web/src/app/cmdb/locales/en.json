@@ -326,6 +326,7 @@
         "chooseAsset": "Choose Asset",
         "everyMinute": "Every",
         "executeOnce": "Execute once",
+        "database": "Database",
         "port": "Port",
         "syncStatus": {
             "add": "Add",
