@@ -37,6 +37,7 @@ interface LoginResponse {
   username?: string;
   id?: string;
   locale?: string;
+  timezone?: string;
   redirect_url?: string;
 }
 
@@ -368,6 +369,7 @@ export default function SigninClient({
         username: userData.username,
         token: userData.token,
         locale: userData.locale || 'en',
+        timezone: userData.timezone || 'Asia/Shanghai',
         temporary_pwd: userData.temporary_pwd || false,
         enable_otp: userData.enable_otp || false,
         qrcode: userData.qrcode || false,
@@ -381,6 +383,7 @@ export default function SigninClient({
           username: userDataForAuth.username || '',
           token: userData.token,
           locale: userDataForAuth.locale,
+          timezone: userDataForAuth.timezone,
           temporary_pwd: userDataForAuth.temporary_pwd,
           enable_otp: userDataForAuth.enable_otp,
           qrcode: userDataForAuth.qrcode,

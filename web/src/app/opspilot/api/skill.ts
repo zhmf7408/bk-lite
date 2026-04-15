@@ -16,6 +16,7 @@ import type {
   CreateSkillPayload,
   Skill,
 } from '@/app/opspilot/types/skill';
+import type { RedisInstanceFormValue } from '@/app/opspilot/components/skill/redisToolEditor';
 
 export const useSkillApi = () => {
   const { get, post, patch, del, put } = useApiClient();
@@ -64,6 +65,10 @@ export const useSkillApi = () => {
     return get('/opspilot/model_provider_mgmt/skill_tools/');
   };
 
+  const testRedisConnection = async (instance: Omit<RedisInstanceFormValue, 'testStatus'>): Promise<void> => {
+    await post('/opspilot/model_provider_mgmt/skill_tools/test_redis_connection/', instance);
+  };
+
   const fetchSkillTemplates = async (): Promise<SkillTemplate[]> => {
     return get('/opspilot/model_provider_mgmt/llm/get_template_list/');
   };
@@ -88,6 +93,7 @@ export const useSkillApi = () => {
     fetchLlmModels,
     saveSkillDetail,
     fetchSkillTools,
+    testRedisConnection,
     fetchSkillTemplates,
     createSkill,
     togglePin,

@@ -356,7 +356,10 @@
         "subTypeEnterpriseWechat": "企业微信",
         "subTypeFeishu": "飞书",
         "subTypeDingtalk": "钉钉",
-        "subTypeCustom": "其他"
+        "subTypeCustom": "其他",
+        "test": "测试",
+        "testFailed": "测试发送失败",
+        "testSuccess": "测试消息已发送，请确认是否已成功接收"
       },
       "table": {
         "description": "描述",

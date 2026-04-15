@@ -356,7 +356,10 @@
         "subTypeEnterpriseWechat": "WeCom",
         "subTypeFeishu": "Feishu",
         "subTypeDingtalk": "DingTalk",
-        "subTypeCustom": "Custom"
+        "subTypeCustom": "Custom",
+        "test": "Test",
+        "testFailed": "Test send failed",
+        "testSuccess": "The test message has been sent. Please confirm whether it was received successfully"
       },
       "table": {
         "description": "DESCRIPTION",

@@ -159,7 +159,7 @@ const SkillSettingsPage: React.FC = () => {
         guide: values.guide,
         tools: selectedTools.map((tool: any) => ({
           id: tool.id,
-          name: tool.name,
+          name: tool.rawName || tool.name,
           icon: tool.icon,
           kwargs: tool.kwargs.filter((kwarg: any) => kwarg.key),
         })),

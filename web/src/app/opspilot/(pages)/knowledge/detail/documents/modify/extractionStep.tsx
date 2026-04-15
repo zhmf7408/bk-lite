@@ -104,7 +104,7 @@ const ExtractionStep: React.FC<{
 
   // Get available extraction methods based on file extension
   // Word: fullText + chapter (default: chapter)
-  // Excel: fullText + worksheet + row (default: row)  
+  // Excel: fullText + worksheet + row (default: row)
   // PDF: fullText + page (default: page)
   // PPT: fullText + page (default: fullText)
   // Others: fullText only
@@ -249,8 +249,8 @@ const ExtractionStep: React.FC<{
       title: t('knowledge.documents.actions'),
       key: 'actions',
       render: (_: unknown, record: any, index: number) => (
-        <Button 
-          type="link" 
+        <Button
+          type="link"
           onClick={() => handleConfigure(record, index)}
           disabled={loadingOcrModels}
           loading={loadingOcrModels}
@@ -273,7 +273,7 @@ const ExtractionStep: React.FC<{
     setOcrEnabled(
       (documentConfig?.enable_ocr_parse ?? extractionMethods[availableMethods.default as keyof typeof extractionMethods]?.defaultOCR) || false
     );
-    
+
     let ocrModelToSelect = documentConfig?.ocr_model;
     if (extractionConfig && extractionConfig.knowledge_document_list) {
       const doc = extractionConfig.knowledge_document_list.find((d) => d.id === record.key);

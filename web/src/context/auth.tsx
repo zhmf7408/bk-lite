@@ -30,6 +30,7 @@ type ExtendedSession = Session & {
     username?: string;
     token?: string;
     locale?: string;
+    timezone?: string;
     name?: string | null;
     email?: string | null;
     image?: string | null;
@@ -171,6 +172,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             username: userData.username,
             token: userData.token,
             locale: userData.locale || 'en',
+            timezone: userData.timezone || 'Asia/Shanghai',
             temporary_pwd: userData.temporary_pwd || false,
             enable_otp: userData.enable_otp || false,
             qrcode: userData.qrcode || false,
@@ -183,6 +185,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
               username: userDataForAuth.username || '',
               token: userData.token,
               locale: userDataForAuth.locale,
+              timezone: userDataForAuth.timezone,
               temporary_pwd: userDataForAuth.temporary_pwd,
               enable_otp: userDataForAuth.enable_otp,
               qrcode: userDataForAuth.qrcode,
@@ -336,11 +339,13 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       setIsAuthenticated(true);
       setIsCheckingAuth(false);
       const userLocale = extendedSession.user?.locale || 'en';
+      const userTimezone = extendedSession.user?.timezone || 'Asia/Shanghai';
       const savedLocale = localStorage.getItem('locale') || 'en';
       if (userLocale !== savedLocale) {
         setLocale(userLocale);
       }
       localStorage.setItem('locale', userLocale);
+      localStorage.setItem('timezone', userTimezone);
     }
   }, [status, session, pathname, setLocale, router, isAutoSigningIn, hasCheckedExistingAuth, isCheckingExistingAuth, isCurrentAuthPath, sessionExpiredOpen]);
 

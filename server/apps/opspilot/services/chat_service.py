@@ -8,6 +8,7 @@ from apps.core.mixinx import EncryptMixin
 from apps.core.utils.loader import LanguageLoader
 from apps.opspilot.enum import SkillTypeChoices
 from apps.opspilot.models import LLMModel, SkillTools
+from apps.opspilot.services.builtin_tools import BUILTIN_REDIS_TOOL_NAME, build_builtin_redis_runtime_tool
 from apps.opspilot.services.history_service import history_service
 from apps.opspilot.services.rag_service import rag_service
 from apps.opspilot.utils.agent_factory import create_agent_instance
@@ -178,17 +179,23 @@ class ChatService:
             )
 
         if kwargs["skill_type"] != SkillTypeChoices.KNOWLEDGE_TOOL:
-            for tool in kwargs.get("tools", []):
+            selected_tools = kwargs.get("tools", [])
+            selected_builtin_redis_kwargs = None
+            for tool in selected_tools:
                 for i in tool.get("kwargs", []):
-                    if i["type"] == "password":
+                    if i.get("type") == "password":
                         EncryptMixin.decrypt_field("value", i)
-            tool_map = {i["id"]: {u["key"]: u["value"] for u in i["kwargs"] if u["key"]} for i in kwargs.get("tools", [])}
+                if tool.get("name") == BUILTIN_REDIS_TOOL_NAME:
+                    selected_builtin_redis_kwargs = {u["key"]: u["value"] for u in tool.get("kwargs", []) if u.get("key")}
+            tool_map = {i["id"]: {u["key"]: u["value"] for u in i["kwargs"] if u.get("key")} for i in selected_tools if "id" in i}
 
             # 查询工具对象，需要判断是否为内置工具
             skill_tools_queryset = SkillTools.objects.filter(id__in=list(tool_map.keys()))
             tools = []
+            loaded_tool_names = set()
 
             for skill_tool in skill_tools_queryset:
+                loaded_tool_names.add(skill_tool.name)
                 tool_params = skill_tool.params.copy()
                 # 移除 kwargs 字段
                 tool_params.pop("kwargs", None)
@@ -196,7 +203,14 @@ class ChatService:
                 # 如果是内置工具，添加 langchain 前缀的 URL
                 if skill_tool.is_build_in:
                     tool_params["url"] = f"langchain:{skill_tool.name}"
+                    if skill_tool.name == BUILTIN_REDIS_TOOL_NAME:
+                        tool_params["extra_tools_prompt"] = build_builtin_redis_runtime_tool(tool_map.get(skill_tool.id, {}))[
+                            "extra_tools_prompt"
+                        ]
                 tools.append(tool_params)
+
+            if selected_builtin_redis_kwargs and BUILTIN_REDIS_TOOL_NAME not in loaded_tool_names:
+                tools.append(build_builtin_redis_runtime_tool(selected_builtin_redis_kwargs))
 
             for i in tool_map.values():
                 extra_config.update(i)

@@ -651,7 +651,7 @@
                     <div class="all-icon">📊</div>
                     <div class="tree-node-label">
                         <span class="tree-label-text">全部</span>
-                        <span class="tree-count">(17)</span>
+                        <span class="tree-count">(18)</span>
                     </div>
                 </div>
 
@@ -682,6 +682,12 @@
                 <div class="category-item" data-filter-type="category" data-filter-value="容器">
                     <span class="category-icon">📦</span>
                     <span class="category-label">容器</span>
+                    <span class="category-count">(1)</span>
+                </div>
+
+                <div class="category-item" data-filter-type="category" data-filter-value="K8s">
+                    <span class="category-icon">☸️</span>
+                    <span class="category-label">K8s</span>
                     <span class="category-count">(1)</span>
                 </div>
 
@@ -721,6 +727,8 @@
             { name: '网络流', icon: '📈', probe: 'Packetbeat', category: '网络', desc: '捕获网络会话数据，记录源/目标IP、端口、字节数等连接信息' },
             // 容器
             { name: 'Docker 容器日志', icon: '🐳', probe: 'Vector', category: '容器', desc: '采集 Docker 容器日志，自动识别容器名称、镜像ID等元数据' },
+            // K8s
+            { name: 'K8s日志', icon: '☸️', probe: 'Vector', category: 'K8s', desc: '通过 DaemonSet 方式采集 K8s 节点与容器日志，自动关联命名空间、Pod、容器等元数据' },
             // 安全与审计
             { name: 'Windows 事件日志', icon: '🪟', probe: 'Winlogbeat', category: '安全与审计', desc: '采集 Windows 事件日志，包含系统事件（硬件、驱动、服务）和安全事件（登录、授权）' },
             { name: 'Linux 文件变更监控', icon: '🛡️', probe: 'Auditbeat', category: '安全与审计', desc: '监控指定文件和目录的变更，检测未授权修改，保护关键配置文件完整性' },
@@ -749,7 +757,7 @@
                     <div class="card-icon">${scene.icon}</div>
                     <div class="card-info">
                         <div class="card-title-row">
-                            <div class="card-title">${scene.name} (${scene.probe})</div>
+                            <div class="card-title">${scene.name}</div>
                         </div>
                         <div class="card-subtitle">
                             <span class="category-badge">${scene.category}</span>
@@ -828,6 +836,10 @@
             // 容器
             if (name === 'Docker 容器日志' && probe === 'Vector') {
                 window.location.href = '集成页面/Docker 容器日志 (Vector).html';
+                return;
+            }
+            if (name === 'K8s日志' && probe === 'Vector') {
+                window.location.href = '集成页面/K8s 集群日志 (Vector).html';
                 return;
             }
             // 安全与审计类型

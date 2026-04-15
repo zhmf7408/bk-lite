@@ -132,6 +132,7 @@ export const SQL_FORM_INITIAL_VALUES = {
   intervalValue: 30,
   enterType: ENTER_TYPE.AUTOMATIC,
   name: '',
+  database: '',
   password: '',
   port: '3306',
   timeout: 10,
@@ -428,4 +429,3 @@ export const NETWORK_DEVICE_OPTIONS = [
     label: '负载均衡',
   },
 ]
-

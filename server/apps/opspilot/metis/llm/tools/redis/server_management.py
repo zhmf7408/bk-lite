@@ -1,8 +1,11 @@
+from typing import Optional
+
 from langchain_core.runnables import RunnableConfig
 from langchain_core.tools import tool
 from redis.exceptions import RedisError
 
-from apps.opspilot.metis.llm.tools.redis.connection import get_redis_connection
+from apps.opspilot.metis.llm.tools.common.credentials import execute_with_credentials
+from apps.opspilot.metis.llm.tools.redis.connection import build_redis_normalized_from_runnable, get_redis_connection_from_item
 from apps.opspilot.metis.llm.tools.redis.hash import redis_hgetall
 from apps.opspilot.metis.llm.tools.redis.json import redis_json_get
 from apps.opspilot.metis.llm.tools.redis.list import redis_llen, redis_lrange
@@ -13,188 +16,279 @@ from apps.opspilot.metis.llm.tools.redis.utils import build_error_response, buil
 
 
 @tool()
-def redis_ping(config: RunnableConfig = None):
+def redis_ping(instance_name: Optional[str] = None, instance_id: Optional[str] = None, config: RunnableConfig = None):
     """检查 Redis 连通性并返回 ping 结果。"""
-    try:
-        client = get_redis_connection(config=config)
-        return build_success_response({"pong": client.ping()})
-    except RedisError as e:
-        return build_error_response(e, error_type="connection_error")
+    normalized = build_redis_normalized_from_runnable(config, instance_name, instance_id)
+
+    def _executor(item):
+        try:
+            client = get_redis_connection_from_item(item)
+            return build_success_response({"pong": client.ping()})
+        except (RedisError, ValueError) as e:
+            return build_error_response(e, error_type="connection_error")
+
+    return execute_with_credentials(normalized, _executor)
 
 
 @tool()
-def redis_dbsize(config: RunnableConfig = None):
+def redis_dbsize(instance_name: Optional[str] = None, instance_id: Optional[str] = None, config: RunnableConfig = None):
     """获取当前 Redis 数据库中的 key 总数。"""
-    try:
-        client = get_redis_connection(config=config)
-        return build_success_response({"dbsize": client.dbsize()})
-    except RedisError as e:
-        return build_error_response(e)
+    normalized = build_redis_normalized_from_runnable(config, instance_name, instance_id)
+
+    def _executor(item):
+        try:
+            client = get_redis_connection_from_item(item)
+            return build_success_response({"dbsize": client.dbsize()})
+        except (RedisError, ValueError) as e:
+            return build_error_response(e)
+
+    return execute_with_credentials(normalized, _executor)
 
 
 @tool()
-def redis_info(section: str = "default", config: RunnableConfig = None):
+def redis_info(
+    section: str = "default", instance_name: Optional[str] = None, instance_id: Optional[str] = None, config: RunnableConfig = None
+):
     """获取 Redis 服务端信息，可指定 section。"""
-    try:
-        client = get_redis_connection(config=config)
-        return build_success_response(client.info(section), section=section)
-    except RedisError as e:
-        return build_error_response(e)
+    normalized = build_redis_normalized_from_runnable(config, instance_name, instance_id)
+
+    def _executor(item):
+        try:
+            client = get_redis_connection_from_item(item)
+            return build_success_response(client.info(section), section=section)
+        except (RedisError, ValueError) as e:
+            return build_error_response(e)
+
+    return execute_with_credentials(normalized, _executor)
 
 
 @tool()
-def redis_client_list(config: RunnableConfig = None):
+def redis_client_list(instance_name: Optional[str] = None, instance_id: Optional[str] = None, config: RunnableConfig = None):
     """获取当前连接到 Redis 的客户端列表。"""
-    try:
-        client = get_redis_connection(config=config)
-        return build_success_response(client.client_list())
-    except RedisError as e:
-        return build_error_response(e)
+    normalized = build_redis_normalized_from_runnable(config, instance_name, instance_id)
+
+    def _executor(item):
+        try:
+            client = get_redis_connection_from_item(item)
+            return build_success_response(client.client_list())
+        except (RedisError, ValueError) as e:
+            return build_error_response(e)
+
+    return execute_with_credentials(normalized, _executor)
 
 
 @tool()
-def redis_scan_keys(pattern: str = "*", count: int = 100, cursor: int = 0, config: RunnableConfig = None):
+def redis_scan_keys(
+    pattern: str = "*",
+    count: int = 100,
+    cursor: int = 0,
+    instance_name: Optional[str] = None,
+    instance_id: Optional[str] = None,
+    config: RunnableConfig = None,
+):
     """按 pattern 分页扫描 Redis keys，避免使用高风险的 KEYS *。"""
-    try:
-        client = get_redis_connection(config=config)
-        next_cursor, keys = client.scan(cursor=cursor, match=pattern, count=count)
-        return build_success_response(truncate_sequence(keys, max_items=count), cursor=next_cursor, pattern=pattern)
-    except RedisError as e:
-        return build_error_response(e)
+    normalized = build_redis_normalized_from_runnable(config, instance_name, instance_id)
+
+    def _executor(item):
+        try:
+            client = get_redis_connection_from_item(item)
+            next_cursor, keys = client.scan(cursor=cursor, match=pattern, count=count)
+            return build_success_response(truncate_sequence(keys, max_items=count), cursor=next_cursor, pattern=pattern)
+        except (RedisError, ValueError) as e:
+            return build_error_response(e)
+
+    return execute_with_credentials(normalized, _executor)
 
 
 @tool()
-def redis_key_type(key: str, config: RunnableConfig = None):
+def redis_key_type(key: str, instance_name: Optional[str] = None, instance_id: Optional[str] = None, config: RunnableConfig = None):
     """获取指定 key 的 Redis 数据类型。"""
-    try:
-        client = get_redis_connection(config=config)
-        return build_success_response({"key": key, "type": client.type(key)})
-    except RedisError as e:
-        return build_error_response(e)
+    normalized = build_redis_normalized_from_runnable(config, instance_name, instance_id)
+
+    def _executor(item):
+        try:
+            client = get_redis_connection_from_item(item)
+            return build_success_response({"key": key, "type": client.type(key)})
+        except (RedisError, ValueError) as e:
+            return build_error_response(e)
+
+    return execute_with_credentials(normalized, _executor)
 
 
 @tool()
-def redis_exists(key: str, config: RunnableConfig = None):
+def redis_exists(key: str, instance_name: Optional[str] = None, instance_id: Optional[str] = None, config: RunnableConfig = None):
     """检查指定 key 是否存在。"""
-    try:
-        client = get_redis_connection(config=config)
-        return build_success_response({"key": key, "exists": bool(client.exists(key))})
-    except RedisError as e:
-        return build_error_response(e)
+    normalized = build_redis_normalized_from_runnable(config, instance_name, instance_id)
+
+    def _executor(item):
+        try:
+            client = get_redis_connection_from_item(item)
+            return build_success_response({"key": key, "exists": bool(client.exists(key))})
+        except (RedisError, ValueError) as e:
+            return build_error_response(e)
+
+    return execute_with_credentials(normalized, _executor)
 
 
 @tool()
-def redis_expire(key: str, seconds: int, config: RunnableConfig = None):
+def redis_expire(
+    key: str, seconds: int, instance_name: Optional[str] = None, instance_id: Optional[str] = None, config: RunnableConfig = None
+):
     """为指定 key 设置过期时间（秒）。"""
-    try:
-        client = get_redis_connection(config=config)
-        return build_success_response({"key": key, "expire_set": bool(client.expire(key, seconds)), "seconds": seconds})
-    except RedisError as e:
-        return build_error_response(e)
+    normalized = build_redis_normalized_from_runnable(config, instance_name, instance_id)
+
+    def _executor(item):
+        try:
+            client = get_redis_connection_from_item(item)
+            return build_success_response({"key": key, "expire_set": bool(client.expire(key, seconds)), "seconds": seconds})
+        except (RedisError, ValueError) as e:
+            return build_error_response(e)
+
+    return execute_with_credentials(normalized, _executor)
 
 
 @tool()
-def redis_ttl(key: str, config: RunnableConfig = None):
+def redis_ttl(key: str, instance_name: Optional[str] = None, instance_id: Optional[str] = None, config: RunnableConfig = None):
     """获取指定 key 的剩余 TTL。"""
-    try:
-        client = get_redis_connection(config=config)
-        return build_success_response({"key": key, "ttl": client.ttl(key)})
-    except RedisError as e:
-        return build_error_response(e)
+    normalized = build_redis_normalized_from_runnable(config, instance_name, instance_id)
+
+    def _executor(item):
+        try:
+            client = get_redis_connection_from_item(item)
+            return build_success_response({"key": key, "ttl": client.ttl(key)})
+        except (RedisError, ValueError) as e:
+            return build_error_response(e)
+
+    return execute_with_credentials(normalized, _executor)
 
 
 @tool()
-def redis_delete(key: str, config: RunnableConfig = None):
+def redis_delete(key: str, instance_name: Optional[str] = None, instance_id: Optional[str] = None, config: RunnableConfig = None):
     """删除指定 key。"""
-    try:
-        client = get_redis_connection(config=config)
-        return build_success_response({"key": key, "deleted": client.delete(key)})
-    except RedisError as e:
-        return build_error_response(e)
+    normalized = build_redis_normalized_from_runnable(config, instance_name, instance_id)
+
+    def _executor(item):
+        try:
+            client = get_redis_connection_from_item(item)
+            return build_success_response({"key": key, "deleted": client.delete(key)})
+        except (RedisError, ValueError) as e:
+            return build_error_response(e)
+
+    return execute_with_credentials(normalized, _executor)
 
 
 @tool()
-def redis_rename(old_key: str, new_key: str, config: RunnableConfig = None):
+def redis_rename(
+    old_key: str, new_key: str, instance_name: Optional[str] = None, instance_id: Optional[str] = None, config: RunnableConfig = None
+):
     """重命名 Redis key。"""
-    try:
-        client = get_redis_connection(config=config)
-        return build_success_response({"old_key": old_key, "new_key": new_key, "renamed": client.rename(old_key, new_key)})
-    except RedisError as e:
-        return build_error_response(e)
+    normalized = build_redis_normalized_from_runnable(config, instance_name, instance_id)
+
+    def _executor(item):
+        try:
+            client = get_redis_connection_from_item(item)
+            return build_success_response({"old_key": old_key, "new_key": new_key, "renamed": client.rename(old_key, new_key)})
+        except (RedisError, ValueError) as e:
+            return build_error_response(e)
+
+    return execute_with_credentials(normalized, _executor)
 
 
 @tool()
-def redis_get_key_value(key: str, max_items: int = 100, config: RunnableConfig = None):
+def redis_get_key_value(
+    key: str,
+    max_items: int = 100,
+    instance_name: Optional[str] = None,
+    instance_id: Optional[str] = None,
+    config: RunnableConfig = None,
+):
     """自动识别 Redis key 类型并返回详细值信息。"""
-    try:
-        client = get_redis_connection(config=config)
-        exists = bool(client.exists(key))
-        if not exists:
-            return build_success_response({"key": key, "exists": False, "type": "none", "ttl": -2, "value": None})
+    normalized = build_redis_normalized_from_runnable(config, instance_name, instance_id)
 
-        key_type = client.type(key)
-        ttl = client.ttl(key)
+    def _executor(item):
+        try:
+            client = get_redis_connection_from_item(item)
+            exists = bool(client.exists(key))
+            if not exists:
+                return build_success_response({"key": key, "exists": False, "type": "none", "ttl": -2, "value": None})
 
-        if key_type == "string":
-            result = redis_get.invoke({"key": key})
-            return build_success_response({"key": key, "exists": True, "type": key_type, "ttl": ttl, **result["data"]})
+            key_type = client.type(key)
+            ttl = client.ttl(key)
 
-        if key_type == "hash":
-            result = redis_hgetall.invoke({"name": key})
-            value = result["data"]
-            count = len(value) if isinstance(value, dict) else 0
-            return build_success_response({"key": key, "exists": True, "type": key_type, "ttl": ttl, "count": count, "value": value})
+            if key_type == "string":
+                result = redis_get.invoke({"key": key, "instance_name": instance_name, "instance_id": instance_id, "config": config})
+                return build_success_response({"key": key, "exists": True, "type": key_type, "ttl": ttl, **result["data"]})
 
-        if key_type == "list":
-            len_result = redis_llen.invoke({"key": key})
-            range_result = redis_lrange.invoke({"key": key, "start": 0, "end": max_items - 1})
-            count = len_result["data"]["length"]
-            value = range_result["data"]
+            if key_type == "hash":
+                result = redis_hgetall.invoke({"name": key, "instance_name": instance_name, "instance_id": instance_id, "config": config})
+                value = result["data"]
+                count = len(value) if isinstance(value, dict) else 0
+                return build_success_response({"key": key, "exists": True, "type": key_type, "ttl": ttl, "count": count, "value": value})
+
+            if key_type == "list":
+                len_result = redis_llen.invoke({"key": key, "instance_name": instance_name, "instance_id": instance_id, "config": config})
+                range_result = redis_lrange.invoke(
+                    {"key": key, "start": 0, "end": max_items - 1, "instance_name": instance_name, "instance_id": instance_id, "config": config}
+                )
+                count = len_result["data"]["length"]
+                value = range_result["data"]
+                return build_success_response(
+                    {"key": key, "exists": True, "type": key_type, "ttl": ttl, "count": count, "truncated": count > max_items, "value": value}
+                )
+
+            if key_type == "set":
+                count_result = redis_scard.invoke({"key": key, "instance_name": instance_name, "instance_id": instance_id, "config": config})
+                members_result = redis_smembers.invoke({"key": key, "instance_name": instance_name, "instance_id": instance_id, "config": config})
+                count = count_result["data"]["count"]
+                value = members_result["data"]
+                return build_success_response(
+                    {
+                        "key": key,
+                        "exists": True,
+                        "type": key_type,
+                        "ttl": ttl,
+                        "count": count,
+                        "truncated": count > max_items,
+                        "value": value[:max_items] if isinstance(value, list) else value,
+                    }
+                )
+
+            if key_type == "zset":
+                count_result = redis_zcard.invoke({"key": key, "instance_name": instance_name, "instance_id": instance_id, "config": config})
+                range_result = redis_zrange.invoke(
+                    {"key": key, "start": 0, "end": max_items - 1, "withscores": True, "instance_name": instance_name, "instance_id": instance_id, "config": config}
+                )
+                count = count_result["data"]["count"]
+                value = range_result["data"]
+                return build_success_response(
+                    {"key": key, "exists": True, "type": key_type, "ttl": ttl, "count": count, "truncated": count > max_items, "value": value}
+                )
+
+            if key_type in ("ReJSON-RL", "json"):
+                result = redis_json_get.invoke({"name": key, "path": "$", "instance_name": instance_name, "instance_id": instance_id, "config": config})
+                return build_success_response({"key": key, "exists": True, "type": key_type, "ttl": ttl, "value": result["data"]})
+
             return build_success_response(
-                {"key": key, "exists": True, "type": key_type, "ttl": ttl, "count": count, "truncated": count > max_items, "value": value}
+                {"key": key, "exists": True, "type": key_type, "ttl": ttl, "value": None, "message": f"Unsupported key type: {key_type}"}
             )
+        except (RedisError, ValueError) as e:
+            return build_error_response(e)
 
-        if key_type == "set":
-            count_result = redis_scard.invoke({"key": key})
-            members_result = redis_smembers.invoke({"key": key})
-            count = count_result["data"]["count"]
-            value = members_result["data"]
-            return build_success_response(
-                {
-                    "key": key,
-                    "exists": True,
-                    "type": key_type,
-                    "ttl": ttl,
-                    "count": count,
-                    "truncated": count > max_items,
-                    "value": value[:max_items] if isinstance(value, list) else value,
-                }
-            )
-
-        if key_type == "zset":
-            count_result = redis_zcard.invoke({"key": key})
-            range_result = redis_zrange.invoke({"key": key, "start": 0, "end": max_items - 1, "withscores": True})
-            count = count_result["data"]["count"]
-            value = range_result["data"]
-            return build_success_response(
-                {"key": key, "exists": True, "type": key_type, "ttl": ttl, "count": count, "truncated": count > max_items, "value": value}
-            )
-
-        if key_type in ("ReJSON-RL", "json"):
-            result = redis_json_get.invoke({"name": key, "path": "$"})
-            return build_success_response({"key": key, "exists": True, "type": key_type, "ttl": ttl, "value": result["data"]})
-
-        return build_success_response(
-            {"key": key, "exists": True, "type": key_type, "ttl": ttl, "value": None, "message": f"Unsupported key type: {key_type}"}
-        )
-    except RedisError as e:
-        return build_error_response(e)
+    return execute_with_credentials(normalized, _executor)
 
 
 @tool()
-def redis_get_key_summary(key: str, preview_limit: int = 200, config: RunnableConfig = None):
+def redis_get_key_summary(
+    key: str,
+    preview_limit: int = 200,
+    instance_name: Optional[str] = None,
+    instance_id: Optional[str] = None,
+    config: RunnableConfig = None,
+):
     """获取 Redis key 的摘要信息，适合巡检和快速阅读。"""
-    result = redis_get_key_value.invoke({"key": key, "config": config})
+    result = redis_get_key_value.invoke(
+        {"key": key, "config": config, "instance_name": instance_name, "instance_id": instance_id}
+    )
     if not result.get("success"):
         return result
 
@@ -234,13 +328,20 @@ def redis_get_key_summary(key: str, preview_limit: int = 200, config: RunnableCo
 
 
 @tool()
-def redis_flushdb(confirm: bool = False, config: RunnableConfig = None):
+def redis_flushdb(
+    confirm: bool = False, instance_name: Optional[str] = None, instance_id: Optional[str] = None, config: RunnableConfig = None
+):
     """清空当前 Redis 数据库，必须显式 confirm=True。"""
     confirm_error = require_confirm(confirm, "flushdb")
     if confirm_error:
         return confirm_error
-    try:
-        client = get_redis_connection(config=config)
-        return build_success_response({"result": client.flushdb()}, operation="flushdb")
-    except RedisError as e:
-        return build_error_response(e)
+    normalized = build_redis_normalized_from_runnable(config, instance_name, instance_id)
+
+    def _executor(item):
+        try:
+            client = get_redis_connection_from_item(item)
+            return build_success_response({"result": client.flushdb()}, operation="flushdb")
+        except (RedisError, ValueError) as e:
+            return build_error_response(e)
+
+    return execute_with_credentials(normalized, _executor)

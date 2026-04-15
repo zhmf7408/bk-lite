@@ -2,6 +2,7 @@ from django.db.models import Case, IntegerField, Value, When
 from django.http import JsonResponse, StreamingHttpResponse
 from django_filters import filters
 from django_filters.rest_framework import FilterSet
+from redis.exceptions import RedisError
 from rest_framework import status
 from rest_framework.decorators import action
 from rest_framework.response import Response
@@ -9,9 +10,12 @@ from rest_framework.response import Response
 from apps.core.decorators.api_permission import HasPermission
 from apps.core.logger import opspilot_logger as logger
 from apps.core.mixinx import EncryptMixin
+from apps.core.utils.loader import LanguageLoader
 from apps.core.utils.viewset_utils import AuthViewSet, LanguageViewSet
+from apps.opspilot.metis.llm.tools.redis.connection import normalize_redis_instance, test_redis_instance
 from apps.opspilot.models import KnowledgeBase, LLMModel, LLMSkill, SkillRequestLog, SkillTools, UserPin
 from apps.opspilot.serializers.llm_serializer import LLMModelSerializer, LLMSerializer, SkillRequestLogSerializer, SkillToolsSerializer
+from apps.opspilot.services.builtin_tools import BUILTIN_REDIS_TOOL_NAME, build_builtin_redis_tool
 from apps.opspilot.utils.agui_chat import stream_agui_chat
 from apps.opspilot.utils.mcp_cache import get_cached_mcp_tools, set_cached_mcp_tools
 from apps.opspilot.utils.mcp_client import MCPClient
@@ -170,7 +174,7 @@ class LLMViewSet(AuthViewSet):
             params["km_llm_model_id"] = params.pop("km_llm_model")
         for tool in params.get("tools", []):
             for i in tool.get("kwargs", []):
-                if i["type"] == "password":
+                if i.get("type") == "password":
                     EncryptMixin.decrypt_field("value", i)
                     EncryptMixin.encrypt_field("value", i)
         for key in params.keys():
@@ -474,7 +478,11 @@ class SkillToolsViewSet(AuthViewSet):
 
     @HasPermission("tool_list-View")
     def list(self, request, *args, **kwargs):
-        return super().list(request, *args, **kwargs)
+        response = super().list(request, *args, **kwargs)
+        if isinstance(response.data, list) and not any(item.get("name") == BUILTIN_REDIS_TOOL_NAME for item in response.data):
+            loader = LanguageLoader(app="opspilot", default_lang=getattr(request.user, "locale", "en") or "en")
+            response.data.append(build_builtin_redis_tool(loader))
+        return response
 
     @HasPermission("tool_list-Add")
     def create(self, request, *args, **kwargs):
@@ -555,3 +563,18 @@ class SkillToolsViewSet(AuthViewSet):
             logger.exception("Failed to fetch MCP tools: server_url=%s", server_url)
             message = self.loader.get("error.mcp_server_error") if self.loader else "Error occurred while fetching MCP tools"
             return JsonResponse({"result": False, "message": f"{message}: {str(e)}"})
+
+    @action(methods=["POST"], detail=False)
+    @HasPermission("tool_list-View")
+    def test_redis_connection(self, request):
+        try:
+            instance = normalize_redis_instance(request.data)
+            if test_redis_instance(instance):
+                return JsonResponse({"result": True, "data": {"success": True}})
+        except ValueError as error:
+            return JsonResponse({"result": False, "message": str(error)}, status=status.HTTP_400_BAD_REQUEST)
+        except RedisError as error:
+            return JsonResponse({"result": False, "message": f"Redis connection test failed: {error}"}, status=status.HTTP_400_BAD_REQUEST)
+        except TypeError as error:
+            return JsonResponse({"result": False, "message": f"Redis connection test failed: {error}"}, status=status.HTTP_400_BAD_REQUEST)
+        return JsonResponse({"result": False, "message": "Redis connection test failed"}, status=status.HTTP_400_BAD_REQUEST)

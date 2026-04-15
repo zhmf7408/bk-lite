@@ -7,9 +7,10 @@ from rest_framework.response import Response
 
 from apps.core.decorators.api_permission import HasPermission
 from apps.core.utils.viewset_utils import GenericViewSetFun
-from apps.system_mgmt.models import Channel
+from apps.system_mgmt.models import Channel, ChannelChoices, User
 from apps.system_mgmt.serializers import ChannelSerializer
 from apps.system_mgmt.utils.operation_log_utils import log_operation
+from apps.system_mgmt.utils.channel_utils import send_by_dingtalk_bot, send_by_feishu_bot, send_by_wecom_bot, send_email
 
 
 class ChannelFilter(FilterSet):
@@ -89,6 +90,54 @@ class ChannelViewSet(viewsets.ModelViewSet, GenericViewSetFun):
         log_operation(request, "update", "channel", f"编辑{obj.channel_type}渠道: {obj.name}")
 
         return JsonResponse({"result": True})
+
+    @action(methods=["POST"], detail=False)
+    @HasPermission("channel_list-Edit")
+    def test_send(self, request, *args, **kwargs):
+        channel_type = request.data.get("channel_type")
+        config = request.data.get("config") or {}
+        channel_name = request.data.get("name") or "Test Channel"
+
+        supported_types = {
+            ChannelChoices.EMAIL,
+            ChannelChoices.ENTERPRISE_WECHAT_BOT,
+            ChannelChoices.FEISHU_BOT,
+            ChannelChoices.DINGTALK_BOT,
+        }
+        if channel_type not in supported_types:
+            return Response({"result": False, "message": "Unsupported channel type"}, status=400)
+
+        test_channel = Channel(name=channel_name, channel_type=channel_type, config=config, description="", team=[])
+        title = f"[{channel_name}] Test Message"
+        receiver_name = request.user.display_name or request.user.username
+        content = f"This is a test message from channel '{channel_name}'.<br/>Receiver: {receiver_name}"
+
+        if channel_type == ChannelChoices.EMAIL:
+            if not request.user.email:
+                return Response({"result": False, "message": "Current user email is empty"}, status=400)
+            user_list = User.objects.filter(id=request.user.id)
+            result = send_email(test_channel, title, content, user_list)
+        elif channel_type == ChannelChoices.ENTERPRISE_WECHAT_BOT:
+            result = send_by_wecom_bot(test_channel, content, [receiver_name])
+        elif channel_type == ChannelChoices.FEISHU_BOT:
+            result = send_by_feishu_bot(test_channel, title, content, [receiver_name])
+        else:
+            result = send_by_dingtalk_bot(test_channel, title, content, [receiver_name])
+
+        if result.get("result") is False:
+            return Response({"result": False, "message": result.get("message") or "Test send failed"}, status=400)
+
+        if channel_type != ChannelChoices.EMAIL:
+            if result.get("errcode") not in (None, 0) or result.get("code") not in (None, 0):
+                return Response(
+                    {
+                        "result": False,
+                        "message": result.get("errmsg") or result.get("msg") or result.get("message") or "Test send failed",
+                    },
+                    status=400,
+                )
+
+        return Response({"result": True})
 
 
 class TemplateFilter(FilterSet):

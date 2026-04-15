@@ -175,6 +175,10 @@ class MonitorObjectViewSet(viewsets.ModelViewSet):
         if not data.get("instance_id_keys"):
             data["instance_id_keys"] = ["instance_id"]
 
+        # 自动填充 default_metric
+        if not data.get("default_metric"):
+            data["default_metric"] = f"any({{instance_type='{data.get('name', '')}'}}) by (instance_id)"
+
         # 创建父对象
         serializer = self.get_serializer(data=data)
         serializer.is_valid(raise_exception=True)
@@ -195,6 +199,7 @@ class MonitorObjectViewSet(viewsets.ModelViewSet):
                         parent=parent_obj,
                         is_visible=True,
                         instance_id_keys=["instance_id", child["id"]],
+                        default_metric=f"any({{instance_type='{child['id']}'}}) by (instance_id, {child['id']})",
                     ))
             if child_objects:
                 MonitorObject.objects.bulk_create(child_objects)
@@ -211,6 +216,10 @@ class MonitorObjectViewSet(viewsets.ModelViewSet):
         # 父对象自动补充 instance_id_keys
         if not instance.instance_id_keys and "instance_id_keys" not in data:
             data["instance_id_keys"] = ["instance_id"]
+
+        # 自动补充空的 default_metric
+        if not instance.default_metric and "default_metric" not in data:
+            data["default_metric"] = f"any({{instance_type='{instance.name}'}}) by (instance_id)"
 
         # 更新父对象
         serializer = self.get_serializer(instance, data=data, partial=partial)
@@ -247,6 +256,7 @@ class MonitorObjectViewSet(viewsets.ModelViewSet):
                         parent=instance,
                         is_visible=True,
                         instance_id_keys=["instance_id", child_id],
+                        default_metric=f"any({{instance_type='{child_id}'}}) by (instance_id, {child_id})",
                     ))
             
             if new_children:

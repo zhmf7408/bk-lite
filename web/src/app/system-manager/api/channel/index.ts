@@ -26,6 +26,10 @@ export const useChannelApi = () => {
     return await get("/system_mgmt/channel_template/", { params });
   }
 
+  async function testChannel(params: any) {
+    return await post('/system_mgmt/channel/test_send/', params);
+  }
+
   return {
     getChannelData,
     getChannelDetail,
@@ -33,5 +37,6 @@ export const useChannelApi = () => {
     updateChannel,
     deleteChannel,
     getChannelTemp,
+    testChannel,
   }
 }

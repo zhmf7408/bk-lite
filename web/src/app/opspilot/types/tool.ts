@@ -1,8 +1,10 @@
 /** 工具变量参数 */
 export interface ToolVariable {
   key: string;
-  value: string;
+  value: unknown;
   description?: string;
+  type?: string;
+  isRequired?: boolean;
 }
 
 /** MCP 工具定义 */
@@ -62,9 +64,10 @@ export interface FormValues {
 export interface SelectTool {
   id: number;
   name: string;
+  rawName?: string;
   icon: string;
   description?: string;
-  kwargs?: { key: string; value: string }[];
+  kwargs?: ToolVariable[];
 }
 
 export interface TagOption {

@@ -2,6 +2,7 @@ import React from 'react';
 import { Form, Input, Select, Button } from 'antd';
 import { PlusOutlined } from '@ant-design/icons';
 import Icon from '@/components/icon';
+import { filterModelOption, getModelOptionText, renderModelOptionLabel } from '@/app/opspilot/utils/modelOption';
 import type { IntentClassificationNodeConfigProps } from './types';
 
 const { Option } = Select;
@@ -9,26 +10,43 @@ const { TextArea } = Input;
 
 export const IntentClassificationNodeConfig: React.FC<IntentClassificationNodeConfigProps> = ({
   t,
-  skills,
-  loadingSkills,
+  llmModels,
+  loadingLlmModels,
+  form,
 }) => {
   return (
     <div className="mb-4">
       <Form.Item
-        name="agent"
-        label={t('chatflow.nodeConfig.selectAgent')}
-        rules={[{ required: true, message: t('chatflow.nodeConfig.pleaseSelectAgent') }]}
+        name="llmModel"
+        label={t('chatflow.nodeConfig.llmModel')}
+        rules={[{ required: true, message: t('chatflow.nodeConfig.pleaseSelectLlmModel') }]}
       >
         <Select
-          placeholder={t('chatflow.nodeConfig.pleaseSelectAgent')}
-          loading={loadingSkills}
+          placeholder={t('chatflow.nodeConfig.pleaseSelectLlmModel')}
+          loading={loadingLlmModels}
           showSearch
-          filterOption={(input, option) => option?.label?.toString().toLowerCase().includes(input.toLowerCase()) ?? false}
+          filterOption={filterModelOption}
+          onChange={(modelId) => {
+            const selectedModel = llmModels.find((model) => model.id === modelId);
+            form.setFieldsValue({ llmModelName: selectedModel?.name || '' });
+          }}
         >
-          {skills.map((s) => (
-            <Option key={s.id} value={s.id} label={s.name}>{s.name}</Option>
+          {llmModels.map((model) => (
+            <Option key={model.id} value={model.id} title={getModelOptionText(model)}>
+              {renderModelOptionLabel(model)}
+            </Option>
           ))}
         </Select>
+      </Form.Item>
+      <Form.Item name="llmModelName" className="hidden">
+        <Input />
+      </Form.Item>
+      <Form.Item
+        name="classificationRules"
+        label={t('chatflow.nodeConfig.classificationRules')}
+        tooltip={t('chatflow.nodeConfig.classificationRulesTooltip')}
+      >
+        <TextArea rows={4} placeholder={t('chatflow.nodeConfig.classificationRulesPlaceholder')} />
       </Form.Item>
 
       <Form.List name="intents">

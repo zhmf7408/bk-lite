@@ -28,31 +28,31 @@ const CommonForm: React.FC<CommonFormProps> = ({ form, modelOptions, initialValu
   const [selectedType, setSelectedType] = useState<number>(2);
 
   const typeOptions = [
-    { 
-      key: 2, 
-      title: t('skill.form.qaType'), 
-      desc: t('skill.form.qaTypeDesc'), 
+    {
+      key: 2,
+      title: t('skill.form.qaType'),
+      desc: t('skill.form.qaTypeDesc'),
       scene: t('skill.form.qaTypeScene'),
       img: RagAgent
     },
-    { 
-      key: 1, 
-      title: t('skill.form.toolsType'), 
-      desc: t('skill.form.toolsTypeDesc'), 
+    {
+      key: 1,
+      title: t('skill.form.toolsType'),
+      desc: t('skill.form.toolsTypeDesc'),
       scene: t('skill.form.toolsTypeScene'),
       img: ReActAgent
     },
-    { 
-      key: 3, 
-      title: t('skill.form.planType'), 
+    {
+      key: 3,
+      title: t('skill.form.planType'),
       desc: t('skill.form.planTypeDesc'),
-      scene: t('skill.form.planTypeScene'), 
+      scene: t('skill.form.planTypeScene'),
       img: PlanAgent
     },
-    { 
-      key: 4, 
-      title: t('skill.form.complexType'), 
-      desc: t('skill.form.complexTypeDesc'), 
+    {
+      key: 4,
+      title: t('skill.form.complexType'),
+      desc: t('skill.form.complexTypeDesc'),
       scene: t('skill.form.complexTypeScene'),
       img: LatsAgent
     }
@@ -110,7 +110,7 @@ const CommonForm: React.FC<CommonFormProps> = ({ form, modelOptions, initialValu
             alt="example"
             className="rounded-md max-w-full max-h-full object-contain"
           />
-        </div> 
+        </div>
       </div>
     );
   };
@@ -137,7 +137,7 @@ const CommonForm: React.FC<CommonFormProps> = ({ form, modelOptions, initialValu
         </Form.Item>
       )}
       {formType === 'skill' && renderSelectedTypeDetails()}
-      
+
       {formType === 'studio' && (
         <Form.Item
           name="bot_type"
@@ -147,7 +147,7 @@ const CommonForm: React.FC<CommonFormProps> = ({ form, modelOptions, initialValu
           <Input type="hidden" />
         </Form.Item>
       )}
-      
+
       <Form.Item
         name="name"
         label={t(`${formType}.form.name`)}
