@@ -577,9 +577,9 @@ class OpenSidecarViewSet(OpenAPIViewSet):
         config = InstallerSessionService.build_session_config(token)
         installer = config["installer"]
         install_dir = config["install_dir"]
-        bootstrap_base_url = request.build_absolute_uri("/").rstrip("/")
-        installer_url = f"{bootstrap_base_url}/api/v1/node_mgmt/open_api/installer/linux/download?token={token}"
-        config_url = f"{bootstrap_base_url}/api/v1/node_mgmt/open_api/installer/session?token={token}"
+        server_base_url = config["server_url"].replace("/api/v1/node_mgmt/open_api/node", "")
+        installer_url = f"{server_base_url}/api/v1/node_mgmt/open_api/installer/linux/download?token={token}"
+        config_url = f"{server_base_url}/api/v1/node_mgmt/open_api/installer/session?token={token}"
 
         script = f'''#!/bin/bash
 set -euo pipefail
