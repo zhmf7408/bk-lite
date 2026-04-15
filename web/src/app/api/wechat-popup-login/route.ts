@@ -107,6 +107,7 @@ export async function POST(request: NextRequest) {
         username: registerData.data.username,
         token: registerData.data.token,
         locale: registerData.data.locale || 'zh',
+        timezone: registerData.data.timezone || 'Asia/Shanghai',
         temporary_pwd: registerData.data.temporary_pwd || false,
         enable_otp: registerData.data.enable_otp || false,
         qrcode: registerData.data.qrcode || false,

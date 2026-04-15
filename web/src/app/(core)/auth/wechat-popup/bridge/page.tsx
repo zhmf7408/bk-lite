@@ -40,6 +40,7 @@ export default function WechatPopupBridgePage() {
           username: user.username || '',
           token: user.token,
           locale: user.locale || 'en',
+          timezone: user.timezone || 'Asia/Shanghai',
           temporary_pwd: user.temporary_pwd || false,
           enable_otp: user.enable_otp || false,
           qrcode: user.qrcode || false,

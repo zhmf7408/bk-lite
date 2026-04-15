@@ -1,5 +1,7 @@
 import { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 import { MenuItem } from '@/types/index';
+import { useLocale } from '@/context/locale';
+import { normalizeLocale } from '@/utils/userPreferences';
 
 interface MenusContextType {
   configMenus: MenuItem[];
@@ -11,13 +13,14 @@ const MenusContext = createContext<MenusContextType>({ configMenus: [], loading:
 export const MenusProvider = ({ children }: { children: ReactNode }) => {
   const [loading, setLoading] = useState<boolean>(false);
   const [configMenus, setConfigMenus] = useState<MenuItem[]>([]);
+  const { locale } = useLocale();
 
   useEffect(() => {
     const fetchMenus = async () => {
-      const locale = localStorage.getItem('locale') || 'en';
+      const nextLocale = normalizeLocale(locale);
       setLoading(true);
       try {
-        const response = await fetch(`/api/menu?locale=${locale}`);
+        const response = await fetch(`/api/menu?locale=${nextLocale}`);
         if (!response.ok) {
           throw new Error('Failed to fetch menus');
         }
@@ -31,7 +34,7 @@ export const MenusProvider = ({ children }: { children: ReactNode }) => {
     };
 
     fetchMenus();
-  }, []);
+  }, [locale]);
 
   return (
     <MenusContext.Provider value={{configMenus, loading}}>
