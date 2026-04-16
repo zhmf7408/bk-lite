@@ -6,7 +6,7 @@ import {
   InputNumber,
   Select,
   Button,
-  message,
+  message
 } from 'antd';
 import { useTranslation } from '@/utils/i18n';
 import GroupSelect from '@/components/group-tree-select';
@@ -42,13 +42,13 @@ const BatchEditModal = forwardRef<ModalRef, BatchEditModalProps>(
         setEnabledFields({});
         form.resetFields();
         setVisible(true);
-      },
+      }
     }));
 
     const handleCheckboxChange = (fieldName: string, checked: boolean) => {
       setEnabledFields((prev) => ({
         ...prev,
-        [fieldName]: checked,
+        [fieldName]: checked
       }));
       if (!checked) {
         form.setFieldValue(fieldName, undefined);
@@ -86,6 +86,8 @@ const BatchEditModal = forwardRef<ModalRef, BatchEditModalProps>(
           widget = (
             <Select
               disabled={isDisabled}
+              showSearch
+              optionFilterProp="label"
               placeholder={column.widget_props?.placeholder || ''}
               options={
                 column.name === 'node_ids' ? nodeList : column.options || []
