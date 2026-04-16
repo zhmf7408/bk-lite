@@ -9,6 +9,7 @@ import SNMPTask from './components/snmpTask';
 import SQLTask from './components/sqlTask';
 import CloudTask from './components/cloudTask';
 import HostTask from './components/hostTask';
+import IPMITask from './components/ipmiTask';
 import TaskDetail from './components/taskDetail';
 import MarkdownRenderer from '@/components/markdown';
 import CustomTable from '@/components/custom-table';
@@ -195,12 +196,16 @@ const ProfessionalCollection: React.FC = () => {
   }, [selectedPluginId]);
 
   const getParams = (pluginId?: string) => {
-    const modelId = pluginId || stateRef.current.selectedPluginId;
+    const currentPluginId = pluginId || stateRef.current.selectedPluginId;
+    const plugin = selectedCategoryRef.current.category?.tabItems?.find(
+      (item) => item.id === currentPluginId
+    );
 
     return {
       page: stateRef.current.pagination.current,
       page_size: stateRef.current.pagination.pageSize,
-      model_id: modelId,
+      model_id: plugin?.model_id || currentPluginId,
+      ...(plugin?.type && { driver_type: plugin.type }),
       name: stateRef.current.searchText,
       ...(stateRef.current.currentExecStatus !== undefined && {
         exec_status: stateRef.current.currentExecStatus,
@@ -436,7 +441,10 @@ const ProfessionalCollection: React.FC = () => {
   const fetchPluginDoc = async (pluginId: string) => {
     try {
       setDocLoading(true);
-      const data = await collectApi.getCollectModelDoc(pluginId);
+      const plugin = selectedCategoryRef.current.category?.tabItems?.find(
+        (item) => item.id === pluginId
+      );
+      const data = await collectApi.getCollectModelDoc(plugin?.model_id || pluginId);
       setPluginDoc(data || '');
     } catch {
       setPluginDoc('');
@@ -566,6 +574,10 @@ const ProfessionalCollection: React.FC = () => {
       snmp: SNMPTask,
       protocol: SQLTask,
     };
+
+    if (currentPlugin.id === 'physcial_server_ipmi') {
+      return <IPMITask {...taskProps} />;
+    }
 
     const taskTypeKey = currentPlugin.task_type || currentPlugin.type || actualCategory.id;
     const TaskComponent = taskMap[taskTypeKey] || K8sTask;

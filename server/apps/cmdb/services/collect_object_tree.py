@@ -60,9 +60,17 @@ def get_collect_obj_tree():
     return tree
 
 
-def get_collect_object_meta(collect_model_id: str):
+def get_collect_object_meta(collect_model_id: str, driver_type: str | None = None):
+    fallback = {}
     for parent in get_collect_obj_tree():
         for child in parent.get("children", []):
             if child.get("model_id") == collect_model_id:
-                return child
-    return {}
+                if driver_type is None:
+                    return child
+                if child.get("type") == driver_type:
+                    return child
+                # 同一个 model_id 现在可能对应多条采集入口（如 physcial_server/job 与 physcial_server/protocol）。
+                # 如果调用方没有精确命中 driver_type，则保留第一个入口作为兼容回退结果。
+                if not fallback:
+                    fallback = child
+    return fallback

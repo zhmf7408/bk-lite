@@ -161,7 +161,7 @@ class CollectModels(MaintainerInfo, TimeInfo):
         if not self.credential or not isinstance(self.credential, dict):
             return self.credential
 
-        encrypted_fields = get_collect_model_passwords(collect_model_id=self.model_id)
+        encrypted_fields = get_collect_model_passwords(collect_model_id=self.model_id, driver_type=self.driver_type)
 
         for encrypted_field in encrypted_fields:
             password = self.credential.get(encrypted_field)
@@ -174,7 +174,7 @@ class CollectModels(MaintainerInfo, TimeInfo):
     def save(self, *args, **kwargs):
         # 只有在密码未加密时才进行加密
         if self.credential and isinstance(self.credential, dict):
-            encrypted_fields = get_collect_model_passwords(collect_model_id=self.model_id)
+            encrypted_fields = get_collect_model_passwords(collect_model_id=self.model_id, driver_type=self.driver_type)
             for encrypted_field in encrypted_fields:
                 password = self.credential.get(encrypted_field)
                 if not password:
