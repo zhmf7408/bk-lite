@@ -122,7 +122,6 @@ const Namespace: React.FC = () => {
     try {
       setExportLoading(row.id);
       const response = await exportObjects({
-        scope: 'config',
         object_type: 'namespace',
         object_ids: [row.id],
       });
@@ -306,7 +305,6 @@ const Namespace: React.FC = () => {
           onCancel={() => setImportModalVisible(false)}
           targetDirectoryId={null}
           onSuccess={() => {
-            void refreshNamespaces();
             fetchNamespaces();
           }}
         />

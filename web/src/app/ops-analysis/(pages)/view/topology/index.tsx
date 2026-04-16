@@ -8,6 +8,7 @@ import React, {
 } from 'react';
 import styles from './index.module.scss';
 import { useTranslation } from '@/utils/i18n';
+import { useOpsAnalysis } from '@/app/ops-analysis/context/common';
 import { Spin } from 'antd';
 import { AppstoreOutlined, CloseOutlined } from '@ant-design/icons';
 import { v4 as uuidv4 } from 'uuid';
@@ -55,6 +56,11 @@ const Topology = forwardRef<TopologyRef, TopologyProps>(
     const { t } = useTranslation();
     const state = useTopologyState();
     const dataSourceManager = useDataSourceManager();
+    const { fetchDataSources } = useOpsAnalysis();
+
+    useEffect(() => {
+      void fetchDataSources();
+    }, [fetchDataSources]);
 
     const {
       zoomIn,

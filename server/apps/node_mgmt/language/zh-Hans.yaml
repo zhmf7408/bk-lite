@@ -42,6 +42,9 @@ collector:
   Vector_linux:
     description: Vector（Linux）是一款轻量高效的日志采集器，原生具备各类日志数据采集能力。同时作为数据中转站将其他日志采集器收集的数据存储到平台。
     name: Vector
+  Vector_windows:
+    description: Vector（Windows）是一款轻量高效的日志采集器，原生具备各类日志数据采集能力。同时作为数据中转站将其他日志采集器收集的数据存储到平台。
+    name: Vector
   Auditbeat_linux:
     name: Auditbeat
     description: Auditbeat（Linux）是一款轻量级的审计数据采集器，能够可靠地采集服务器上的系统级审计与安全事件日志。
@@ -60,6 +63,9 @@ collector:
   Packetbeat_linux:
     description: Packetbeat（Linux）是一款轻量级的网络数据包采集器，能够实时采集和分析服务器之间的网络流量。
     name: Packetbeat
+  Packetbeat_windows:
+    description: Packetbeat（Windows）是一款轻量级的网络数据包采集器，能够实时采集和分析服务器之间的网络流量。
+    name: Packetbeat
   exporter_mongodb_linux:
     description: None
     name: None
@@ -69,6 +75,9 @@ collector:
   Filebeat_linux:
     name: Filebeat
     description: Filebeat（Linux）是一款轻量级文件日志采集器，能够可靠地采集指定路径的日志文件。
+  Filebeat_windows:
+    name: Filebeat
+    description: Filebeat（Windows）是一款轻量级文件日志采集器，能够可靠地采集指定路径的日志文件。
   jmx_jboss_linux:
     description: None
     name: None

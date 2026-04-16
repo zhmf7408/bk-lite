@@ -18,7 +18,7 @@ const NODE_TYPE_MAP = {
   'basic-shape': 'basic-shape-node'
 } as const;
 
-const DEFAULT_ICON_PATH = '/app/assets/assetModelIcon/cc-default_默认.svg';
+const DEFAULT_ICON_PATH = '/assets/icons/cc-default_默认.svg';
 
 const getBasicShapeAttrs = (nodeConfig: TopologyNodeData, shapeType?: string): Record<string, any> => {
   const { BASIC_SHAPE_NODE } = NODE_DEFAULTS;
@@ -328,10 +328,10 @@ const getIconUrl = (nodeConfig: TopologyNodeData): string => {
     if (iconList) {
       const iconItem = iconList.find(item => item.key === nodeConfig.logoIcon);
       if (iconItem) {
-        return `/app/assets/assetModelIcon/${iconItem.url}.svg`;
+        return `/assets/icons/${iconItem.url}.svg`;
       }
     }
-    return `/app/assets/assetModelIcon/${nodeConfig.logoIcon}.svg`;
+    return `/assets/icons/${nodeConfig.logoIcon}.svg`;
   }
 
   if (nodeConfig.logoType === 'custom' && nodeConfig.logoUrl) {

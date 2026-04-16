@@ -7,6 +7,7 @@ declare module 'next-auth' {
     accessToken?: string;
     error?: string;
     locale?: string;
+    timezone?: string;
     username?: string;
     roles?: string[];
     zoneinfo?: string;
@@ -20,6 +21,7 @@ declare module 'next-auth' {
       image?: string | null;
       username?: string;
       locale?: string;
+      timezone?: string;
       token?: string;
       temporary_pwd?: boolean;
       enable_otp?: boolean;
@@ -38,6 +40,7 @@ declare module 'next-auth' {
     image?: string | null;
     username?: string;
     locale?: string;
+    timezone?: string;
     token?: string;
     temporary_pwd?: boolean;
     enable_otp?: boolean;
@@ -56,6 +59,7 @@ declare module 'next-auth/jwt' {
     refreshToken?: string;
     expiresAt?: number;
     locale?: string;
+    timezone?: string;
     error?: string;
     username?: string;
     roles?: string[];

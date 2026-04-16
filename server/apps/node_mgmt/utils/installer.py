@@ -71,18 +71,14 @@ def get_manual_install_command(
 
         # 检查响应状态
         if response.status_code != 200:
-            raise BaseAppException(
-                f"Infra API returned status {response.status_code}: {response.text}"
-            )
+            raise BaseAppException(f"Infra API returned status {response.status_code}: {response.text}")
 
         # 解析响应（假设返回的是 {"yaml": "..."} 格式）
         response_data = response.json()
         yaml_content = response_data.get("yaml")
 
         if not yaml_content:
-            raise BaseAppException(
-                "Invalid response from infra API: missing 'yaml' field"
-            )
+            raise BaseAppException("Invalid response from infra API: missing 'yaml' field")
 
         return yaml_content
 
@@ -96,9 +92,7 @@ def get_manual_install_command(
         import traceback
 
         error_detail = traceback.format_exc()
-        raise BaseAppException(
-            f"Failed to render config: {str(e)} | Detail: {error_detail}"
-        )
+        raise BaseAppException(f"Failed to render config: {str(e)} | Detail: {error_detail}")
 
 
 # 获取卸载命令
@@ -111,9 +105,7 @@ def get_uninstall_command(os):
 # 执行本地命令
 def exec_command_to_local(instance_id, command):
     exe_obj = Executor(instance_id)
-    result = exe_obj.execute_local(
-        command, timeout=InstallerConstants.COMMAND_EXECUTE_TIMEOUT
-    )
+    result = exe_obj.execute_local(command, timeout=InstallerConstants.COMMAND_EXECUTE_TIMEOUT)
     return result
 
 
@@ -138,6 +130,34 @@ def exec_command_to_remote(
         passphrase=passphrase,
         timeout=InstallerConstants.COMMAND_EXECUTE_TIMEOUT,
         port=port,
+    )
+    return result
+
+
+def exec_command_to_remote_stream(
+    instance_id,
+    ip,
+    username,
+    password,
+    command,
+    port=22,
+    private_key=None,
+    passphrase=None,
+    execution_id=None,
+    stream_log_topic=None,
+):
+    exe_obj = Executor(instance_id)
+    result = exe_obj.execute_ssh_stream(
+        command,
+        ip,
+        username,
+        password=password,
+        private_key=private_key,
+        passphrase=passphrase,
+        timeout=InstallerConstants.COMMAND_EXECUTE_TIMEOUT,
+        port=port,
+        execution_id=execution_id,
+        stream_log_topic=stream_log_topic,
     )
     return result
 
@@ -218,7 +238,5 @@ def transfer_file_to_remote(
 # 解压文件
 def unzip_file(instance_id, file_path, target_path):
     exe_obj = Executor(instance_id)
-    result = exe_obj.unzip_local(
-        file_path, target_path, timeout=InstallerConstants.NATS_OPERATION_TIMEOUT
-    )
+    result = exe_obj.unzip_local(file_path, target_path, timeout=InstallerConstants.NATS_OPERATION_TIMEOUT)
     return result

@@ -52,6 +52,38 @@ import ConditionList from './conditionList';
 
 const { Option } = Select;
 const PAGE_LIMIT = 100;
+const DEFAULT_DISPLAY_FIELDS = ['timestamp', 'message'];
+
+const getStoredDisplayFields = () => {
+  if (typeof window === 'undefined') {
+    return DEFAULT_DISPLAY_FIELDS;
+  }
+
+  const stored = localStorage.getItem('logSearchFields');
+  if (!stored) {
+    return DEFAULT_DISPLAY_FIELDS;
+  }
+
+  try {
+    const parsed = JSON.parse(stored);
+    if (!Array.isArray(parsed)) {
+      return DEFAULT_DISPLAY_FIELDS;
+    }
+
+    const normalized = parsed.filter(
+      (field): field is string => typeof field === 'string' && !!field
+    );
+    const result = [...normalized];
+    DEFAULT_DISPLAY_FIELDS.forEach((field) => {
+      if (!result.includes(field)) {
+        result.unshift(field);
+      }
+    });
+    return result;
+  } catch {
+    return DEFAULT_DISPLAY_FIELDS;
+  }
+};
 
 const quoteLogsqlToken = (value: unknown) => {
   const normalized = String(value ?? '');
@@ -62,6 +94,8 @@ const quoteLogsqlToken = (value: unknown) => {
     .replace(/\r/g, '\\r');
   return `"${escaped}"`;
 };
+
+const QUERY_CONNECTOR_REGEXP = /(\||\(|AND|OR)$/i;
 
 const SearchView: React.FC = () => {
   const { t } = useTranslation();
@@ -79,6 +113,7 @@ const SearchView: React.FC = () => {
   const conditionRef = useRef<ModalRef>(null);
   const conditionListRef = useRef<ModalRef>(null);
   const searchTextRef = useRef<string>(queryText);
+  const [hasSearchText, setHasSearchText] = useState<boolean>(!!queryText);
   const [frequence, setFrequence] = useState<number>(0);
   const [defaultSearchText, setDefaultSearchText] = useState<string>(queryText);
   const [tableData, setTableData] = useState<TableDataItem[]>([]);
@@ -86,7 +121,9 @@ const SearchView: React.FC = () => {
   const [queryEndTime, setQueryEndTime] = useState<Date>(new Date());
   const [groupList, setGroupList] = useState<ListItem[]>([]);
   const [fields, setFields] = useState<string[]>([]);
-  const [columnFields, setColumnFields] = useState<string[]>([]);
+  const [columnFields, setColumnFields] = useState<string[]>(() =>
+    getStoredDisplayFields()
+  );
   const [groups, setGroups] = useState<React.Key[]>([]);
   const [pagination, setPagination] = useState<Pagination>({
     current: 0,
@@ -120,7 +157,7 @@ const SearchView: React.FC = () => {
 
   const disableStore = useMemo(
     () => !groups.length || !searchTextRef.current,
-    [groups]
+    [groups, hasSearchText]
   );
 
   useEffect(() => {
@@ -128,6 +165,10 @@ const SearchView: React.FC = () => {
     getAllFields();
     initData();
   }, [isLoading]);
+
+  useEffect(() => {
+    localStorage.setItem('logSearchFields', JSON.stringify(columnFields));
+  }, [columnFields]);
 
   useEffect(() => {
     if (!frequence) {
@@ -291,19 +332,25 @@ const SearchView: React.FC = () => {
       const fieldLabel = `${String(row.label || '')}:`;
       if (!trimmedText) {
         searchTextRef.current = fieldLabel;
-      } else if (/(\||\(|AND|OR)$/i.test(trimmedText)) {
+      } else if (QUERY_CONNECTOR_REGEXP.test(trimmedText)) {
         searchTextRef.current = `${trimmedText} ${fieldLabel}`;
       } else {
-        searchTextRef.current = `${trimmedText} | ${fieldLabel}`;
+        searchTextRef.current = `${trimmedText} AND ${fieldLabel}`;
       }
     } else {
       const fieldLabel = quoteLogsqlToken(row.label);
       const fieldValue = quoteLogsqlToken(row.value);
-      searchTextRef.current = currentText
-        ? `${fieldLabel}:${fieldValue} | ${currentText}`
-        : `${fieldLabel}:${fieldValue}`;
+      const fieldExpression = `${fieldLabel}:${fieldValue}`;
+      if (!trimmedText) {
+        searchTextRef.current = fieldExpression;
+      } else if (QUERY_CONNECTOR_REGEXP.test(trimmedText)) {
+        searchTextRef.current = `${trimmedText} ${fieldExpression}`;
+      } else {
+        searchTextRef.current = `${trimmedText} AND ${fieldExpression}`;
+      }
     }
     setDefaultSearchText(searchTextRef.current);
+    setHasSearchText(!!searchTextRef.current);
   };
 
   const onXRangeChange = (arr: [Dayjs, Dayjs]) => {
@@ -356,6 +403,7 @@ const SearchView: React.FC = () => {
     const end = +new Date(time_range.end);
     setGroups(log_groups);
     searchTextRef.current = query;
+    setHasSearchText(!!query);
     setDefaultSearchText(query);
     setTimeDefaultValue({
       selectValue: (time_range.origin_value as number) || 0,
@@ -446,6 +494,7 @@ const SearchView: React.FC = () => {
               }
               onChange={(value) => {
                 searchTextRef.current = value;
+                setHasSearchText(!!value);
               }}
               onPressEnter={handleSearch}
             />
@@ -559,6 +608,7 @@ const SearchView: React.FC = () => {
                     style={{ height: scrollHeight + 'px' }}
                     className="w-[230px] min-w-[230px] flex-shrink-0"
                     fields={fields}
+                    displayFields={columnFields}
                     addToQuery={addToQuery}
                     changeDisplayColumns={(val) => {
                       setColumnFields(val);

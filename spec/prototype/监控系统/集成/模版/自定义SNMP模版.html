@@ -858,6 +858,157 @@
             display: none;
         }
 
+        .collect-panel {
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+        }
+
+        .collect-header {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+
+        .collect-title {
+            font-size: 18px;
+            font-weight: 600;
+            color: #313238;
+        }
+
+        .collect-desc {
+            font-size: 13px;
+            color: #7f8795;
+            line-height: 1.6;
+        }
+
+        .collect-editor-wrap {
+            border: 1px solid #dcdee5;
+            border-radius: 8px;
+            overflow: hidden;
+            background: #fff;
+        }
+
+        .collect-editor-body {
+            display: flex;
+            align-items: stretch;
+            min-height: 520px;
+            background: #fff;
+        }
+
+        .collect-line-numbers {
+            width: 52px;
+            padding: 18px 8px 18px 0;
+            background: #f7f8fa;
+            border-right: 1px solid #eaebf0;
+            color: #979ba5;
+            font-family: 'Monaco', 'Menlo', monospace;
+            font-size: 13px;
+            line-height: 1.7;
+            text-align: right;
+            white-space: pre;
+            overflow: hidden;
+            user-select: none;
+            flex-shrink: 0;
+        }
+
+        .collect-editor-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 12px 16px;
+            background: #f5f7fa;
+            border-bottom: 1px solid #eaebf0;
+        }
+
+        .collect-editor-title {
+            font-size: 13px;
+            font-weight: 600;
+            color: #313238;
+        }
+
+        .collect-editor-meta {
+            font-size: 12px;
+            color: #979ba5;
+        }
+
+        .collect-editor-actions {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .btn-editor-action {
+            padding: 6px 14px;
+            border-radius: 4px;
+            border: 1px solid #dcdee5;
+            background: #fff;
+            color: #63656e;
+            font-size: 12px;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .btn-editor-action:hover {
+            border-color: #3a84ff;
+            color: #3a84ff;
+        }
+
+        .btn-editor-action.edit {
+            background: #3a84ff;
+            border-color: #3a84ff;
+            color: #fff;
+        }
+
+        .btn-editor-action.edit:hover {
+            background: #306ed0;
+            border-color: #306ed0;
+            color: #fff;
+        }
+
+        .btn-editor-action.primary {
+            background: #3a84ff;
+            border-color: #3a84ff;
+            color: #fff;
+        }
+
+        .btn-editor-action.primary:hover {
+            background: #306ed0;
+            border-color: #306ed0;
+            color: #fff;
+        }
+
+        .btn-editor-action.hidden {
+            display: none;
+        }
+
+        .collect-textarea {
+            width: 100%;
+            min-height: 520px;
+            padding: 18px;
+            border: none;
+            outline: none;
+            resize: vertical;
+            font-family: 'Monaco', 'Menlo', monospace;
+            font-size: 13px;
+            line-height: 1.7;
+            color: #313238;
+            background: #fff;
+            overflow: auto;
+        }
+
+        .collect-textarea[readonly] {
+            background: #fcfcfd;
+            color: #63656e;
+            cursor: default;
+        }
+
+        .collect-hint {
+            font-size: 12px;
+            color: #979ba5;
+            line-height: 1.6;
+        }
+
         /* 隐藏内容区 */
         .content-panel {
             display: none;
@@ -911,6 +1062,10 @@
             max-height: 85vh;
             overflow: hidden;
             box-shadow: 0 4px 24px rgba(0, 0, 0, 0.15);
+        }
+
+        .modal-small {
+            width: 480px;
         }
 
         .modal-header {
@@ -1024,6 +1179,12 @@
 
         .modal-form-textarea:focus {
             border-color: #3a84ff;
+        }
+
+        .modal-message {
+            font-size: 14px;
+            color: #4d4f56;
+            line-height: 1.8;
         }
 
         .modal-form-row {
@@ -1212,20 +1373,32 @@
         <!-- 左侧导航 -->
         <div class="left-sidebar">
             <div class="sidebar-menu">
-                <div class="sidebar-item active" onclick="switchTab('config')">
+                <div class="sidebar-item active" onclick="switchTab('config', this)">
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                         <circle cx="12" cy="12" r="3"/>
                         <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/>
                     </svg>
                     <span>配置</span>
                 </div>
-                <div class="sidebar-item" onclick="switchTab('metrics')">
+                <div class="sidebar-item" onclick="switchTab('metrics', this)">
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                         <line x1="18" y1="20" x2="18" y2="10"/>
                         <line x1="12" y1="20" x2="12" y2="4"/>
                         <line x1="6" y1="20" x2="6" y2="14"/>
                     </svg>
                     <span>指标</span>
+                </div>
+                <div class="sidebar-item" onclick="switchTab('structure', this)">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M3 5h7v5H3z"/>
+                        <path d="M14 3h7v9h-7z"/>
+                        <path d="M3 14h7v7H3z"/>
+                        <path d="M14 16h7v5h-7z"/>
+                        <path d="M10 7h4"/>
+                        <path d="M7 10v4"/>
+                        <path d="M17.5 12v4"/>
+                    </svg>
+                    <span>采集</span>
                 </div>
             </div>
             <div class="sidebar-back" onclick="goBack()">
@@ -1669,6 +1842,42 @@
                     <div class="metric-group-content"></div>
                 </div>
             </div>
+
+            <div class="content-panel" id="structurePanel">
+                <div class="collect-panel">
+                    <div class="collect-header">
+                        <div class="collect-title">采集</div>
+                        <div class="collect-desc">直接填写 Telegraf SNMP input 配置中的指标片段。OID 仅支持数字形式，请勿将动态数值作为 tag，避免引起数据库写入爆炸。</div>
+                    </div>
+
+                    <div class="collect-editor-wrap">
+                        <div class="collect-editor-header">
+                            <span class="collect-editor-title">采集配置指标片段</span>
+                            <div class="collect-editor-actions">
+                                <span class="collect-editor-meta">TOML / Telegraf SNMP Input</span>
+                                <button class="btn-editor-action edit" id="collectEditButton" type="button" onclick="enterCollectEditMode()">编辑</button>
+                                <button class="btn-editor-action primary hidden" id="collectSaveButton" type="button" onclick="saveCollectConfig()">保存</button>
+                                <button class="btn-editor-action hidden" id="collectCancelButton" type="button" onclick="cancelCollectEdit()">取消</button>
+                            </div>
+                        </div>
+                        <div class="collect-editor-body">
+                            <div class="collect-line-numbers" id="collectLineNumbers">1</div>
+                            <textarea class="collect-textarea" id="collectTextarea" spellcheck="false" placeholder="请输入采集配置..." readonly># [[inputs.snmp.field]]
+#   oid = ".1.3.6.1.2.1.1.3.0"
+#   name = "snmp_uptime"
+#
+# [[inputs.snmp.table]]
+#   oid = ".1.3.6.1.2.1.2.2"
+#   name = "interface"
+#
+#   [[inputs.snmp.table.field]]
+#     oid = ".1.3.6.1.2.1.2.2.1.2"
+#     name = "ifDescr"
+#     is_tag = true</textarea>
+                        </div>
+                    </div>
+                </div>
+            </div>
         </div>
     </div>
 
@@ -1750,14 +1959,34 @@
         </div>
     </div>
 
+    <div class="modal-overlay" id="collectSaveModal">
+        <div class="modal modal-small">
+            <div class="modal-header">
+                <span class="modal-title">确认保存采集配置</span>
+                <span class="modal-close" onclick="closeCollectSaveModal()">×</span>
+            </div>
+            <div class="modal-body">
+                <div class="modal-message">保存后，已关联并正在采集的资产会立即应用最新配置。请确认当前采集配置已经检查无误，避免影响现有采集结果。</div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn-modal-cancel" onclick="closeCollectSaveModal()">取消</button>
+                <button class="btn-modal-confirm" onclick="confirmCollectSave()">确认保存</button>
+            </div>
+        </div>
+    </div>
+
     <script>
+        let collectDraftValue = '';
+
         // 切换标签页
-        function switchTab(tab) {
+        function switchTab(tab, element) {
             // 更新侧边栏选中状态
             document.querySelectorAll('.sidebar-item').forEach(item => {
                 item.classList.remove('active');
             });
-            event.currentTarget.classList.add('active');
+            if (element) {
+                element.classList.add('active');
+            }
 
             // 切换内容面板
             document.querySelectorAll('.content-panel').forEach(panel => {
@@ -1768,7 +1997,92 @@
                 document.getElementById('configPanel').classList.add('active');
             } else if (tab === 'metrics') {
                 document.getElementById('metricsPanel').classList.add('active');
+            } else if (tab === 'structure') {
+                document.getElementById('structurePanel').classList.add('active');
             }
+        }
+
+        function updateCollectLineNumbers() {
+            const textarea = document.getElementById('collectTextarea');
+            const lineNumbers = document.getElementById('collectLineNumbers');
+            if (!textarea || !lineNumbers) {
+                return;
+            }
+
+            const lines = textarea.value.split('\n').length;
+            const content = Array.from({ length: lines }, (_, index) => index + 1).join('\n');
+            lineNumbers.textContent = content;
+            lineNumbers.scrollTop = textarea.scrollTop;
+        }
+
+        function setCollectEditMode(isEditing) {
+            const textarea = document.getElementById('collectTextarea');
+            const editButton = document.getElementById('collectEditButton');
+            const saveButton = document.getElementById('collectSaveButton');
+            const cancelButton = document.getElementById('collectCancelButton');
+
+            if (!textarea || !editButton || !saveButton || !cancelButton) {
+                return;
+            }
+
+            textarea.readOnly = !isEditing;
+            editButton.classList.toggle('hidden', isEditing);
+            saveButton.classList.toggle('hidden', !isEditing);
+            cancelButton.classList.toggle('hidden', !isEditing);
+
+            if (isEditing) {
+                textarea.focus();
+            }
+        }
+
+        function enterCollectEditMode() {
+            const textarea = document.getElementById('collectTextarea');
+            if (!textarea) {
+                return;
+            }
+
+            collectDraftValue = textarea.value;
+            setCollectEditMode(true);
+        }
+
+        function cancelCollectEdit() {
+            const textarea = document.getElementById('collectTextarea');
+            if (!textarea) {
+                return;
+            }
+
+            textarea.value = collectDraftValue;
+            updateCollectLineNumbers();
+            setCollectEditMode(false);
+        }
+
+        function saveCollectConfig() {
+            const textarea = document.getElementById('collectTextarea');
+            if (!textarea) {
+                return;
+            }
+
+            document.getElementById('collectSaveModal').classList.add('show');
+        }
+
+        function closeCollectSaveModal() {
+            const modal = document.getElementById('collectSaveModal');
+            if (!modal) {
+                return;
+            }
+
+            modal.classList.remove('show');
+        }
+
+        function confirmCollectSave() {
+            const textarea = document.getElementById('collectTextarea');
+            if (!textarea) {
+                return;
+            }
+
+            collectDraftValue = textarea.value;
+            closeCollectSaveModal();
+            setCollectEditMode(false);
         }
 
         // 展开/折叠指标分组
@@ -1808,6 +2122,19 @@
             // TODO: 处理添加指标逻辑
             closeAddMetricModal();
         }
+
+        document.addEventListener('DOMContentLoaded', () => {
+            const textarea = document.getElementById('collectTextarea');
+            if (!textarea) {
+                return;
+            }
+
+            collectDraftValue = textarea.value;
+            updateCollectLineNumbers();
+            textarea.addEventListener('input', updateCollectLineNumbers);
+            textarea.addEventListener('scroll', updateCollectLineNumbers);
+            setCollectEditMode(false);
+        });
     </script>
 </body>
 </html>

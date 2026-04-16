@@ -1,8 +1,63 @@
 import os
 
 
+def _installer_filename(target_os: str) -> str:
+    return "bklite-controller-installer.exe" if target_os == "windows" else "bklite-controller-installer"
+
+
+def _installer_alias_path(target_os: str) -> str:
+    return f"installer/{target_os}/{_installer_filename(target_os)}"
+
+
 class InstallerConstants:
     REQUEST_TIMEOUT = 30
+    CONTROLLER_INSTALL_MAX_PARALLEL = 3
+
+    EXECUTION_PHASE_KEY = "execution_phase"
+    EXECUTION_ATTEMPT_KEY = "execution_attempt"
+    EXECUTION_PHASE_BOOTSTRAP_RUNNING = "bootstrap_running"
+    EXECUTION_PHASE_CONNECTIVITY_WAITING = "connectivity_waiting"
+    EXECUTION_PHASE_FINISHED = "finished"
+
+    STEP_STATUS_WAITING = "waiting"
+    STEP_STATUS_RUNNING = "running"
+    STEP_STATUS_SUCCESS = "success"
+    STEP_STATUS_ERROR = "error"
+
+    OVERALL_STATUS_WAITING = "waiting"
+    OVERALL_STATUS_RUNNING = "running"
+    OVERALL_STATUS_SUCCESS = "success"
+    OVERALL_STATUS_ERROR = "error"
+    OVERALL_STATUS_TIMEOUT = "timeout"
+    OVERALL_STATUS_CANCELLED = "cancelled"
+
+    INSTALLER_EVENT_STATUS_MAP = {
+        "running": STEP_STATUS_RUNNING,
+        "success": STEP_STATUS_SUCCESS,
+        "failed": STEP_STATUS_ERROR,
+        "error": STEP_STATUS_ERROR,
+        "skipped": STEP_STATUS_SUCCESS,
+    }
+
+    INSTALLER_EVENT_STEP_MAP = {
+        "fetch_session": "fetch_session",
+        "prepare_directories": "prepare_dirs",
+        "download_package": "download",
+        "extract_package": "extract",
+        "configure_runtime": "write_config",
+        "run_package_installer": "install",
+        "complete": "install_complete",
+    }
+
+    INSTALLER_STEP_SEQUENCE = [
+        "fetch_session",
+        "prepare_dirs",
+        "download",
+        "extract",
+        "write_config",
+        "install",
+        "install_complete",
+    ]
 
     # 控制器安装相关超时配置（秒）
     # NATS 操作超时 - 用于 download、unzip、send、run 等步骤
@@ -36,6 +91,24 @@ class InstallerConstants:
 
     DOWNLOAD_TOKEN_CACHE_PREFIX = "package_download_token"
 
-    WINDOWS_INSTALLER_S3_PATH = "installer/windows/bklite-monitor-installer.exe"
+    DEFAULT_INSTALLER_VERSION = os.getenv("INSTALLER_DEFAULT_VERSION", "latest")
 
-    WINDOWS_INSTALLER_FILENAME = "bklite-monitor-installer.exe"
+    WINDOWS_INSTALLER_FILENAME = _installer_filename("windows")
+    LINUX_INSTALLER_FILENAME = _installer_filename("linux")
+
+    WINDOWS_INSTALL_DEFAULT_DIR = r"C:\fusion-collectors"
+    LINUX_INSTALL_DEFAULT_DIR = "/opt/fusion-collectors"
+
+    @classmethod
+    def build_versioned_installer_path(cls, target_os: str, version: str | None = None) -> str:
+        installer_version = version or cls.DEFAULT_INSTALLER_VERSION
+        filename = cls.WINDOWS_INSTALLER_FILENAME if target_os == "windows" else cls.LINUX_INSTALLER_FILENAME
+        return f"installer/{target_os}/{installer_version}/{filename}"
+
+    @classmethod
+    def build_latest_alias_path(cls, target_os: str) -> str:
+        filename = cls.WINDOWS_INSTALLER_FILENAME if target_os == "windows" else cls.LINUX_INSTALLER_FILENAME
+        return f"installer/{target_os}/{filename}"
+
+    WINDOWS_INSTALLER_S3_PATH = _installer_alias_path("windows")
+    LINUX_INSTALLER_S3_PATH = _installer_alias_path("linux")

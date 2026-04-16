@@ -61,7 +61,45 @@ const ICON_LIST = [
   'cc-weblogic_WebLogic',
   'cc-websphere_websphere',
   'cc-iis_IIS',
-  'cc-ibmmq_IBM MQ'
+  'cc-ibmmq_IBM MQ',
+  'mm-activemq_ActiveMQ',
+  'mm-apache_Apache',
+  'mm-cvm_云服务器',
+  'mm-datastorage_数据存储',
+  'mm-db2_DB2',
+  'mm-docker_Docker',
+  'mm-elasticsearch_Elasticsearch',
+  'mm-esxi_ESXI',
+  'mm-firewall_防火墙',
+  'mm-hardwareDevice_硬件设备',
+  'mm-host_主机',
+  'mm-jetty_Jetty',
+  'mm-jvm_JVM',
+  'mm-k8s_K8S',
+  'mm-kafka_Kafka',
+  'mm-loadbalance_负载均衡',
+  'mm-middleware_中间件',
+  'mm-minio_Minio',
+  'mm-mongodb_Mongodb',
+  'mm-mssql_Mssql',
+  'mm-mysql_Mysql',
+  'mm-nginx_Nginx',
+  'mm-node_Node',
+  'mm-oracle_Oracle',
+  'mm-pod_Pod',
+  'mm-postgresql_Postgresql',
+  'mm-rabbitmq_Rabbitmq',
+  'mm-redis_Redis',
+  'mm-router_路由器',
+  'mm-storage_储存设备',
+  'mm-switch_交换机',
+  'mm-tencentCloud_腾讯云',
+  'mm-tomcat_Tomcat',
+  'mm-vm_虚拟机',
+  'mm-vmware_Vmware',
+  'mm-weblogic_Weblogic',
+  'mm-website_网站',
+  'mm-zookeeper_Zookeeper'
 ];
 
 interface ModalProps {
@@ -210,7 +248,7 @@ const ObjectModal = forwardRef<ModalRef, ModalProps>(
             title={icon.split('_')[1] || icon}
           >
             <img
-              src={`/app/assets/assetModelIcon/${icon}.svg`}
+              src={`/assets/icons/${icon}.svg`}
               alt={icon}
               className="w-6 h-6"
               onError={(e) => {
@@ -282,12 +320,12 @@ const ObjectModal = forwardRef<ModalRef, ModalProps>(
               <div className="flex items-center gap-3">
                 <div className="w-12 h-12 flex items-center justify-center rounded-lg bg-[var(--color-fill-2)]">
                   <img
-                    src={`/app/assets/assetModelIcon/${selectedIcon}.svg`}
+                    src={`/assets/icons/${selectedIcon}.svg`}
                     alt={selectedIcon}
                     className="w-8 h-8"
                     onError={(e) => {
                       (e.target as HTMLImageElement).src =
-                        '/app/assets/assetModelIcon/cc-default_默认.svg';
+                        '/assets/icons/cc-default_默认.svg';
                     }}
                   />
                 </div>

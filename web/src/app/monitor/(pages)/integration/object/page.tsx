@@ -82,12 +82,12 @@ const ObjectPage = () => {
             <div className="w-8 h-8 rounded flex items-center justify-center bg-[var(--color-fill-2)]">
               {record.icon ? (
                 <img
-                  src={`/app/assets/assetModelIcon/${record.icon}.svg`}
+                  src={`/assets/icons/${record.icon}.svg`}
                   alt={record.name}
                   className="w-6 h-6"
                   onError={(e) => {
                     (e.target as HTMLImageElement).src =
-                      '/app/assets/assetModelIcon/cc-default_默认.svg';
+                      '/assets/icons/cc-default_默认.svg';
                   }}
                 />
               ) : (

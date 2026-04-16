@@ -12,6 +12,7 @@ import { useLocale } from '@/context/locale';
 import { ClientData, AppConfigItem } from '@/types/index';
 import OperateModal from '@/components/operate-modal'
 import { useUserInfoContext } from '@/context/userInfo';
+import { usePortalBranding } from '@/hooks/usePortalBranding';
 import styles from './index.module.scss';
 
 const ControlPage = () => {
@@ -24,6 +25,7 @@ const ControlPage = () => {
   const [form] = Form.useForm();
   const { themeName } = useTheme();
   const { locale } = useLocale();
+  const { portalName } = usePortalBranding();
   const [overlayBgClass, setOverlayBgClass] = useState<string>('bg-[url(/app/console_bg.jpg)]');
   const colorOptions = ['blue', 'geekblue', 'purple'];
 
@@ -39,6 +41,8 @@ const ControlPage = () => {
 
   const isDemoEnv = process.env.NEXT_PUBLIC_IS_DEMO_ENV === 'true';
   const zhlocale = locale === 'zh-CN';
+  const consoleTitle = zhlocale ? `欢迎使用${portalName}控制台` : `Welcome to ${portalName} Console`;
+  const consoleDescription = t('opsConsole.description').replace(/BlueKing Lite/g, portalName);
 
   const displayApps = (appConfigList.length > 0 ? appConfigList : clientData).filter(item => item.name !== 'ops-console');
 
@@ -241,9 +245,9 @@ const ControlPage = () => {
         <div className="mt-6 mb-10">
           <div className="w-full flex justify-between items-center">
             <div className="w-full">
-              <h1 className="text-3xl font-bold mb-4">{t('opsConsole.console')}</h1>
+              <h1 className="text-3xl font-bold mb-4">{consoleTitle}</h1>
               <p className="text-[var(--color-text-2)] mb-4 w-1/2 break-words">
-                {t('opsConsole.description')}
+                {consoleDescription}
               </p>
             </div>
             {isDemoEnv && (

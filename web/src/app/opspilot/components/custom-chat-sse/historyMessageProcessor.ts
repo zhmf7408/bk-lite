@@ -337,7 +337,6 @@ const buildFromEvents = (events: any[], finalize = true) => {
   events.forEach((msg: any) => {
     switch (msg.type) {
       case 'RUN_STARTED':
-        isThinking = true;
         break;
 
       case 'THINKING':

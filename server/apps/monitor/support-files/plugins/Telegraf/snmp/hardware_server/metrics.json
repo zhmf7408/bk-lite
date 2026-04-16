@@ -3,7 +3,7 @@
   "plugin_desc": "The SNMP general plugin is used to monitor and manage the status of devices through SNMP. Administrators can obtain key information about the device, such as interface traffic, error statistics, and status information, thereby optimizing network performance and improving management efficiency.",
   "status_query": "any({instance_type='hardware_server', collect_type='snmp'}) by (instance_id)",
   "name": "Hardware Server",
-  "icon": "cc-hard-server_硬件服务器",
+  "icon": "mm-hardwareDevice_硬件设备",
   "type": "Hardware Device",
   "description": "",
   "default_metric": "any({instance_type='hardware_server'}) by (instance_id)",
@@ -13,13 +13,13 @@
     {
       "metric_group": "Base",
       "name": "snmp_uptime",
-      "query": "sum(snmp_uptime{instance_type='hardware_server', __$labels__}) by (instance_id)",
+      "query": "sum(snmp_uptime{instance_type='hardware_server', __$labels__}/100) by (instance_id)",
       "display_name": "System Uptime",
       "data_type": "Number",
-      "unit": "d",
+      "unit": "s",
       "dimensions": [],
       "instance_id_keys": ["instance_id"],
-      "description": "This metric indicates the uptime of the device since the last restart, measured in days."
+      "description": "This metric indicates the uptime of the device since the last restart. By monitoring the uptime, network administrators can understand the stability and reliability of the device and identify potential reboot or failure issues."
     },
     {
       "metric_group": "Status",

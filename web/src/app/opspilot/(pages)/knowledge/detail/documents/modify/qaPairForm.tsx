@@ -10,26 +10,27 @@ import ChunkPreviewModal from './chunkPreviewModal';
 import Icon from '@/components/icon';
 import type { DocumentItem, QAPairFormProps } from '@/app/opspilot/types/knowledge';
 import { getDocumentTypeLabel } from '@/app/opspilot/utils/knowledgeBaseUtils';
+import { filterModelOption, getModelOptionText, renderModelOptionLabel } from '@/app/opspilot/utils/modelOption';
 
 const { TabPane } = Tabs;
 const { TextArea } = Input;
 
-const QAPairForm = forwardRef<any, QAPairFormProps>(({ 
-  initialData, 
-  onFormChange = () => {}, 
-  onFormDataChange = () => {} 
+const QAPairForm = forwardRef<any, QAPairFormProps>(({
+  initialData,
+  onFormChange = () => {},
+  onFormDataChange = () => {}
 }, ref) => {
   const [form] = Form.useForm();
   const { t } = useTranslation();
   const searchParams = useSearchParams();
   const id = searchParams ? searchParams.get('id') : null;
   const parId = searchParams ? searchParams.get('parId') : null;
-  const { 
-    fetchDocuments, 
+  const {
+    fetchDocuments,
     createQAPairs,
     getQAPairDetail,
     updateQAPairConfig,
-    previewQAPairs 
+    previewQAPairs
   } = useKnowledgeApi();
   const { fetchLlmModels: fetchLlmModelsApi } = useSkillApi();
 
@@ -52,15 +53,15 @@ const QAPairForm = forwardRef<any, QAPairFormProps>(({
   const [tempSelectedDocuments, setTempSelectedDocuments] = useState<string[]>([]);
   const [currentPage, setCurrentPage] = useState<number>(1);
   const [pageSize, setPageSize] = useState<number>(10);
-  
+
   const [isEditMode, setIsEditMode] = useState<boolean>(false);
-  
+
   const [previewModalVisible, setPreviewModalVisible] = useState<boolean>(false);
   const [selectedChunks, setSelectedChunks] = useState<string[]>([]);
   const [currentQaCount, setCurrentQaCount] = useState<number>(1);
   const [previewResults, setPreviewResults] = useState<Array<{question: string; answer: string}>>([]);
   const [previewLoading, setPreviewLoading] = useState<boolean>(false);
-  
+
   const formValuesRef = useRef({
     questionLlmModel: 0,
     answerLlmModel: 0,
@@ -99,13 +100,13 @@ const QAPairForm = forwardRef<any, QAPairFormProps>(({
   const validateAndNotify = useCallback(() => {
     const hasValidDocuments = isEditMode || selectedDocuments.length > 0;
     const isValid = !!(
-      (formValuesRef.current.questionLlmModel !== undefined && formValuesRef.current.questionLlmModel !== null) && 
-      (formValuesRef.current.answerLlmModel !== undefined && formValuesRef.current.answerLlmModel !== null) && 
-      formValuesRef.current.qaCount && 
+      (formValuesRef.current.questionLlmModel !== undefined && formValuesRef.current.questionLlmModel !== null) &&
+      (formValuesRef.current.answerLlmModel !== undefined && formValuesRef.current.answerLlmModel !== null) &&
+      formValuesRef.current.qaCount &&
       formValuesRef.current.qaCount > 0 &&
       hasValidDocuments
     );
-    
+
     onFormChangeRef.current(isValid);
     onFormDataChangeRef.current({
       ...formValuesRef.current,
@@ -118,7 +119,7 @@ const QAPairForm = forwardRef<any, QAPairFormProps>(({
     try {
       const models = await fetchLlmModelsApi();
       setLlmModels(models);
-      
+
       if (!parId && !initialData?.questionLlmModel && models.length > 0) {
         const defaultValues = {
           questionLlmModel: models[0].id,
@@ -130,7 +131,7 @@ const QAPairForm = forwardRef<any, QAPairFormProps>(({
         form.setFieldsValue(defaultValues);
         formValuesRef.current = defaultValues;
         setCurrentQaCount(1);
-        
+
         if (timerRef.current) clearTimeout(timerRef.current);
         timerRef.current = setTimeout(() => {
           validateAndNotify();
@@ -145,7 +146,7 @@ const QAPairForm = forwardRef<any, QAPairFormProps>(({
 
   const fetchDocumentsByType = useCallback(async (type: string, page: number, pageSize: number) => {
     if (!id) return;
-    
+
     setLoading(true);
     try {
       const result = await fetchDocuments({
@@ -160,17 +161,17 @@ const QAPairForm = forwardRef<any, QAPairFormProps>(({
         title: item.name,
         chunk_size: item.chunk_size || 0,
       }));
-      
+
       setDocumentData(prev => ({
         ...prev,
         [type]: processedItems
       }));
-      
+
       setDocumentTotalCounts(prev => ({
         ...prev,
         [type]: result.count || result.items.length
       }));
-      
+
     } catch {
       message.error(t('knowledge.qaPairs.fetchDocumentsListFailed'));
     } finally {
@@ -208,7 +209,7 @@ const QAPairForm = forwardRef<any, QAPairFormProps>(({
       form.setFieldsValue(values);
       formValuesRef.current = values;
       setCurrentQaCount(values.qaCount);
-      
+
       if (!isEditMode && initialData.selectedDocuments) {
         setSelectedDocuments(initialData.selectedDocuments);
       }
@@ -218,11 +219,11 @@ const QAPairForm = forwardRef<any, QAPairFormProps>(({
   useEffect(() => {
     const fetchQAPairDetails = async () => {
       if (!parId) return;
-      
+
       setIsEditMode(true);
       try {
         const qaPairDetail = await getQAPairDetail(Number(parId));
-        
+
         const editValues = {
           questionLlmModel: qaPairDetail.llm_model,
           answerLlmModel: qaPairDetail.answer_llm_model,
@@ -230,14 +231,14 @@ const QAPairForm = forwardRef<any, QAPairFormProps>(({
           questionPrompt: qaPairDetail.question_prompt || '',
           answerPrompt: qaPairDetail.answer_prompt || ''
         };
-        
+
         if (qaPairDetail.document_id) {
           const documentKeys = [qaPairDetail.document_id.toString()];
           setSelectedDocuments(documentKeys);
         }
-        
+
         setEditData(editValues);
-        
+
       } catch (error) {
         console.error('Failed to fetch QA pair details:', error);
         message.error(t('common.fetchFailed'));
@@ -255,9 +256,9 @@ const QAPairForm = forwardRef<any, QAPairFormProps>(({
           form.setFieldsValue(editData);
           formValuesRef.current = editData;
           setCurrentQaCount(editData.qaCount || 1);
-          
+
           validateAndNotify();
-          
+
         } catch (error) {
           console.error('设置表单值时出错:', error);
         }
@@ -272,7 +273,7 @@ const QAPairForm = forwardRef<any, QAPairFormProps>(({
       setIsEditMode(false);
     }
   }, [parId]);
-  
+
   const handleDocumentSelect = useCallback((keys: React.Key[]) => {
     setTempSelectedDocuments(keys.map(key => key.toString()));
   }, []);
@@ -315,16 +316,16 @@ const QAPairForm = forwardRef<any, QAPairFormProps>(({
       answerPrompt: allValues.answerPrompt || ''
     };
     formValuesRef.current = newValues;
-    
+
     const hasValidDocuments = isEditMode || selectedDocuments.length > 0;
     const isValid = !!(
-      (newValues.questionLlmModel !== undefined && newValues.questionLlmModel !== null) && 
-      (newValues.answerLlmModel !== undefined && newValues.answerLlmModel !== null) && 
-      newValues.qaCount && 
+      (newValues.questionLlmModel !== undefined && newValues.questionLlmModel !== null) &&
+      (newValues.answerLlmModel !== undefined && newValues.answerLlmModel !== null) &&
+      newValues.qaCount &&
       newValues.qaCount > 0 &&
       hasValidDocuments
     );
-    
+
     onFormChangeRef.current(isValid);
     onFormDataChangeRef.current({
       ...newValues,
@@ -394,9 +395,9 @@ const QAPairForm = forwardRef<any, QAPairFormProps>(({
 
     try {
       await form.validateFields();
-      
+
       setLoading(true);
-      
+
       if (isEditMode && parId) {
         const updatePayload = {
           llm_model_id: formValuesRef.current.questionLlmModel,
@@ -438,9 +439,9 @@ const QAPairForm = forwardRef<any, QAPairFormProps>(({
         await createQAPairs(payload);
         message.success(t('knowledge.qaPairs.qaPairsCreateSuccess'));
       }
-      
+
       return Promise.resolve();
-      
+
     } catch (error) {
       message.error(isEditMode ? t('knowledge.qaPairs.qaPairsUpdateFailed') : t('knowledge.qaPairs.qaPairsCreateFailed'));
       throw error;
@@ -455,19 +456,19 @@ const QAPairForm = forwardRef<any, QAPairFormProps>(({
       message.error(t('knowledge.qaPairs.ensureDocumentsAndModelsSelected'));
       return;
     }
-    
+
     if (!formValuesRef.current.questionLlmModel || !formValuesRef.current.answerLlmModel) {
       message.error(t('knowledge.qaPairs.selectLlmModel'));
       return;
     }
-    
+
     setPreviewModalVisible(true);
   }, [selectedDocuments, t]);
 
   // 确认选中的块并生成预览
   const handleConfirmChunks = useCallback(async (chunks: string[], chunksData: Array<{chunk_id: string; content: string; knowledge_id: string}>) => {
     setSelectedChunks(chunks);
-    
+
     // 自动调用预览接口
     setPreviewLoading(true);
     try {
@@ -544,7 +545,7 @@ const QAPairForm = forwardRef<any, QAPairFormProps>(({
                 )}
                 <span className="text-blue-500 ml-2">
                   {isEditMode ? (
-                    selectedDocuments.length > 0 ? 
+                    selectedDocuments.length > 0 ?
                       `(${selectedDocuments.length}) ${t('knowledge.qaPairs.documentsSelected')}` :
                       `(${selectedDocuments.length}) ${t('knowledge.qaPairs.noDocumentsSelected')}`
                   ) : (
@@ -583,13 +584,11 @@ const QAPairForm = forwardRef<any, QAPairFormProps>(({
                 placeholder={t('knowledge.qaPairs.selectQuestionLlmModel')}
                 loading={llmModelsLoading}
                 showSearch
-                filterOption={(input, option) =>
-                  typeof option?.children === 'string' && (option.children as string).toLowerCase().includes(input.toLowerCase())
-                }
+                filterOption={filterModelOption}
               >
                 {llmModels.map(model => (
-                  <Select.Option key={model.id} value={model.id}>
-                    {model.name}
+                  <Select.Option key={model.id} value={model.id} title={getModelOptionText(model)}>
+                    {renderModelOptionLabel(model)}
                   </Select.Option>
                 ))}
               </Select>
@@ -616,13 +615,11 @@ const QAPairForm = forwardRef<any, QAPairFormProps>(({
                 placeholder={t('knowledge.qaPairs.selectAnswerLlmModel')}
                 loading={llmModelsLoading}
                 showSearch
-                filterOption={(input, option) =>
-                  typeof option?.children === 'string' && (option.children as string).toLowerCase().includes(input.toLowerCase())
-                }
+                filterOption={filterModelOption}
               >
                 {llmModels.map(model => (
-                  <Select.Option key={model.id} value={model.id}>
-                    {model.name}
+                  <Select.Option key={model.id} value={model.id} title={getModelOptionText(model)}>
+                    {renderModelOptionLabel(model)}
                   </Select.Option>
                 ))}
               </Select>
@@ -656,7 +653,7 @@ const QAPairForm = forwardRef<any, QAPairFormProps>(({
               {t('knowledge.qaPairs.preview')} {totalSelectedChunks > 0 && `(${totalSelectedChunks})`}
             </Button>
           </div>
-          
+
           <div className="flex-1 overflow-auto">
             {previewLoading ? (
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -744,8 +741,8 @@ const QAPairForm = forwardRef<any, QAPairFormProps>(({
             <Button onClick={() => setDrawerVisible(false)}>
               {t('common.cancel')}
             </Button>
-            <Button 
-              type="primary" 
+            <Button
+              type="primary"
               onClick={() => {
                 setSelectedDocuments(tempSelectedDocuments);
                 setDrawerVisible(false);
@@ -768,7 +765,7 @@ const QAPairForm = forwardRef<any, QAPairFormProps>(({
               <TabPane tab={t('knowledge.webLink')} key="web_page" />
               <TabPane tab={t('knowledge.cusText')} key="manual" />
             </Tabs>
-            
+
             <div className="flex-1 mt-4">
               <CustomTable
                 size="small"
@@ -788,7 +785,7 @@ const QAPairForm = forwardRef<any, QAPairFormProps>(({
                   onChange: handlePaginationChange,
                 }}
                 loading={loading}
-                scroll={{ 
+                scroll={{
                   y: 'calc(100vh - 370px)',
                 }}
               />
@@ -813,12 +810,12 @@ const QAPairForm = forwardRef<any, QAPairFormProps>(({
                   </Button>
                 )}
               </div>
-              
+
               <Divider className="my-2" />
-              
+
               <div className="flex-1 overflow-auto">
                 {tempSelectedDocumentsList.length === 0 ? (
-                  <Empty 
+                  <Empty
                     description={t('knowledge.qaPairs.selectFromLeftTable')}
                     image={Empty.PRESENTED_IMAGE_SIMPLE}
                     className="mt-8"
@@ -832,14 +829,14 @@ const QAPairForm = forwardRef<any, QAPairFormProps>(({
                       >
                         <div className="flex-1 min-w-0">
                           <div className="flex items-center gap-2 mb-1">
-                            <Tag 
+                            <Tag
                               color="blue"
                               className="text-xs"
                             >
                               {getDocumentTypeLabelCallback(doc.type)}
                             </Tag>
                           </div>
-                          <div 
+                          <div
                             className="text-sm font-medium text-gray-900 truncate"
                             title={doc.title}
                           >
@@ -859,7 +856,7 @@ const QAPairForm = forwardRef<any, QAPairFormProps>(({
                   </div>
                 )}
               </div>
-              
+
               {tempSelectedDocuments.length > 0 && (
                 <div className="mt-4 pt-3 border-t border-gray-200 flex-shrink-0">
                   <div className="text-xs text-blue-600 text-center">

@@ -6,6 +6,36 @@ from langchain_core.tools import tool
 from apps.opspilot.metis.llm.tools.mssql.utils import execute_readonly_query, format_size, safe_json_dumps
 
 
+def _extract_setting_unit(setting_name: str) -> str | None:
+    if not setting_name:
+        return None
+
+    if "(MB)" in setting_name:
+        return "MB"
+    if "(s)" in setting_name:
+        return "s"
+    if "(min)" in setting_name:
+        return "min"
+    if "(%)" in setting_name:
+        return "%"
+    return None
+
+
+def _format_setting_value(value, unit: str | None) -> str | None:
+    if value is None or unit is None:
+        return None
+
+    if unit == "MB":
+        return format_size(float(value) * 1024 * 1024)
+    if unit == "s":
+        return f"{value}s"
+    if unit == "min":
+        return f"{value}min"
+    if unit == "%":
+        return f"{value}%"
+    return None
+
+
 @tool()
 def get_current_database_info(config: RunnableConfig = None):
     """
@@ -482,6 +512,14 @@ def get_database_config(config: RunnableConfig = None):
 
     try:
         results = execute_readonly_query(query, config=config)
+
+        for row in results:
+            unit = _extract_setting_unit(row["name"])
+            row["unit"] = unit
+            row["value_display"] = _format_setting_value(row["value"], unit)
+            row["value_in_use_display"] = _format_setting_value(row["value_in_use"], unit)
+            row["minimum_display"] = _format_setting_value(row["minimum"], unit)
+            row["maximum_display"] = _format_setting_value(row["maximum"], unit)
 
         return safe_json_dumps({"total_settings": len(results), "settings": results})
     except Exception as e:

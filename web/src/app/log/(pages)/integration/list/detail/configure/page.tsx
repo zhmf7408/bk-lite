@@ -4,6 +4,7 @@ import { Spin, Segmented } from 'antd';
 import AutomaticConfiguration from './automatic';
 import SnmpTrapConfiguration from './snmpTrapConfiguration';
 import SyslogConfiguration from './syslogConfiguration';
+import K8sConfiguration from './k8s/k8sConfiguration';
 import { useTranslation } from '@/utils/i18n';
 import configureStyle from './index.module.scss';
 import { useSearchParams } from 'next/navigation';
@@ -27,7 +28,7 @@ const Configure: React.FC = () => {
   return (
     <div className={configureStyle.configure}>
       {isK8s ? (
-        t('log.integration.k8sNote')
+        <K8sConfiguration />
       ) : isSnmpTrap ? (
         <SnmpTrapConfiguration />
       ) : isSyslog ? (

@@ -172,6 +172,14 @@
             "Add",
             "Delete"
           ]
+        },
+        {
+          "id": "portal_settings",
+          "name": "Portal Settings",
+          "operation": [
+            "View",
+            "Edit"
+          ]
         }
       ]
     }

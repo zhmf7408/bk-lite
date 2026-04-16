@@ -1,11 +1,9 @@
 import useApiClient from '@/utils/request';
 
 export type ObjectType = 'dashboard' | 'topology' | 'architecture' | 'datasource' | 'namespace';
-export type ScopeType = 'canvas' | 'config';
 export type ConflictAction = 'skip' | 'overwrite' | 'rename';
 
 export interface ExportRequest {
-  scope: ScopeType;
   object_type: ObjectType;
   object_ids: number[];
 }

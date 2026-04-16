@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"nats-executor/local"
 	"nats-executor/logger"
 	"nats-executor/utils"
@@ -25,6 +26,21 @@ type responseMsg interface {
 	Respond([]byte) error
 }
 
+type streamEvent struct {
+	ExecutionID string `json:"execution_id"`
+	Stream      string `json:"stream"`
+	Line        string `json:"line"`
+	Timestamp   string `json:"timestamp"`
+}
+
+type streamLogWriter struct {
+	nc          *nats.Conn
+	topic       string
+	executionID string
+	stream      string
+	buffer      bytes.Buffer
+}
+
 type sshClient interface {
 	NewSession() (sshSession, error)
 	Close() error
@@ -34,8 +50,8 @@ type sshSession interface {
 	Run(cmd string) error
 	Signal(sig ssh.Signal) error
 	Close() error
-	SetStdout(w *bytes.Buffer)
-	SetStderr(w *bytes.Buffer)
+	SetStdout(w io.Writer)
+	SetStderr(w io.Writer)
 }
 
 type realSSHClient struct{ client *ssh.Client }
@@ -74,8 +90,57 @@ func (c realSSHClient) Close() error { return c.client.Close() }
 func (s realSSHSession) Run(cmd string) error        { return s.session.Run(cmd) }
 func (s realSSHSession) Signal(sig ssh.Signal) error { return s.session.Signal(sig) }
 func (s realSSHSession) Close() error                { return s.session.Close() }
-func (s realSSHSession) SetStdout(w *bytes.Buffer)   { s.session.Stdout = w }
-func (s realSSHSession) SetStderr(w *bytes.Buffer)   { s.session.Stderr = w }
+func (s realSSHSession) SetStdout(w io.Writer)       { s.session.Stdout = w }
+func (s realSSHSession) SetStderr(w io.Writer)       { s.session.Stderr = w }
+
+func newStreamLogWriter(nc *nats.Conn, topic, executionID, stream string) *streamLogWriter {
+	return &streamLogWriter{nc: nc, topic: topic, executionID: executionID, stream: stream}
+}
+
+func (w *streamLogWriter) Write(p []byte) (int, error) {
+	if len(p) == 0 {
+		return 0, nil
+	}
+	_, _ = w.buffer.Write(p)
+	for {
+		line, err := w.buffer.ReadString('\n')
+		if err == io.EOF {
+			break
+		}
+		if err != nil {
+			return len(p), err
+		}
+		w.publish(strings.TrimRight(line, "\r\n"))
+	}
+	return len(p), nil
+}
+
+func (w *streamLogWriter) Flush() {
+	if w.buffer.Len() == 0 {
+		return
+	}
+	w.publish(strings.TrimRight(w.buffer.String(), "\r\n"))
+	w.buffer.Reset()
+}
+
+func (w *streamLogWriter) publish(line string) {
+	if w.nc == nil || w.topic == "" || line == "" {
+		return
+	}
+	payload, err := json.Marshal(streamEvent{
+		ExecutionID: w.executionID,
+		Stream:      w.stream,
+		Line:        line,
+		Timestamp:   time.Now().UTC().Format(time.RFC3339),
+	})
+	if err != nil {
+		logger.Warnf("[SSH Execute] stream marshal failed: %v", err)
+		return
+	}
+	if err := w.nc.Publish(w.topic, payload); err != nil {
+		logger.Warnf("[SSH Execute] stream publish failed: %v", err)
+	}
+}
 
 type incomingMessage struct {
 	Args   []json.RawMessage `json:"args"`
@@ -109,7 +174,7 @@ func redactSensitiveCommand(command string) string {
 	return sshpassPasswordPattern.ReplaceAllString(command, "sshpass -p '***'")
 }
 
-func handleSSHExecuteMessage(data []byte, instanceId string) ([]byte, bool) {
+func handleSSHExecuteMessage(data []byte, instanceId string, natsConn *nats.Conn) ([]byte, bool) {
 	incoming, ok := decodeIncomingMessage(data)
 	if !ok {
 		return utils.NewErrorExecuteResponse(instanceId, utils.ErrorCodeInvalidRequest, "invalid request payload"), true
@@ -120,7 +185,7 @@ func handleSSHExecuteMessage(data []byte, instanceId string) ([]byte, bool) {
 		return utils.NewErrorExecuteResponse(instanceId, utils.ErrorCodeInvalidRequest, "invalid request payload"), true
 	}
 
-	responseData := executeSSHCommand(sshExecuteRequest, instanceId)
+	responseData := executeWithConn(sshExecuteRequest, instanceId, natsConn)
 	responseContent, _ := json.Marshal(responseData)
 	return responseContent, true
 }
@@ -239,8 +304,8 @@ func handleUploadToRemoteMessage(data []byte, instanceId string) ([]byte, bool) 
 	return responseContent, true
 }
 
-func respondSSHExecuteMessage(msg responseMsg, data []byte, instanceId string) bool {
-	responseContent, ok := handleSSHExecuteMessage(data, instanceId)
+func respondSSHExecuteMessage(msg responseMsg, data []byte, instanceId string, nc *nats.Conn) bool {
+	responseContent, ok := handleSSHExecuteMessage(data, instanceId, nc)
 	if !ok {
 		logger.Errorf("[SSH Subscribe] Instance: %s, Error unmarshalling incoming message", instanceId)
 		return false
@@ -475,6 +540,10 @@ func validateExecuteRequest(req ExecuteRequest) string {
 }
 
 func Execute(req ExecuteRequest, instanceId string) ExecuteResponse {
+	return executeWithConn(req, instanceId, nil)
+}
+
+func executeWithConn(req ExecuteRequest, instanceId string, nc *nats.Conn) ExecuteResponse {
 	if validationErr := validateExecuteRequest(req); validationErr != "" {
 		return invalidSSHExecuteResponse(instanceId, validationErr)
 	}
@@ -610,8 +679,18 @@ func Execute(req ExecuteRequest, instanceId string) ExecuteResponse {
 	defer session.Close()
 
 	var stdout, stderr bytes.Buffer
-	session.SetStdout(&stdout)
-	session.SetStderr(&stderr)
+	stdoutWriter := io.Writer(&stdout)
+	stderrWriter := io.Writer(&stderr)
+	var stdoutStreamWriter *streamLogWriter
+	var stderrStreamWriter *streamLogWriter
+	if req.StreamLogs && req.StreamLogTopic != "" && nc != nil {
+		stdoutStreamWriter = newStreamLogWriter(nc, req.StreamLogTopic, req.ExecutionID, "stdout")
+		stderrStreamWriter = newStreamLogWriter(nc, req.StreamLogTopic, req.ExecutionID, "stderr")
+		stdoutWriter = io.MultiWriter(&stdout, stdoutStreamWriter)
+		stderrWriter = io.MultiWriter(&stderr, stderrStreamWriter)
+	}
+	session.SetStdout(stdoutWriter)
+	session.SetStderr(stderrWriter)
 
 	ctx, cancel := context.WithTimeout(context.Background(), time.Duration(req.ExecuteTimeout)*time.Second)
 	defer cancel()
@@ -630,6 +709,12 @@ func Execute(req ExecuteRequest, instanceId string) ExecuteResponse {
 		errMsg := fmt.Sprintf("Command timed out after %v (timeout: %ds)", duration, req.ExecuteTimeout)
 		logger.Warnf("[SSH Execute] Instance: %s, %s", instanceId, errMsg)
 		session.Signal(ssh.SIGKILL)
+		if stdoutStreamWriter != nil {
+			stdoutStreamWriter.Flush()
+		}
+		if stderrStreamWriter != nil {
+			stderrStreamWriter.Flush()
+		}
 		return ExecuteResponse{
 			Output:     stdout.String() + stderr.String(),
 			InstanceId: instanceId,
@@ -639,6 +724,12 @@ func Execute(req ExecuteRequest, instanceId string) ExecuteResponse {
 		}
 	case err := <-errChan:
 		duration := time.Since(startTime)
+		if stdoutStreamWriter != nil {
+			stdoutStreamWriter.Flush()
+		}
+		if stderrStreamWriter != nil {
+			stderrStreamWriter.Flush()
+		}
 		output := stdout.String()
 		if stderr.Len() > 0 {
 			output += stderr.String()
@@ -692,7 +783,7 @@ func SubscribeSSHExecutor(nc *nats.Conn, instanceId *string) {
 
 	_, err := nc.Subscribe(subject, func(msg *nats.Msg) {
 		logger.Debugf("[SSH Subscribe] Instance: %s, Received message, size: %d bytes", *instanceId, len(msg.Data))
-		respondSSHExecuteMessage(msg, msg.Data, *instanceId)
+		respondSSHExecuteMessage(msg, msg.Data, *instanceId, nc)
 	})
 
 	if err != nil {

@@ -155,6 +155,7 @@ export interface RasaModel {
   id: number;
   name: string;
   enabled: boolean;
+  vendor_name?: string;
 }
 
 export interface LlmModel {
@@ -162,6 +163,7 @@ export interface LlmModel {
   name: string;
   enabled: boolean;
   is_template?: boolean;
+  vendor_name?: string;
 }
 
 export interface BotConfigPayload {

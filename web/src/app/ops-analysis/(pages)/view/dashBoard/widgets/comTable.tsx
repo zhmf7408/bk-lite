@@ -38,12 +38,9 @@ interface TableDataItem {
   [key: string]: any;
 }
 
-// 后端标准格式：每个 namespace 的 data 字段是带分页的对象
 interface NamespacePagedData {
-  data?: TableDataItem[];
+  items?: TableDataItem[];
   count?: number;
-  page?: number;
-  page_size?: number;
 }
 
 interface NamespaceGroupedItem {
@@ -84,30 +81,37 @@ const ComTable: React.FC<ComTableProps> = ({
   const { tableData, pagination } = useMemo(() => {
     const empty = {
       tableData: [],
-      pagination: { current: 1, pageSize: 20, total: 0 },
+      pagination: {
+        current: queryPagination.current,
+        pageSize: queryPagination.pageSize,
+        total: 0,
+      },
     };
 
     if (!Array.isArray(rawData) || rawData.length === 0) return empty;
 
     const rows: TableDataItem[] = [];
     let total = 0;
-    let current = 1;
-    let pageSize = 20;
 
     for (const item of rawData as NamespaceGroupedItem[]) {
       const namespaceId = item?.namespace_id || '-';
       const paged = item?.data;
-      const records = Array.isArray(paged?.data) ? paged.data! : [];
+      const records = Array.isArray(paged?.items) ? paged.items : [];
       records.forEach((record) =>
         rows.push({ namespace_id: namespaceId, ...record }),
       );
       total += Number(paged?.count) || records.length;
-      if (paged?.page) current = Number(paged.page);
-      if (paged?.page_size) pageSize = Number(paged.page_size);
     }
 
-    return { tableData: rows, pagination: { current, pageSize, total } };
-  }, [rawData]);
+    return {
+      tableData: rows,
+      pagination: {
+        current: queryPagination.current,
+        pageSize: queryPagination.pageSize,
+        total,
+      },
+    };
+  }, [rawData, queryPagination.current, queryPagination.pageSize]);
 
   const namespaceOptions = useMemo((): Array<{
     label: string;
@@ -286,23 +290,6 @@ const ComTable: React.FC<ComTableProps> = ({
 
     return [namespaceColumn, ...dataColumns];
   }, [columnConfigs, t]);
-
-  useEffect(() => {
-    if (pagination?.current && pagination?.pageSize) {
-      setQueryPagination((prev) => {
-        if (
-          prev.current === pagination.current &&
-          prev.pageSize === pagination.pageSize
-        ) {
-          return prev;
-        }
-        return {
-          current: pagination.current,
-          pageSize: pagination.pageSize,
-        };
-      });
-    }
-  }, [pagination?.current, pagination?.pageSize]);
 
   useEffect(() => {
     if (!onQueryChange) return;

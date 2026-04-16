@@ -1,13 +1,13 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { usePathname } from 'next/navigation';
 import Link from 'next/link';
-import Image from 'next/image';
 import { Popover, Spin, Tour, Tooltip } from 'antd';
 import { CaretDownFilled } from '@ant-design/icons';
 import { useTranslation } from '@/utils/i18n';
 import { usePermissions } from '@/context/permissions';
 import { useClientData } from '@/context/client';
 import { useUserInfoContext } from '@/context/userInfo';
+import { usePortalBranding } from '@/hooks/usePortalBranding';
 import { findMatchedMenuPath } from '@/utils/menuHelpers';
 import styles from './index.module.scss';
 import type { TourProps } from 'antd';
@@ -28,6 +28,7 @@ const TopMenu: React.FC<TopMenuProps> = ({ hideMainMenu }) => {
   const pathname = usePathname();
   const { clientData, appConfigList, loading, appConfigLoading } = useClientData();
   const { userId } = useUserInfoContext();
+  const { portalName, logoUrl } = usePortalBranding();
   const [tourOpen, setTourOpen] = useState(false);
   const [tourStep, setTourStep] = useState<TourProps['steps']>([]);
   const [currentStep, setCurrentStep] = useState(0);
@@ -158,8 +159,8 @@ const TopMenu: React.FC<TopMenuProps> = ({ hideMainMenu }) => {
     <div className="z-30 flex flex-col grow-0 shrink-0 w-full basis-auto h-[56px] relative">
       <div className="flex items-center justify-between px-4 w-full h-full">
         <div className="flex items-center space-x-2">
-          <Image src="/logo-site.png" className="block w-auto h-10" alt="logo" width={100} height={40} />
-          <div className="font-medium">BlueKing Lite</div>
+          <img src={logoUrl} className="block h-10 w-auto object-contain" alt="logo" />
+          <div className="font-medium">{portalName}</div>
           <Popover content={renderContent} title={t('common.appList')} trigger="hover">
             <div className={`flex items-center justify-center cursor-pointer rounded-[10px] px-3 py-2 ${styles.nav}`}>
               <Icon type="caidandaohang" className="mr-1" />

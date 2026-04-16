@@ -108,6 +108,10 @@ class Management:
                 except Exception as e:
                     result["failed"].append({"instance_info": instance_info, "error": getattr(e, "message", e)})
 
+        from apps.cmdb.services.auto_relation_reconcile import schedule_instance_auto_relation_reconcile
+
+        schedule_instance_auto_relation_reconcile([item["inst_info"]["_id"] for item in result["success"]])
+
         return result
 
     def update_inst(self, inst_list):
@@ -136,6 +140,10 @@ class Management:
                     result["success"].append(dict(inst_info=entity[0], assos_result=assos_result))
                 except Exception as e:
                     result["failed"].append({"instance_info": instance_info, "error": getattr(e, "message", e)})
+
+        from apps.cmdb.services.auto_relation_reconcile import schedule_instance_auto_relation_reconcile
+
+        schedule_instance_auto_relation_reconcile([item["inst_info"]["_id"] for item in result["success"]])
         return result
 
     @staticmethod
@@ -154,6 +162,10 @@ class Management:
                     result["success"].append(instance_info)
                 except Exception as e:
                     result["failed"].append({"instance_info": instance_info, "error": getattr(e, "message", e)})
+
+        from apps.cmdb.services.auto_relation_reconcile import schedule_incoming_rule_full_sync_by_model_ids
+
+        schedule_incoming_rule_full_sync_by_model_ids([item["model_id"] for item in result["success"]])
         return result
 
     def set_asso_info(self, dst_id, src_info, dst_info):

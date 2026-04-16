@@ -1,38 +1,61 @@
+import { useCallback } from 'react';
 import useApiClient from '@/utils/request';
 
 export const useSettingsApi = () => {
   const { get, post, del } = useApiClient();
 
+  const getPortalSettings = useCallback(async (): Promise<{
+    portal_name?: string;
+    portal_logo_url?: string;
+    portal_favicon_url?: string;
+    watermark_enabled?: string;
+    watermark_text?: string;
+  }> => {
+    return get('/system_mgmt/system_settings/get_sys_set/');
+  }, [get]);
+
+  const updatePortalSettings = useCallback(async (params: {
+    portal_name?: string;
+    portal_logo_url?: string;
+    portal_favicon_url?: string;
+    watermark_enabled?: string;
+    watermark_text?: string;
+  }): Promise<void> => {
+    await post('/system_mgmt/system_settings/update_sys_set/', params);
+  }, [post]);
+
   /**
    * Fetches user API secrets.
    */
-  const fetchUserApiSecrets = async (): Promise<any[]> => {
+  const fetchUserApiSecrets = useCallback(async (): Promise<any[]> => {
     return get('/base/user_api_secret/');
-  };
+  }, [get]);
 
   /**
    * Fetches teams/groups.
    */
-  const fetchTeams = async (): Promise<any[]> => {
+  const fetchTeams = useCallback(async (): Promise<any[]> => {
     return get('/opspilot/knowledge_mgmt/knowledge_base/get_teams/');
-  };
+  }, [get]);
 
   /**
    * Deletes a user API secret by ID.
    * @param id - Secret ID.
    */
-  const deleteUserApiSecret = async (id: number): Promise<void> => {
+  const deleteUserApiSecret = useCallback(async (id: number): Promise<void> => {
     await del(`/base/user_api_secret/${id}/`);
-  };
+  }, [del]);
 
   /**
    * Creates a new user API secret.
    */
-  const createUserApiSecret = async (): Promise<void> => {
+  const createUserApiSecret = useCallback(async (): Promise<void> => {
     await post('/base/user_api_secret/');
-  };
+  }, [post]);
 
   return {
+    getPortalSettings,
+    updatePortalSettings,
     fetchUserApiSecrets,
     fetchTeams,
     deleteUserApiSecret,

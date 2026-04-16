@@ -1,6 +1,8 @@
 from django.db import models
 from django.utils import timezone as django_timezone
 
+from apps.core.utils.permission_cache import clear_user_permission_cache
+
 
 class User(models.Model):
     username = models.CharField(max_length=100)
@@ -37,6 +39,7 @@ class User(models.Model):
             except User.DoesNotExist:
                 pass
         super().save(*args, **kwargs)
+        clear_user_permission_cache(self.username, self.domain)
 
     @staticmethod
     def display_fields():

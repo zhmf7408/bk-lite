@@ -1,0 +1,194 @@
+from datetime import timedelta
+import re
+import uuid
+
+import requests
+from django.core.cache import cache
+from django.utils import timezone
+
+from apps.core.exceptions.base_app_exception import BaseAppException
+from apps.log.models import CollectInstance, CollectInstanceOrganization, CollectType
+from apps.log.services.search import SearchService
+from apps.rpc.node_mgmt import NodeMgmt
+
+
+class K8sLogCollectService:
+    TOKEN_EXPIRE_TIME = 60 * 30
+    TOKEN_MAX_USAGE = 5
+    REQUEST_TIMEOUT = 30
+    TOKEN_CACHE_PREFIX = "log_k8s_install_token"
+    CLUSTER_NAME_PATTERN = re.compile(r"^[A-Za-z0-9_-]+$")
+
+    @classmethod
+    def _build_cache_key(cls, token: str) -> str:
+        return f"{cls.TOKEN_CACHE_PREFIX}:{token}"
+
+    @classmethod
+    def validate_cluster_name(cls, cluster_name: str):
+        if not cluster_name:
+            raise BaseAppException("集群名称不能为空")
+        if not cls.CLUSTER_NAME_PATTERN.fullmatch(cluster_name):
+            raise BaseAppException("集群名称格式不正确，仅支持字母、数字、下划线和中划线")
+
+    @staticmethod
+    def get_collect_type(collect_type_id):
+        collect_type = CollectType.objects.filter(id=collect_type_id).first()
+        if not collect_type:
+            raise BaseAppException("采集类型不存在")
+        if collect_type.name != "kubernetes":
+            raise BaseAppException("当前采集类型不是 Kubernetes")
+        return collect_type
+
+    @classmethod
+    def create_k8s_collect_instance(cls, data: dict):
+        organizations = data.get("organizations") or []
+        collect_type_id = data.get("collect_type_id")
+        name = (data.get("name") or "").strip()
+        instance_id = (data.get("id") or name).strip()
+
+        cls.get_collect_type(collect_type_id)
+        cls.validate_cluster_name(name)
+        cls.validate_cluster_name(instance_id)
+
+        if CollectInstance.objects.filter(collect_type_id=collect_type_id, name=name).exists():
+            raise BaseAppException("当前集群名称已存在")
+        if CollectInstance.objects.filter(id=instance_id).exists():
+            raise BaseAppException("当前实例 ID 已存在")
+
+        instance = CollectInstance.objects.create(
+            id=instance_id,
+            name=name,
+            collect_type_id=collect_type_id,
+            node_id=None,
+        )
+
+        assos = [CollectInstanceOrganization(collect_instance_id=instance.id, organization=organization) for organization in organizations]
+        if assos:
+            CollectInstanceOrganization.objects.bulk_create(assos, ignore_conflicts=True)
+
+        return {"instance_id": instance.id}
+
+    @classmethod
+    def generate_install_token(cls, cluster_name: str, cloud_region_id: str) -> str:
+        token = str(uuid.uuid4())
+        cache.set(
+            cls._build_cache_key(token),
+            {
+                "cluster_name": cluster_name,
+                "cloud_region_id": str(cloud_region_id),
+                "config_type": "log",
+                "usage_count": 0,
+                "max_usage": cls.TOKEN_MAX_USAGE,
+            },
+            timeout=cls.TOKEN_EXPIRE_TIME,
+        )
+        return token
+
+    @classmethod
+    def validate_and_get_token_data(cls, token: str) -> dict:
+        if not token:
+            raise BaseAppException("Token is required")
+
+        cache_key = cls._build_cache_key(token)
+        data = cache.get(cache_key)
+        if not data:
+            raise BaseAppException("Invalid or expired token")
+
+        usage_count = data.get("usage_count", 0)
+        max_usage = data.get("max_usage", cls.TOKEN_MAX_USAGE)
+        if usage_count >= max_usage:
+            cache.delete(cache_key)
+            raise BaseAppException(f"Token has exceeded maximum usage limit ({max_usage} times)")
+
+        data["usage_count"] = usage_count + 1
+        cache.set(cache_key, data, timeout=cls.TOKEN_EXPIRE_TIME)
+        return {
+            "cluster_name": data["cluster_name"],
+            "cloud_region_id": data["cloud_region_id"],
+            "config_type": data.get("config_type", "log"),
+            "remaining_usage": max_usage - data["usage_count"],
+        }
+
+    @staticmethod
+    def get_cloud_region_envconfig(cloud_region_id: str) -> dict:
+        env_vars = NodeMgmt().get_cloud_region_envconfig(cloud_region_id)
+        missing_vars = []
+        for field in [
+            "NODE_SERVER_URL",
+            "WEBHOOK_SERVER_URL",
+            "NATS_USERNAME",
+            "NATS_PASSWORD",
+            "NATS_SERVERS",
+        ]:
+            if not env_vars.get(field):
+                missing_vars.append(field)
+
+        if missing_vars:
+            raise BaseAppException(f"Missing required environment variables in cloud region {cloud_region_id}: {', '.join(missing_vars)}")
+
+        return env_vars
+
+    @classmethod
+    def generate_install_command(cls, instance_id: str, cloud_region_id: str) -> str:
+        instance = CollectInstance.objects.filter(id=instance_id, collect_type__name="kubernetes").first()
+        if not instance:
+            raise BaseAppException("Kubernetes 日志接入实例不存在")
+
+        env_vars = cls.get_cloud_region_envconfig(cloud_region_id)
+        server_url = env_vars.get("NODE_SERVER_URL")
+        token = cls.generate_install_token(instance.id, str(cloud_region_id))
+        api_url = f"{server_url.rstrip('/')}/api/v1/log/open_api/k8s/render/"
+        return f"curl -sSLk -X POST -H 'Content-Type: application/json' {api_url} -d '{{\"token\":\"{token}\"}}' | kubectl apply -f -"
+
+    @classmethod
+    def render_config_from_cloud_region(cls, cluster_name: str, cloud_region_id: str) -> str:
+        env_vars = cls.get_cloud_region_envconfig(cloud_region_id)
+        webhook_server_url = env_vars.get("WEBHOOK_SERVER_URL")
+        api_url = f"{webhook_server_url.rstrip('/')}/infra/kubernetes"
+
+        try:
+            response = requests.post(
+                api_url,
+                json={
+                    "cluster_name": cluster_name,
+                    "type": "log",
+                    "nats_url": env_vars.get("NATS_SERVERS"),
+                    "nats_username": env_vars.get("NATS_USERNAME"),
+                    "nats_password": env_vars.get("NATS_PASSWORD"),
+                    "nats_ca": env_vars.get("NATS_TLS_CA"),
+                },
+                headers={"Content-Type": "application/json"},
+                timeout=cls.REQUEST_TIMEOUT,
+                verify=False,
+            )
+            if response.status_code != 200:
+                raise BaseAppException(f"Infra API returned status {response.status_code}: {response.text}")
+
+            response_data = response.json()
+            yaml_content = response_data.get("yaml")
+            if not yaml_content:
+                raise BaseAppException("Invalid response from infra API: missing 'yaml' field")
+            return yaml_content
+        except requests.Timeout as error:
+            raise BaseAppException(f"Infra API request timeout: {error}")
+        except requests.RequestException as error:
+            raise BaseAppException(f"Infra API request failed: {error}")
+        except ValueError as error:
+            raise BaseAppException(f"Failed to parse response from infra API: {error}")
+
+    @staticmethod
+    def check_collect_status(instance_id: str) -> bool:
+        instance = CollectInstance.objects.filter(id=instance_id, collect_type__name="kubernetes").first()
+        if not instance:
+            raise BaseAppException("Kubernetes 日志接入实例不存在")
+
+        end_time = timezone.now()
+        start_time = end_time - timedelta(minutes=10)
+        query = f'collect_type:"kubernetes" AND instance_id:"{instance.id}"'
+        data = SearchService.search_logs(
+            query,
+            start_time.strftime("%Y-%m-%d %H:%M:%S"),
+            end_time.strftime("%Y-%m-%d %H:%M:%S"),
+            1,
+        )
+        return bool(data)

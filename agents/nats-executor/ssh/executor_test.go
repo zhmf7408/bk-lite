@@ -1,8 +1,8 @@
 package ssh
 
 import (
-	"bytes"
 	"errors"
+	"io"
 	"nats-executor/local"
 	"os"
 	"path/filepath"
@@ -38,8 +38,8 @@ type stubSSHSession struct {
 	run    func(cmd string) error
 	signal func(sig gossh.Signal) error
 	close  func() error
-	stdout *bytes.Buffer
-	stderr *bytes.Buffer
+	stdout io.Writer
+	stderr io.Writer
 }
 
 func (s *stubSSHSession) Run(cmd string) error {
@@ -63,8 +63,8 @@ func (s *stubSSHSession) Close() error {
 	return s.close()
 }
 
-func (s *stubSSHSession) SetStdout(w *bytes.Buffer) { s.stdout = w }
-func (s *stubSSHSession) SetStderr(w *bytes.Buffer) { s.stderr = w }
+func (s *stubSSHSession) SetStdout(w io.Writer) { s.stdout = w }
+func (s *stubSSHSession) SetStderr(w io.Writer) { s.stderr = w }
 
 // 测试 buildSCPCommand 函数 - 密码认证
 func TestBuildSCPCommandWithPassword(t *testing.T) {

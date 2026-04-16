@@ -934,6 +934,7 @@ def wechat_user_register(user_id, nick_name):
             "display_name": user.display_name,
             "is_first_login": is_first_login,
             "locale": user.locale,
+            "timezone": user.timezone,
             "token": token,
         },
     }
@@ -1050,6 +1051,7 @@ def get_user_login_token(user, username):
             "id": user.id,
             "domain": user.domain,
             "locale": user.locale,
+            "timezone": user.timezone,
             "temporary_pwd": user.temporary_pwd,
             "enable_otp": enable_otp,
             "qrcode": user.otp_secret is None or user.otp_secret == "",
@@ -1176,6 +1178,7 @@ def verify_bk_token(bk_token):
                 "id": user.id,
                 "domain": user.domain,
                 "locale": user.locale,
+                "timezone": user.timezone,
                 "qrcode": user.otp_secret is None or user.otp_secret == "",
             },
             "url": bk_config.get("bk_url"),

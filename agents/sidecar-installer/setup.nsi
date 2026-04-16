@@ -19,17 +19,17 @@
 ; Settings
 ; ============================================================================
 
-Name "Collector Sidecar Installer"
-OutFile "collector-sidecar-installer.exe"
+Name "BK-Lite Controller Installer"
+OutFile "bklite-controller-installer.exe"
 InstallDir "C:\fusion-collectors"
 RequestExecutionLevel admin
 Unicode True
 ManifestDPIAware true
 
 VIProductVersion "1.0.0.0"
-VIAddVersionKey "ProductName" "Collector Sidecar"
+VIAddVersionKey "ProductName" "BK-Lite Controller Installer"
 VIAddVersionKey "CompanyName" "BK-Lite"
-VIAddVersionKey "FileDescription" "Collector Sidecar Installer"
+VIAddVersionKey "FileDescription" "BK-Lite Controller Installer"
 VIAddVersionKey "FileVersion" "1.0.0"
 VIAddVersionKey "LegalCopyright" "MIT License"
 
@@ -47,11 +47,11 @@ VIAddVersionKey "LegalCopyright" "MIT License"
 !define MUI_HEADERIMAGE_RIGHT
 !define MUI_WELCOMEFINISHPAGE_BITMAP "wizard.bmp"
 
-!define MUI_WELCOMEPAGE_TITLE "Collector Sidecar Setup"
-!define MUI_WELCOMEPAGE_TEXT "This wizard will install Collector Sidecar.$\r$\n$\r$\nClick Next to continue."
+!define MUI_WELCOMEPAGE_TITLE "BK-Lite Controller Setup"
+!define MUI_WELCOMEPAGE_TEXT "This wizard will install the BK-Lite controller.$\r$\n$\r$\nClick Next to continue."
 
 !define MUI_FINISHPAGE_TITLE "Installation Complete"
-!define MUI_FINISHPAGE_TEXT "Collector Sidecar has been installed.$\r$\n$\r$\nClick Finish to close."
+!define MUI_FINISHPAGE_TEXT "The BK-Lite controller has been installed.$\r$\n$\r$\nClick Finish to close."
 
 ; ============================================================================
 ; Variables

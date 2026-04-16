@@ -59,6 +59,7 @@ export interface FieldListProps {
   className?: string;
   style?: Record<string, string>;
   fields: string[];
+  displayFields: string[];
   addToQuery: (row: TableDataItem, type: string) => void;
   changeDisplayColumns: (columns: string[]) => void;
   getSearchParams?: () => {

@@ -136,6 +136,6 @@ for pid_info in "${pid_list[@]}"; do
     fi
 
     json_template='{"inst_name":"%s","obj_id":"%s","install_path":"%s","port":"%s","conf_path":"%s","java_path":"%s","ip_addr":"%s","java_version":"%s","version":"%s","cluster_name":"%s","node_name":"%s","is_master":"%s","data_path":"%s","log_path":"%s"}'
-    json_string=$(printf "$json_template" "${innerip}-es-${port}" "elasticsearch" "$install_path" "$port" "$cfg_path" "$jdk_path" "$innerip" "$(get_jdk_version "$jdk_path")" "$(get_es_version "$install_path")" "${ret[cluster_name]}" "${ret[node_name]}" "$ismaster" "${ret[data_path]}" "${ret[log_path]}")
+    json_string=$(printf "$json_template" "${innerip}-es-${port}" "es" "$install_path" "$port" "$cfg_path" "$jdk_path" "$innerip" "$(get_jdk_version "$jdk_path")" "$(get_es_version "$install_path")" "${ret[cluster_name]}" "${ret[node_name]}" "$ismaster" "${ret[data_path]}" "${ret[log_path]}")
     echo $json_string
 done

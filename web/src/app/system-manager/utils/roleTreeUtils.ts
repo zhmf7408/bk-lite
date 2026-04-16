@@ -87,10 +87,14 @@ export function cleanSelectedKeys(
 }
 
 export function isFullySelected(node: TreeDataNode, selectedKeys: React.Key[]): boolean {
+  if (!hasKey(selectedKeys, node.key)) {
+    return false;
+  }
+
   if (node.children && node.children.length > 0) {
     return node.children.every(child => isFullySelected(child, selectedKeys));
   }
-  return hasKey(selectedKeys, node.key);
+  return true;
 }
 
 export function getAllKeys(nodes: TreeDataNode[]): React.Key[] {

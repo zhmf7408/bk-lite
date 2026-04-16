@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { useTheme } from '@/context/theme';
 
 declare global {
   interface Window {
@@ -22,6 +23,8 @@ export default function WechatQrLoginPanel({ callbackUrl, thirdLogin }: WechatQr
   const [wechatSettings, setWechatSettings] = useState<WechatSettings | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const { themeName } = useTheme();
+  const isDarkTheme = themeName === 'dark';
   const containerRef = useRef<HTMLDivElement | null>(null);
 
   const redirectUri = useMemo(() => {
@@ -128,11 +131,11 @@ export default function WechatQrLoginPanel({ callbackUrl, thirdLogin }: WechatQr
             <div
               className="mx-auto flex aspect-square w-full max-w-52 items-center justify-center rounded-3xl px-4 text-center"
               style={{
-                background: '#F4F7FB',
-                boxShadow: '0 10px 24px rgba(148, 163, 184, 0.10)',
+                background: isDarkTheme ? 'rgba(255,255,255,0.04)' : '#F4F7FB',
+                boxShadow: isDarkTheme ? '0 10px 24px rgba(0, 0, 0, 0.18)' : '0 10px 24px rgba(148, 163, 184, 0.10)',
               }}
             >
-              <div className="text-[11px] leading-5 text-[#8A98AA]">正在加载二维码...</div>
+              <div className="text-[11px] leading-5 text-(--color-text-3)">正在加载二维码...</div>
             </div>
           </div>
         ) : error ? (
@@ -140,11 +143,11 @@ export default function WechatQrLoginPanel({ callbackUrl, thirdLogin }: WechatQr
             <div
               className="mx-auto flex aspect-square w-full max-w-52 items-center justify-center rounded-3xl px-4 text-center"
               style={{
-                background: '#F4F7FB',
-                boxShadow: '0 10px 24px rgba(148, 163, 184, 0.10)',
+                background: isDarkTheme ? 'rgba(255,255,255,0.04)' : '#F4F7FB',
+                boxShadow: isDarkTheme ? '0 10px 24px rgba(0, 0, 0, 0.18)' : '0 10px 24px rgba(148, 163, 184, 0.10)',
               }}
             >
-              <div className="text-[11px] leading-5 text-[#8A98AA]">无法显示二维码</div>
+              <div className="text-[11px] leading-5 text-(--color-text-3)">无法显示二维码</div>
             </div>
           </div>
         ) : (
@@ -152,10 +155,11 @@ export default function WechatQrLoginPanel({ callbackUrl, thirdLogin }: WechatQr
             <div
               id="bk-lite-wechat-inline-login-container"
               ref={containerRef}
-              className="mx-auto flex items-center justify-center rounded-3xl bg-white px-4 py-5"
+              className="mx-auto flex items-center justify-center rounded-3xl px-4 py-5"
               style={{
                 minHeight: '320px',
-                boxShadow: '0 14px 30px rgba(148, 163, 184, 0.10)',
+                background: isDarkTheme ? 'rgba(255,255,255,0.03)' : '#ffffff',
+                boxShadow: isDarkTheme ? '0 14px 30px rgba(0, 0, 0, 0.22)' : '0 14px 30px rgba(148, 163, 184, 0.10)',
               }}
             />
           </div>

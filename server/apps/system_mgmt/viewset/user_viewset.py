@@ -264,7 +264,7 @@ class UserViewSet(ViewSetUtils):
             log_operation(request, "update", "user", f"编辑用户: {params['username']}")
 
             # 清除权限缓存
-            clear_user_permission_cache(params["username"])
+            clear_user_permission_cache(params["username"], params.get("domain", "domain.com"))
 
         return JsonResponse({"result": True})
 

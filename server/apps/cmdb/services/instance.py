@@ -342,6 +342,10 @@ class InstanceManage(object):
             model_object=OPERATOR_INSTANCE,
             message=f"创建模型实例. 模型:{result['model_id']} 实例:{result.get('inst_name') or result.get('ip_addr', '')}",
         )
+
+        from apps.cmdb.services.auto_relation_reconcile import schedule_instance_auto_relation_reconcile
+
+        schedule_instance_auto_relation_reconcile([result["_id"]])
         return result
 
     @staticmethod
@@ -398,6 +402,10 @@ class InstanceManage(object):
             model_object=OPERATOR_INSTANCE,
             message=f"修改模型实例属性. 模型:{model_info['model_name']} 实例:{result[0]['inst_name']}",
         )
+
+        from apps.cmdb.services.auto_relation_reconcile import schedule_instance_auto_relation_reconcile
+
+        schedule_instance_auto_relation_reconcile([result[0]["_id"]])
 
         return result[0]
 
@@ -471,6 +479,10 @@ class InstanceManage(object):
         ]
         batch_create_change_record(INSTANCE, UPDATE_INST, change_records, operator=operator)
 
+        from apps.cmdb.services.auto_relation_reconcile import schedule_instance_auto_relation_reconcile
+
+        schedule_instance_auto_relation_reconcile([item["_id"] for item in result])
+
         return result
 
     @staticmethod
@@ -504,6 +516,10 @@ class InstanceManage(object):
             for i in inst_list
         ]
         batch_create_change_record(INSTANCE, DELETE_INST, change_records, operator=operator)
+
+        from apps.cmdb.services.auto_relation_reconcile import schedule_incoming_rule_full_sync_by_model_ids
+
+        schedule_incoming_rule_full_sync_by_model_ids([item["model_id"] for item in inst_list])
 
     @staticmethod
     def instance_association_instance_list(model_id: str, inst_id: int):
@@ -756,6 +772,10 @@ class InstanceManage(object):
         ]
         batch_create_change_record(INSTANCE, CREATE_INST, change_records, operator=operator)
 
+        from apps.cmdb.services.auto_relation_reconcile import schedule_instance_auto_relation_reconcile
+
+        schedule_instance_auto_relation_reconcile([item["data"]["_id"] for item in results if item.get("success")])
+
         return results
 
     def inst_import_support_edit(
@@ -811,6 +831,14 @@ class InstanceManage(object):
         ]
         batch_create_change_record(INSTANCE, CREATE_INST, add_changes, operator=operator)
         batch_create_change_record(INSTANCE, UPDATE_INST, update_changes, operator=operator)
+
+        from apps.cmdb.services.auto_relation_reconcile import schedule_instance_auto_relation_reconcile
+
+        schedule_instance_auto_relation_reconcile(
+            [item["data"]["_id"] for item in add_results if item.get("success")]
+            + [item["data"]["_id"] for item in update_results if item.get("success")]
+        )
+
         res_status, result_message = self.format_result_message(_import.import_result_message)
         logger.info(f"模型 {model_id} 数据导入成功")
 

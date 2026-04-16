@@ -37,6 +37,7 @@ from apps.opspilot.metis.llm.tools.mssql.diagnostics import (  # noqa: E402
 
 # 动态SQL查询工具
 from apps.opspilot.metis.llm.tools.mssql.dynamic import (  # noqa: E402
+    execute_fallback_readonly_sql,
     execute_safe_select,
     explain_query_plan,
     get_sample_data,
@@ -94,6 +95,7 @@ __all__ = [
     "get_table_schema_details",
     "search_tables_by_keyword",
     "execute_safe_select",
+    "execute_fallback_readonly_sql",
     "explain_query_plan",
     "get_sample_data",
     # 故障诊断工具 (P0)

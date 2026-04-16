@@ -27,7 +27,6 @@ const ExportModal: React.FC<ExportModalProps> = ({
       setLoading(true);
 
       const response = await exportObjects({
-        scope: 'canvas',
         object_type: objectType,
         object_ids: [objectId],
       });

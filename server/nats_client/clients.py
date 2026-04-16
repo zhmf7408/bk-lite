@@ -1,8 +1,9 @@
-__all__ = ["nat_request", "request", "request_sync", "publish", "publish_sync", "js_publish", "js_publish_sync", "request_v2"]
+__all__ = ["nat_request", "request", "request_sync", "publish", "publish_sync", "js_publish", "js_publish_sync", "request_v2", "subscribe_lines_sync"]
 
 import asyncio
 import functools
 import json
+import queue
 from typing import Optional
 from urllib.parse import urlsplit, urlunsplit
 
@@ -211,3 +212,35 @@ def publish_sync(*args, **kwargs):
 
 js_publish = functools.partial(publish, _js=True)
 js_publish_sync = functools.partial(publish_sync, _js=True)
+
+
+def subscribe_lines_sync(subject: str, timeout: Optional[float] = None, stop_event=None):
+    result_queue: "queue.Queue[dict]" = queue.Queue()
+
+    async def runner():
+        nc = await get_nc_client()
+
+        async def callback(msg):
+            try:
+                payload = json.loads(msg.data.decode())
+            except json.JSONDecodeError:
+                payload = {"line": msg.data.decode(errors="ignore")}
+            result_queue.put(payload)
+
+        sub = await nc.subscribe(subject, cb=callback)
+        try:
+            start = asyncio.get_event_loop().time()
+            while True:
+                if stop_event is not None and stop_event.is_set():
+                    break
+                if timeout and (asyncio.get_event_loop().time() - start) > timeout:
+                    break
+                await asyncio.sleep(0.1)
+        finally:
+            await sub.unsubscribe()
+            await nc.close()
+
+    def start():
+        asyncio.run(runner())
+
+    return result_queue, start

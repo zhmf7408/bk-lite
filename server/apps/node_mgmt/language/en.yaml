@@ -53,6 +53,12 @@ collector:
       as a data transfer hub, storing data collected by other log collectors onto
       the platform.
     name: Vector
+  Vector_windows:
+    description: Vector (Windows) is a lightweight and efficient log collector that
+      natively supports the collection of various types of log data. It also serves
+      as a data transfer hub, storing data collected by other log collectors onto
+      the platform.
+    name: Vector
   Auditbeat_linux:
     name: Auditbeat
     description: Auditbeat (Linux) is a lightweight audit data collector capable of
@@ -78,6 +84,10 @@ collector:
     description: 'Packetbeat(Linux) is a lightweight network packet collector that
       can capture and analyze network traffic between servers in real-time. '
     name: Packetbeat
+  Packetbeat_windows:
+    description: 'Packetbeat (Windows) is a lightweight network packet collector that
+      can capture and analyze network traffic between servers in real-time. '
+    name: Packetbeat
   exporter_mongodb_linux:
     description: None
     name: None
@@ -87,6 +97,10 @@ collector:
   Filebeat_linux:
     name: Filebeat
     description: 'Filebeat (Linux) is a lightweight file log collector capable of
+      reliably collecting log files from specified paths. '
+  Filebeat_windows:
+    name: Filebeat
+    description: 'Filebeat (Windows) is a lightweight file log collector capable of
       reliably collecting log files from specified paths. '
   jmx_jboss_linux:
     description: None

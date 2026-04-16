@@ -9,14 +9,7 @@ class InstallTokenService:
 
     @staticmethod
     def generate_install_token(
-        node_id: str,
-        ip: str,
-        user: str,
-        os: str,
-        package_id: str,
-        cloud_region_id: str,
-        organizations: list,
-        node_name: str
+        node_id: str, ip: str, user: str, os: str, package_id: str, cloud_region_id: str, organizations: list, node_name: str
     ) -> str:
         """
         生成安装令牌（30分钟有效，最多使用5次）
@@ -35,18 +28,22 @@ class InstallTokenService:
         cache_key = f"{InstallerConstants.INSTALL_TOKEN_CACHE_PREFIX}:{token}"
 
         # 在 cache 中存储令牌及其关联的参数和使用次数
-        cache.set(cache_key, {
-            "node_id": node_id,
-            "ip": ip,
-            "user": user,
-            "os": os,
-            "package_id": package_id,
-            "cloud_region_id": cloud_region_id,
-            "organizations": organizations,
-            "node_name": node_name,
-            "usage_count": 0,
-            "max_usage": InstallerConstants.INSTALL_TOKEN_MAX_USAGE,
-        }, timeout=InstallerConstants.INSTALL_TOKEN_EXPIRE_TIME)
+        cache.set(
+            cache_key,
+            {
+                "node_id": node_id,
+                "ip": ip,
+                "user": user,
+                "os": os,
+                "package_id": package_id,
+                "cloud_region_id": cloud_region_id,
+                "organizations": organizations,
+                "node_name": node_name,
+                "usage_count": 0,
+                "max_usage": InstallerConstants.INSTALL_TOKEN_MAX_USAGE,
+            },
+            timeout=InstallerConstants.INSTALL_TOKEN_EXPIRE_TIME,
+        )
 
         return token
 
@@ -105,12 +102,16 @@ class InstallTokenService:
         cache_key = f"{InstallerConstants.DOWNLOAD_TOKEN_CACHE_PREFIX}:{token}"
 
         # 在 cache 中存储令牌及其关联的参数和使用次数
-        cache.set(cache_key, {
-            "package_id": package_id,
-            "node_id": node_id,
-            "usage_count": 0,
-            "max_usage": InstallerConstants.DOWNLOAD_TOKEN_MAX_USAGE,
-        }, timeout=InstallerConstants.DOWNLOAD_TOKEN_EXPIRE_TIME)
+        cache.set(
+            cache_key,
+            {
+                "package_id": package_id,
+                "node_id": node_id,
+                "usage_count": 0,
+                "max_usage": InstallerConstants.DOWNLOAD_TOKEN_MAX_USAGE,
+            },
+            timeout=InstallerConstants.DOWNLOAD_TOKEN_EXPIRE_TIME,
+        )
 
         return token
 

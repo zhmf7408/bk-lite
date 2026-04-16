@@ -17,6 +17,7 @@ CMDB CQL查询测试类
 
 import os
 import sys
+from unittest.mock import MagicMock, patch
 
 # 检查是否在Django环境中
 if __name__ == "__main__":
@@ -33,6 +34,46 @@ if __name__ == "__main__":
 
 from apps.cmdb.graph.drivers.graph_client import GraphClient
 from apps.core.logger import cmdb_logger as logger
+
+
+def test_import_model_config_applies_shared_post_import_extras():
+    from apps.cmdb.services.model import ModelManage
+
+    fake_file = MagicMock()
+    fake_model_config = {"attr-host": [{"attr_id": "inst_name"}], "asso-host": []}
+
+    with patch("apps.cmdb.services.model.ModelMigrate") as mock_migrator_cls, patch.object(
+        ModelManage, "_apply_model_config_post_import_extras"
+    ) as mock_apply_extras:
+        mock_migrator = MagicMock()
+        mock_migrator.model_config = fake_model_config
+        mock_migrator.main.return_value = {"ok": True}
+        mock_migrator_cls.return_value = mock_migrator
+
+        result = ModelManage.import_model_config(fake_file)
+
+        mock_migrator_cls.assert_called_once_with(file_source=fake_file, is_pre=False)
+        mock_migrator.main.assert_called_once_with()
+        mock_apply_extras.assert_called_once_with(fake_model_config)
+        assert result == {"ok": True}
+
+
+def test_model_init_reuses_shared_post_import_extras():
+    with patch("apps.cmdb.management.commands.model_init.ModelMigrate") as mock_migrator_cls, patch(
+        "apps.cmdb.management.commands.model_init.ModelManage._apply_model_config_post_import_extras"
+    ) as mock_apply_extras:
+        mock_migrator = MagicMock()
+        mock_migrator.model_config = {"attr-host": []}
+        mock_migrator.main.return_value = {"ok": True}
+        mock_migrator_cls.return_value = mock_migrator
+
+        from django.core.management import call_command
+
+        call_command("model_init")
+
+        mock_migrator_cls.assert_called_once_with()
+        mock_migrator.main.assert_called_once_with()
+        mock_apply_extras.assert_called_once_with(mock_migrator.model_config)
 
 
 class CQLQueryTest:

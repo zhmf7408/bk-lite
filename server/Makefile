@@ -40,7 +40,10 @@ init-buckets:
 	python manage.py initialize_buckets
 
 celery:
-	uv run celery -A apps.core.celery worker -B --loglevel=info --pool threads
+	uv run celery -A apps.core.celery worker --loglevel=info --pool threads
+
+celery-beat:
+	uv run celery -A apps.core.celery beat --loglevel=info --scheduler django_celery_beat.schedulers:DatabaseScheduler
 
 celery-inspect:
 	uv run celery -A apps.core.celery inspect scheduled

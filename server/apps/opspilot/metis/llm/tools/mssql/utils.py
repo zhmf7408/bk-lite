@@ -1,10 +1,97 @@
 """MSSQL通用工具函数"""
 
 import json
+from numbers import Number
 
 import pyodbc
 from langchain_core.runnables import RunnableConfig
 from loguru import logger
+
+UNIT_FIELD_FORMATTERS = {
+    "size_bytes": lambda value: format_size(value),
+    "total_size_bytes": lambda value: format_size(value),
+    "used_size_bytes": lambda value: format_size(value),
+    "total_time_ms": lambda value: format_duration(value),
+    "avg_time_ms": lambda value: format_duration(value),
+    "max_time_ms": lambda value: format_duration(value),
+    "total_cpu_time_ms": lambda value: format_duration(value),
+    "threshold_ms": lambda value: format_duration(value),
+    "wait_time_ms": lambda value: format_duration(value),
+    "duration_ms": lambda value: format_duration(value),
+    "usage_percent": lambda value: f"{float(value):.2f}%",
+    "size_mb": lambda value: format_size(float(value) * 1024 * 1024),
+    "used_mb": lambda value: format_size(float(value) * 1024 * 1024),
+    "free_mb": lambda value: format_size(float(value) * 1024 * 1024),
+    "log_send_queue_kb": lambda value: format_size(float(value) * 1024),
+    "redo_queue_kb": lambda value: format_size(float(value) * 1024),
+    "data_size_mb": lambda value: format_size(float(value) * 1024 * 1024),
+    "log_size_mb": lambda value: format_size(float(value) * 1024 * 1024),
+    "total_size_mb": lambda value: format_size(float(value) * 1024 * 1024),
+    "total_space_kb": lambda value: format_size(float(value) * 1024),
+    "used_space_kb": lambda value: format_size(float(value) * 1024),
+    "unused_space_kb": lambda value: format_size(float(value) * 1024),
+    "wait_time_s": lambda value: format_duration(float(value) * 1000),
+    "max_wait_time_ms": lambda value: format_duration(value),
+    "signal_wait_time_s": lambda value: format_duration(float(value) * 1000),
+    "signal_wait_percent": lambda value: f"{float(value):.2f}%",
+    "locked_pages_mb": lambda value: format_size(float(value) * 1024 * 1024),
+    "memory_used_mb": lambda value: format_size(float(value) * 1024 * 1024),
+    "virtual_memory_mb": lambda value: format_size(float(value) * 1024 * 1024),
+    "committed_memory_mb": lambda value: format_size(float(value) * 1024 * 1024),
+    "memory_utilization_percentage": lambda value: f"{float(value):.2f}%",
+    "sql_cpu_percent": lambda value: f"{float(value):.2f}%",
+    "system_idle_percent": lambda value: f"{float(value):.2f}%",
+    "other_process_cpu_percent": lambda value: f"{float(value):.2f}%",
+    "mb_read": lambda value: format_size(float(value) * 1024 * 1024),
+    "mb_written": lambda value: format_size(float(value) * 1024 * 1024),
+    "io_stall_read_ms": lambda value: format_duration(value),
+    "avg_read_latency_ms": lambda value: format_duration(value),
+    "io_stall_write_ms": lambda value: format_duration(value),
+    "avg_write_latency_ms": lambda value: format_duration(value),
+    "total_io_stall_ms": lambda value: format_duration(value),
+    "size_on_disk_mb": lambda value: format_size(float(value) * 1024 * 1024),
+    "duration_seconds": lambda value: format_duration(float(value) * 1000),
+    "backup_size_mb": lambda value: format_size(float(value) * 1024 * 1024),
+    "compressed_size_mb": lambda value: format_size(float(value) * 1024 * 1024),
+    "hours_since_full_backup": lambda value: format_duration(float(value) * 60 * 60 * 1000),
+    "hours_since_log_backup": lambda value: format_duration(float(value) * 60 * 60 * 1000),
+    "max_latency_seconds": lambda value: format_duration(float(value) * 1000),
+    "first_size_mb": lambda value: format_size(float(value) * 1024 * 1024),
+    "last_size_mb": lambda value: format_size(float(value) * 1024 * 1024),
+    "growth_mb": lambda value: format_size(abs(float(value)) * 1024 * 1024),
+    "daily_growth_mb": lambda value: format_size(abs(float(value)) * 1024 * 1024),
+    "growth_percent": lambda value: f"{float(value):.2f}%",
+}
+
+LEGACY_FORMATTED_FIELD_ALIASES = {
+    "total_time_ms": ["total_time_formatted"],
+    "avg_time_ms": ["avg_time_formatted"],
+    "max_time_ms": ["max_time_formatted"],
+    "wait_time_ms": ["wait_time_formatted"],
+    "duration_ms": ["duration_formatted"],
+    "size_mb": ["size_formatted"],
+    "log_send_queue_kb": ["log_send_queue_formatted"],
+    "redo_queue_kb": ["redo_queue_formatted"],
+    "data_size_mb": ["data_size_formatted"],
+    "log_size_mb": ["log_size_formatted"],
+    "total_space_kb": ["total_space_formatted"],
+    "used_space_kb": ["used_space_formatted"],
+    "wait_time_s": ["wait_time_formatted"],
+    "max_wait_time_ms": ["max_wait_time_formatted"],
+    "memory_used_mb": ["memory_used_formatted"],
+    "virtual_memory_mb": ["virtual_memory_formatted"],
+    "mb_read": ["mb_read_formatted"],
+    "mb_written": ["mb_written_formatted"],
+    "size_on_disk_mb": ["size_on_disk_formatted"],
+    "avg_read_latency_ms": ["avg_read_latency_formatted"],
+    "avg_write_latency_ms": ["avg_write_latency_formatted"],
+    "duration_seconds": ["duration_formatted"],
+    "backup_size_mb": ["backup_size_formatted"],
+    "compressed_size_mb": ["compressed_size_formatted"],
+    "max_latency_seconds": ["max_latency_formatted"],
+    "last_size_mb": ["size_formatted"],
+    "growth_mb": ["growth_formatted"],
+}
 
 
 def prepare_context(config: RunnableConfig = None) -> dict:
@@ -67,7 +154,7 @@ def get_available_driver() -> str:
         logger.warning(f"获取ODBC驱动列表失败: {e}")
 
     # 如果无法获取驱动列表,返回默认驱动让pyodbc尝试
-    raise RuntimeError("未找到可用的SQL Server ODBC驱动。请安装以下驱动之一: " "ODBC Driver 18 for SQL Server, ODBC Driver 17 for SQL Server, 或 SQL Server")
+    raise RuntimeError("未找到可用的SQL Server ODBC驱动。请安装以下驱动之一: ODBC Driver 18 for SQL Server, ODBC Driver 17 for SQL Server, 或 SQL Server")
 
 
 def get_db_connection(config: RunnableConfig = None, database: str = None):
@@ -228,6 +315,54 @@ def parse_mssql_version(config: RunnableConfig = None) -> dict:
         return {"full_version": "unknown", "version_number": "unknown", "major_version": 0}
 
 
+def _is_numeric_value(value) -> bool:
+    return isinstance(value, Number) and not isinstance(value, bool)
+
+
+def _format_unit_display(key: str, value) -> str | None:
+    formatter = UNIT_FIELD_FORMATTERS.get(key.lower())
+    if formatter is None:
+        return None
+    return formatter(value)
+
+
+def enrich_unit_fields(data):
+    """递归为带单位语义的数字字段补充人类可读展示值。"""
+    if isinstance(data, list):
+        return [enrich_unit_fields(item) for item in data]
+
+    if isinstance(data, dict):
+        enriched = {}
+        for key, value in data.items():
+            enriched_value = enrich_unit_fields(value)
+            enriched[key] = enriched_value
+
+            if key.endswith("_formatted"):
+                alias_key = f"{key[:-10]}_display"
+                if alias_key not in data:
+                    enriched[alias_key] = enriched_value
+                continue
+
+            if key.endswith(("_formatted", "_display")) or not _is_numeric_value(value):
+                continue
+
+            display_value = _format_unit_display(key, value)
+            if display_value is None:
+                continue
+
+            display_key = f"{key}_display"
+            if display_key not in data:
+                enriched[display_key] = display_value
+
+            for alias_key in LEGACY_FORMATTED_FIELD_ALIASES.get(key.lower(), []):
+                if alias_key not in data:
+                    enriched[alias_key] = display_value
+
+        return enriched
+
+    return data
+
+
 def safe_json_dumps(data: dict) -> str:
     """
     安全的JSON序列化,处理特殊类型
@@ -245,7 +380,7 @@ def safe_json_dumps(data: dict) -> str:
             return obj.isoformat()
         return str(obj)
 
-    return json.dumps(data, default=default_handler, ensure_ascii=False, indent=2)
+    return json.dumps(enrich_unit_fields(data), default=default_handler, ensure_ascii=False, indent=2)
 
 
 def calculate_percentage(part: float, total: float) -> float:

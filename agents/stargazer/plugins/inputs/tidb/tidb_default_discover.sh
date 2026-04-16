@@ -47,8 +47,7 @@ discover_tidb() {
         local listener_pid=$(echo "$proc" | awk '{print $2}')
         listener_ports=$(get_listener_ports $listener_pid)
         if [ -z "$listener_ports" ]; then
-            echo "{}"
-            exit 0
+            continue
         fi
         local exe=$(readlink -f /proc/$listener_pid/exe)
         local install_path=$( dirname $exe | sed 's/\/bin$//')
@@ -94,14 +93,12 @@ discover_tidb() {
         bk_host_innerip="{{bk_host_innerip}}"
         bk_inst_name="${bk_host_innerip}-tidb-${listener_ports}"
 
-        tidb_info=$(printf '{"inst_name":"%s","dm_db_name":"tidb","ip_addr":"%s","port":"%s","version":"%s","dm_install_path":"%s","dm_conf_path":"%s","dm_log_file":"%s","dm_home_bash":"%s","dm_db_max_sessions":"%s","dm_redo_log":"%s","dm_datafile":"%s","dm_mode":"%s"}' \
+        tidb_info=$(printf '{"inst_name":"%s","db_name":"tidb","ip_addr":"%s","port":"%s","version":"%s","install_path":"%s","home_bash":"%s","db_max_sessions":"%s","redo_log":"%s","datafile":"%s","mode":"%s"}' \
             "$bk_inst_name" \
             "$bk_host_innerip" \
             "$listener_ports" \
             "$version" \
             "$install_path" \
-            "$config_file" \
-            "$log_file" \
             "$tidb_home" \
             "$max_connections" \
             "$redo_log" \

@@ -1,12 +1,12 @@
 name: es
 version: "2.0.0"
-category: middleware
+category: database
 
 metadata:
   display_name: "Elasticsearch 搜索引擎"
   description: "Elasticsearch 搜索引擎采集插件，支持脚本方式采集"
   author: "WeOps"
-  tags: [middleware, elasticsearch, search]
+  tags: [database, elasticsearch, search]
   cloud_protocol: false
   model_id: es
 

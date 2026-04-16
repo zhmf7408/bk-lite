@@ -170,7 +170,15 @@ class MonitorObjectViewSet(viewsets.ModelViewSet):
         """创建监控对象，支持同时创建子对象"""
         data = request.data
         children = data.pop("children", [])
-        
+
+        # 父对象自动填充 instance_id_keys
+        if not data.get("instance_id_keys"):
+            data["instance_id_keys"] = ["instance_id"]
+
+        # 自动填充 default_metric
+        if not data.get("default_metric"):
+            data["default_metric"] = f"any({{instance_type='{data.get('name', '')}'}}) by (instance_id)"
+
         # 创建父对象
         serializer = self.get_serializer(data=data)
         serializer.is_valid(raise_exception=True)
@@ -189,7 +197,9 @@ class MonitorObjectViewSet(viewsets.ModelViewSet):
                         description="",
                         level="derivative",
                         parent=parent_obj,
-                        is_visible=True
+                        is_visible=True,
+                        instance_id_keys=["instance_id", child["id"]],
+                        default_metric=f"any({{instance_type='{child['id']}'}}) by (instance_id, {child['id']})",
                     ))
             if child_objects:
                 MonitorObject.objects.bulk_create(child_objects)
@@ -198,11 +208,19 @@ class MonitorObjectViewSet(viewsets.ModelViewSet):
 
     def update(self, request, *args, **kwargs):
         """更新监控对象，支持更新/新增子对象"""
-        partial = kwargs.pop('partial', False)
+        partial = kwargs.pop("partial", False)
         instance = self.get_object()
         data = request.data.copy()
         children = data.pop("children", None)
-        
+
+        # 父对象自动补充 instance_id_keys
+        if not instance.instance_id_keys and "instance_id_keys" not in data:
+            data["instance_id_keys"] = ["instance_id"]
+
+        # 自动补充空的 default_metric
+        if not instance.default_metric and "default_metric" not in data:
+            data["default_metric"] = f"any({{instance_type='{instance.name}'}}) by (instance_id)"
+
         # 更新父对象
         serializer = self.get_serializer(instance, data=data, partial=partial)
         serializer.is_valid(raise_exception=True)
@@ -236,7 +254,9 @@ class MonitorObjectViewSet(viewsets.ModelViewSet):
                         description="",
                         level="derivative",
                         parent=instance,
-                        is_visible=True
+                        is_visible=True,
+                        instance_id_keys=["instance_id", child_id],
+                        default_metric=f"any({{instance_type='{child_id}'}}) by (instance_id, {child_id})",
                     ))
             
             if new_children:

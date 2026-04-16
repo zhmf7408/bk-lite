@@ -25,3 +25,8 @@ class Command(BaseCommand):
 
         SystemSettings.objects.get_or_create(key="login_expired_time", defaults={"value": "24"})
         SystemSettings.objects.get_or_create(key="enable_otp", defaults={"value": "0"})
+        SystemSettings.objects.get_or_create(key="portal_name", defaults={"value": "BlueKing Lite"})
+        SystemSettings.objects.get_or_create(key="portal_logo_url", defaults={"value": ""})
+        SystemSettings.objects.get_or_create(key="portal_favicon_url", defaults={"value": ""})
+        SystemSettings.objects.get_or_create(key="watermark_enabled", defaults={"value": "0"})
+        SystemSettings.objects.get_or_create(key="watermark_text", defaults={"value": "BlueKing Lite · ${username} · ${date}"})

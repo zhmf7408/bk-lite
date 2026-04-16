@@ -11,10 +11,6 @@ from apps.operation_analysis.constants.import_export import (
 
 
 class ExportRequestSerializer(serializers.Serializer):
-    scope = serializers.ChoiceField(
-        choices=[s.value for s in ScopeType],
-        help_text="导出范围：canvas或config",
-    )
     object_type = serializers.ChoiceField(
         choices=[t.value for t in ObjectType],
         help_text="对象类型",
@@ -26,15 +22,14 @@ class ExportRequestSerializer(serializers.Serializer):
     )
 
     def validate(self, attrs):
-        scope = attrs["scope"]
         object_type = attrs["object_type"]
 
-        if scope == ScopeType.CANVAS.value:
-            if object_type not in [t.value for t in CANVAS_TYPES]:
-                raise serializers.ValidationError(f"canvas范围仅支持dashboard/topology/architecture类型")
-        elif scope == ScopeType.CONFIG.value:
-            if object_type not in [t.value for t in CONFIG_TYPES]:
-                raise serializers.ValidationError(f"config范围仅支持datasource/namespace类型")
+        if object_type in [t.value for t in CANVAS_TYPES]:
+            attrs["scope"] = ScopeType.CANVAS.value
+        elif object_type in [t.value for t in CONFIG_TYPES]:
+            attrs["scope"] = ScopeType.CONFIG.value
+        else:
+            raise serializers.ValidationError("object_type不支持导出")
 
         return attrs
 

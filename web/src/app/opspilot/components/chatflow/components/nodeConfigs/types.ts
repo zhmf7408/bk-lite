@@ -1,4 +1,5 @@
 import type { FormInstance, UploadFile, UploadProps } from 'antd';
+import type { LlmModel } from '@/app/opspilot/types/skill';
 
 export interface TranslationFunction {
   (key: string): string;
@@ -57,8 +58,9 @@ export interface ConditionNodeConfigProps extends BaseNodeConfigProps {
 }
 
 export interface IntentClassificationNodeConfigProps extends BaseNodeConfigProps {
-  skills: Array<{ id: string; name: string }>;
-  loadingSkills: boolean;
+  llmModels: LlmModel[];
+  loadingLlmModels: boolean;
+  form: FormInstance;
 }
 
 export interface NotificationNodeConfigProps extends BaseNodeConfigProps {

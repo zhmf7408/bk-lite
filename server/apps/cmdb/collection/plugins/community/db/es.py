@@ -4,6 +4,7 @@ from apps.cmdb.collection.plugins.community.db.base import BaseDBCollectionPlugi
 class ESCollectionPlugin(BaseDBCollectionPlugin):
     supported_model_id = "es"
     metric_names = ("es_info_gauge",)
+
     field_mapping = {
         "inst_name": BaseDBCollectionPlugin.get_inst_name,
         "ip_addr": "ip_addr",

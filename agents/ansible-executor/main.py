@@ -2,20 +2,18 @@ import argparse
 import asyncio
 import os
 
-from dotenv import load_dotenv
-
 from core.config import load_config
+from dotenv import load_dotenv
 from service.embedded_ansible import run_embedded_ansible
-from service.runtime import (
-    configure_ansible_environment,
-    find_config_path,
-    find_dotenv_path,
-)
 from service.nats_service import AnsibleNATSService
+from service.runtime import configure_ansible_environment, find_config_path, find_dotenv_path, repair_ansible_windows_collection_layout
 
 
 def main() -> None:
     configure_ansible_environment()
+    collections_path = os.environ.get("ANSIBLE_COLLECTIONS_PATH")
+    if collections_path:
+        repair_ansible_windows_collection_layout(collections_path)
     dotenv_path = find_dotenv_path()
     if dotenv_path:
         load_dotenv(dotenv_path)
@@ -38,9 +36,7 @@ def main() -> None:
     )
     args = parser.parse_args()
     if args.internal_ansible_cli:
-        raise SystemExit(
-            run_embedded_ansible(args.internal_ansible_cli, args.ansible_args)
-        )
+        raise SystemExit(run_embedded_ansible(args.internal_ansible_cli, args.ansible_args))
 
     config = load_config(find_config_path(args.config))
     os.environ["ANSIBLE_WORK_DIR"] = config.ansible_work_dir

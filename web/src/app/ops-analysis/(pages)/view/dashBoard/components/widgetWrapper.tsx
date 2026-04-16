@@ -117,26 +117,7 @@ const WidgetWrapper: React.FC<WidgetWrapperProps> = ({
 
   // 提取数据校验逻辑
   const validateChartData = (data: unknown, type?: string) => {
-    const isDataEmpty = () => {
-      if (!data) return true;
-      if (Array.isArray(data) && data.length === 0) return true;
-
-      if (Array.isArray(data) && data.length > 0) {
-        const hasValidData = data.some((item) => {
-          if (!item || !item.data) return false;
-          // 兼容旧格式（data 直接为数组）和新格式（data 为 NATS 原始对象 {result, data: [...]}）
-          const innerData = Array.isArray(item.data)
-            ? item.data
-            : item.data && Array.isArray(item.data.data)
-              ? item.data.data
-              : null;
-          return innerData && innerData.length > 0;
-        });
-        if (!hasValidData) return true;
-      }
-
-      return false;
-    };
+    const isDataEmpty = () => !data || (Array.isArray(data) && data.length === 0);
 
     if (isDataEmpty()) {
       return { isValid: true };

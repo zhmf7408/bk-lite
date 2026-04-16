@@ -211,14 +211,14 @@ const ViewConfig: React.FC<ViewConfigPropsWithManager> = ({
         if (row && typeof row === 'object') {
           const rowData = row.data;
 
-          // 表格类：data 是对象，包含 {data: [...], count, page, page_size}
+          // 表格类：data 是对象，包含 {items: [...], count}
           if (
             rowData &&
             typeof rowData === 'object' &&
             !Array.isArray(rowData) &&
-            Array.isArray(rowData.data)
+            Array.isArray(rowData.items)
           ) {
-            const firstInNested = rowData.data.find(
+            const firstInNested = rowData.items.find(
               (item: any) => item && typeof item === 'object',
             );
             if (firstInNested) {
@@ -295,6 +295,12 @@ const ViewConfig: React.FC<ViewConfigPropsWithManager> = ({
     processedParams.forEach((param) => {
       payload[param.name] = param.value;
     });
+
+    if (chartType === 'table') {
+      payload.page = 1;
+      payload.page_size = 20;
+    }
+
     return payload;
   };
 
@@ -950,7 +956,7 @@ const ViewConfig: React.FC<ViewConfigPropsWithManager> = ({
           </div>
           <DataSourceParamsConfig
             selectedDataSource={selectedDataSource}
-            includeFilterTypes={['params', 'fixed', 'filter']}
+            includeFilterTypes={['params', 'fixed']}
           />
         </div>
 

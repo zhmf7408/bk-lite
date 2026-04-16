@@ -7,9 +7,16 @@ from apps.node_mgmt.utils.s3 import upload_file_to_s3
 
 
 class Command(BaseCommand):
-    help = "Windows 安装器初始化 - 上传安装器文件到 S3"
+    help = "安装器初始化 - 上传安装器文件到 latest 路径"
 
     def add_arguments(self, parser):
+        parser.add_argument(
+            "--os",
+            type=str,
+            choices=["windows", "linux"],
+            default="windows",
+            help="安装器目标操作系统",
+        )
         parser.add_argument(
             "--file_path",
             type=str,
@@ -18,23 +25,27 @@ class Command(BaseCommand):
         )
 
     def handle(self, *args, **options):
+        target_os = options["os"]
         file_path = options["file_path"]
+        alias_path = InstallerConstants.build_latest_alias_path(target_os)
 
-        logger.info(f"Windows 安装器初始化开始，文件路径: {file_path}")
+        logger.info(f"{target_os} 安装器初始化开始，文件路径: {file_path}")
 
         try:
             with open(file_path, "rb") as file:
-                async_to_sync(upload_file_to_s3)(
-                    file, InstallerConstants.WINDOWS_INSTALLER_S3_PATH
-                )
-            logger.info(
-                f"Windows 安装器上传成功，S3 路径: {InstallerConstants.WINDOWS_INSTALLER_S3_PATH}"
-            )
+                data = file.read()
+            from io import BytesIO
+
+            alias_file = BytesIO(data)
+            alias_file.name = file_path
+
+            async_to_sync(upload_file_to_s3)(alias_file, alias_path)
+            logger.info(f"{target_os} 安装器上传成功，latest 路径: {alias_path}")
         except FileNotFoundError:
             logger.error(f"文件不存在: {file_path}")
             raise
         except Exception as e:
-            logger.error(f"Windows 安装器上传失败: {e}")
+            logger.error(f"{target_os} 安装器上传失败: {e}")
             raise
 
-        logger.info("Windows 安装器初始化完成！")
+        logger.info(f"{target_os} 安装器初始化完成！")

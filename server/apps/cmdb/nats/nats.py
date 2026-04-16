@@ -130,10 +130,10 @@ def query_asset_instances(
     :param page: 页码
     :param page_size: 每页条数
     :param user_info: 当前用户信息（由 operation_analysis 自动注入）
-    :return: {data: [...], count: int, page: int, page_size: int}
+    :return: {result: bool, data: {count: int, items: [...]}, message: str}
     """
     if not model_id:
-        return {"data": [], "count": 0, "page": 1, "page_size": int(page_size or 20)}
+        return {"result": True, "data": {"count": 0, "items": []}, "message": ""}
 
     page = int(page or 1)
     page_size = int(page_size or 20)
@@ -222,10 +222,12 @@ def query_asset_instances(
     )
 
     return {
-        "data": instances,
-        "count": count,
-        "page": page,
-        "page_size": page_size,
+        "result": True,
+        "data": {
+            "count": count,
+            "items": instances,
+        },
+        "message": "",
     }
 
 

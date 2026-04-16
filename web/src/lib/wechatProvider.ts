@@ -142,6 +142,7 @@ export default function WeChatProvider<P extends WechatProfile>(
           email: null,
           token: userData.token,
           locale: userData.locale || 'zh',
+          timezone: userData.timezone || 'Asia/Shanghai',
           wechatOpenId: profile.openid,
           wechatUnionId: profile.unionid,
         };

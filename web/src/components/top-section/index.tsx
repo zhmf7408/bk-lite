@@ -6,18 +6,21 @@ interface TopSectionProps {
   title: string;
   content: string;
   iconType?: string;
+  icon?: React.ReactNode;
 }
 
-const TopSection: React.FC<TopSectionProps> = ({ title, content, iconType }) => (
-  <div className="p-4 rounded-md w-full h-[80px] bg-[var(--color-bg)] flex items-center">
-    {iconType && (
+const TopSection: React.FC<TopSectionProps> = ({ title, content, iconType, icon }) => (
+  <div className="flex h-20 w-full items-center rounded-md bg-(--color-bg) p-4">
+    {icon ? (
+      <div className="mr-3 flex h-18 w-18 items-center justify-center">{icon}</div>
+    ) : iconType ? (
       <div>
         <Icon type={iconType} className="mr-2 text-6xl" />
       </div>
-    )}
+    ) : null}
     <div className="flex-1 overflow-hidden">
       <h2 className="text-base font-semibold mb-2">{title}</h2>
-      <EllipsisWithTooltip className="text-xs text-[var(--color-text-3)] whitespace-nowrap overflow-hidden text-ellipsis" text={content} />
+      <EllipsisWithTooltip className="overflow-hidden text-ellipsis whitespace-nowrap text-xs text-(--color-text-3)" text={content} />
     </div>
   </div>
 );

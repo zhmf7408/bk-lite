@@ -3,7 +3,7 @@
 from langchain_core.runnables import RunnableConfig
 from langchain_core.tools import tool
 
-from apps.opspilot.metis.llm.tools.mssql.utils import execute_readonly_query, format_duration, format_size, safe_json_dumps
+from apps.opspilot.metis.llm.tools.mssql.utils import execute_readonly_query, format_size, safe_json_dumps
 
 
 @tool()
@@ -66,8 +66,6 @@ def get_database_metrics(config: RunnableConfig = None):
 
         # 格式化和增强数据
         for row in results:
-            row["data_size_formatted"] = format_size(row["data_size_mb"] * 1024 * 1024) if row["data_size_mb"] else "0 B"
-            row["log_size_formatted"] = format_size(row["log_size_mb"] * 1024 * 1024) if row["log_size_mb"] else "0 B"
             row["create_date"] = str(row["create_date"]) if row["create_date"] else None
 
             # 合并缓存统计
@@ -161,7 +159,6 @@ def get_table_metrics(schema_name: str = "dbo", table: str = None, config: Runna
 
         # 格式化数据
         for row in results:
-            row["total_space_formatted"] = format_size(row["total_space_kb"] * 1024)
             row["used_space_formatted"] = format_size(row["used_space_kb"] * 1024) if row.get("used_space_kb") else "N/A"
 
             # 格式化时间字段
@@ -223,11 +220,6 @@ def get_wait_stats(config: RunnableConfig = None):
 
     try:
         results = execute_readonly_query(query, config=config)
-
-        # 格式化数据
-        for row in results:
-            row["wait_time_formatted"] = format_duration(row["wait_time_s"] * 1000)
-            row["max_wait_time_formatted"] = format_duration(row["max_wait_time_ms"])
 
         # 分类等待类型
         io_waits = [r for r in results if "PAGEIO" in r["wait_type"] or "IO" in r["wait_type"]]
@@ -353,12 +345,6 @@ def get_instance_metrics(config: RunnableConfig = None):
                 }
             )
 
-        # 格式化内存信息
-        if memory_info:
-            mem = memory_info[0]
-            mem["memory_used_formatted"] = format_size(mem["memory_used_mb"] * 1024 * 1024)
-            mem["virtual_memory_formatted"] = format_size(mem["virtual_memory_mb"] * 1024 * 1024)
-
         return safe_json_dumps(
             {
                 "server_info": server_info[0] if server_info else {},
@@ -422,14 +408,6 @@ def get_io_stats(config: RunnableConfig = None):
 
     try:
         results = execute_readonly_query(query, config=config)
-
-        # 格式化数据
-        for row in results:
-            row["mb_read_formatted"] = format_size(row["mb_read"] * 1024 * 1024)
-            row["mb_written_formatted"] = format_size(row["mb_written"] * 1024 * 1024)
-            row["size_on_disk_formatted"] = format_size(row["size_on_disk_mb"] * 1024 * 1024)
-            row["avg_read_latency_formatted"] = format_duration(row["avg_read_latency_ms"])
-            row["avg_write_latency_formatted"] = format_duration(row["avg_write_latency_ms"])
 
         # 识别高延迟文件(>20ms平均延迟)
         high_latency_files = [r for r in results if r["avg_read_latency_ms"] > 20 or r["avg_write_latency_ms"] > 20]
@@ -568,7 +546,6 @@ def check_backup_status(database_name: str = None, days: int = 7, config: Runnab
         for row in backup_history:
             row["backup_start_date"] = str(row["backup_start_date"]) if row["backup_start_date"] else None
             row["backup_finish_date"] = str(row["backup_finish_date"]) if row["backup_finish_date"] else None
-            row["duration_formatted"] = format_duration(row["duration_seconds"] * 1000) if row["duration_seconds"] else "N/A"
             row["backup_size_formatted"] = format_size(row["backup_size_mb"] * 1024 * 1024) if row["backup_size_mb"] else "N/A"
             row["compressed_size_formatted"] = format_size(row["compressed_size_mb"] * 1024 * 1024) if row["compressed_size_mb"] else "N/A"
 
@@ -773,7 +750,6 @@ def check_agent_jobs(job_name: str = None, include_history: bool = True, config:
         # 格式化历史
         for row in history:
             row["run_datetime"] = str(row["run_datetime"]) if row["run_datetime"] else None
-            row["duration_formatted"] = format_duration(row["duration_seconds"] * 1000) if row["duration_seconds"] else "N/A"
             # 截断过长的消息
             if row.get("message") and len(row["message"]) > 500:
                 row["message"] = row["message"][:500] + "..."
@@ -988,7 +964,6 @@ def check_replication_status(config: RunnableConfig = None):
                 pending = execute_readonly_query(pending_commands_query, config=config)
                 for row in pending:
                     row["oldest_command_time"] = str(row["oldest_command_time"]) if row.get("oldest_command_time") else None
-                    row["max_latency_formatted"] = format_duration(row["max_latency_seconds"] * 1000) if row.get("max_latency_seconds") else "N/A"
             except Exception:
                 pass
 
@@ -1185,8 +1160,6 @@ def check_database_size_growth(database_name: str = None, days: int = 30, config
                         "days_analyzed": days_diff,
                         "daily_growth_mb": round(daily_growth_mb, 2),
                         "backup_count": len(records),
-                        "size_formatted": format_size(last_size * 1024 * 1024),
-                        "growth_formatted": format_size(abs(growth_mb) * 1024 * 1024),
                     }
                 )
             elif len(records) == 1:

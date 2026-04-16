@@ -135,7 +135,8 @@ export const formatConfigInfo = (data: ChatflowNodeData, t: any) => {
       const intentConfig = config as IntentClassificationNodeConfig;
       if (intentConfig.intents && intentConfig.intents.length > 0) {
         const intentNames = intentConfig.intents.map((intent: { name: string }) => intent.name).join(', ');
-        return `${t('chatflow.intentClassification')}: ${intentNames}`;
+        const modelDisplayName = intentConfig.llmModelName || intentConfig.llmModel || '--';
+        return `${t('chatflow.nodeConfig.llmModel')}: ${modelDisplayName} · ${t('chatflow.intentClassification')}: ${intentNames}`;
       }
       return t('chatflow.notConfigured');
     }

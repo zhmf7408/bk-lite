@@ -6,7 +6,7 @@ import React, {
   useImperativeHandle,
   useEffect,
   useRef,
-  useMemo,
+  useMemo
 } from 'react';
 import { Button, Tag, Tabs, Spin, Timeline } from 'antd';
 import OperateModal from '@/app/log/components/operate-drawer';
@@ -17,7 +17,7 @@ import {
   TableDataItem,
   TabItem,
   Pagination,
-  TimeLineItem,
+  TimeLineItem
 } from '@/app/log/types';
 import { HeatMapDataItem } from '@/types';
 import { AlertOutlined } from '@ant-design/icons';
@@ -50,7 +50,7 @@ const AlertDetail = forwardRef<ModalRef, ModalConfig>(
     const [pagination, setPagination] = useState<Pagination>({
       current: 1,
       total: 0,
-      pageSize: 100,
+      pageSize: 100
     });
     const [tableLoading, setTableLoading] = useState<boolean>(false);
     const tabs: TabItem[] = useAlertDetailTabs();
@@ -63,7 +63,7 @@ const AlertDetail = forwardRef<ModalRef, ModalConfig>(
         setTitle(title);
         setFormData(form);
         getRawData(form);
-      },
+      }
     }));
 
     const isInformation = useMemo(
@@ -84,7 +84,7 @@ const AlertDetail = forwardRef<ModalRef, ModalConfig>(
         const params = {
           page: 1,
           page_size: -1,
-          alert_id: formData.id,
+          alert_id: formData.id
         };
         const data = await geEventList(params);
         setChartData(data || []);
@@ -99,7 +99,7 @@ const AlertDetail = forwardRef<ModalRef, ModalConfig>(
       const params = {
         page: currentPage,
         page_size: pagination.pageSize,
-        alert_id: formData.id,
+        alert_id: formData.id
       };
       try {
         const data = await geEventList(params);
@@ -117,12 +117,12 @@ const AlertDetail = forwardRef<ModalRef, ModalConfig>(
                 {t('common.detail')}
               </Button>
             </>
-          ),
+          )
         }));
         setTimeLineData((prev) => [...prev, ..._timelineData]);
         setPagination((prev: Pagination) => ({
           ...prev,
-          total: data.count,
+          total: data.count
         }));
       } finally {
         setTableLoading(false);
@@ -136,10 +136,14 @@ const AlertDetail = forwardRef<ModalRef, ModalConfig>(
         const isAggregate = form.alert_type === 'aggregate';
         const data = responseData?.raw_data?.data;
         const aggregateData = data?.query_result ? [data?.query_result] : [];
-        const result = !isAggregate ? data || [] : aggregateData;
+        const result = !isAggregate
+          ? Array.isArray(data)
+            ? data
+            : []
+          : aggregateData;
         const rawList = result.map((item: TableDataItem, index: number) => ({
           ...item,
-          id: index,
+          id: index
         }));
         setRawData(rawList);
       } finally {
@@ -153,7 +157,7 @@ const AlertDetail = forwardRef<ModalRef, ModalConfig>(
         const nextPage = pagination.current + 1;
         setPagination((prev) => ({
           ...prev,
-          current: nextPage,
+          current: nextPage
         }));
         getTableData(nextPage);
       }
@@ -185,7 +189,7 @@ const AlertDetail = forwardRef<ModalRef, ModalConfig>(
       setPagination({
         current: 1,
         total: 0,
-        pageSize: 100,
+        pageSize: 100
       });
       setLoading(false);
       setTableLoading(false);
@@ -209,8 +213,8 @@ const AlertDetail = forwardRef<ModalRef, ModalConfig>(
         form: {
           ...row,
           alert_type: formData.alert_type,
-          show_fields: formData.show_fields || [],
-        },
+          show_fields: formData.show_fields || []
+        }
       });
     };
 
@@ -281,7 +285,7 @@ const AlertDetail = forwardRef<ModalRef, ModalConfig>(
                     className="pt-[10px]"
                     style={{
                       height: 'calc(100vh - 520px)',
-                      overflowY: 'auto',
+                      overflowY: 'auto'
                     }}
                     ref={timelineRef}
                     onScroll={handleScroll}

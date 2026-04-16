@@ -33,9 +33,9 @@ Get_Mongo_Pid(){
         if [[ "$userId" == "apps" ]];then
             continue
         fi
-         # 过滤掉不是apache的进程
-        is_mongo=$($(readlink /proc/$pid/exe) -v 2>/dev/null|grep -i mongo)
-        if [ -z "$is_mongo" ];then
+         # 过滤掉不是mongo的进程
+         is_mongo=$($(readlink /proc/$pid/exe) -v 2>/dev/null|grep -i mongo)
+         if [ -z "$is_mongo" ];then
         	continue
         fi
          # 筛选后的pid
@@ -54,7 +54,8 @@ Cover_Mongo(){
         do
             Get_Port_Join_Str $pid
             exe_path=$(readlink /proc/$pid/exe)
-            if [[ $inst_name_array =~ $host_innerip-apache-$port_str ]];then
+            inst_name="$host_innerip-mongodb-$port_str"
+            if [[ " ${inst_name_array[*]} " =~ " ${inst_name} " ]];then
                 continue
             fi
             bin_path=$(dirname $exe_path)
@@ -62,8 +63,7 @@ Cover_Mongo(){
             if [[ ! -f "$mongo_path" ]]; then
                 mongo_path=""
             fi
-            inst_name="$host_innerip-mongodb-$port_str"
-            inst_name_array[${#array_name[@]}]=$inst_name
+            inst_name_array[${#inst_name_array[@]}]=$inst_name
             version=$($exe_path --version | grep -i "db version" | awk '{print $3}' | sed 's/^v//')
             cmd_expr="cat /proc/$pid/cmdline"
             config=$($cmd_expr | tr '\0' ' ' | grep -oP '(?<=--config)[^-]+|(?<=-f)[^-]+'|awk '{print $1}')
@@ -78,9 +78,13 @@ Cover_Mongo(){
             fi
 
             # 数据库角色采集
-            database_role=$($mongo_path --port $port_str -eval "rs.status()" 2>/dev/null | grep -i 'role' | awk '{print $2}' | head -n1)
-            if [ -z "$database_role" ]; then
-                database_role="standalone"
+            database_role=""
+            if [[ -n "$mongo_path" ]]; then
+                rs_status_output=$($mongo_path --port "$port_str" --eval "rs.status()" 2>/dev/null)
+                database_role=$(printf '%s\n' "$rs_status_output" | grep -i 'role' | awk '{print $2}' | head -n1)
+                if [[ -z "$database_role" ]] && printf '%s\n' "$rs_status_output" | grep -qi 'not running with --replSet'; then
+                    database_role="standalone"
+                fi
             fi
 
             fork=$(cat $config 2>/dev/null | grep -v '^#'|awk '/fork:/ {print $2}')

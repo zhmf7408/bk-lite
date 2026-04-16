@@ -3,6 +3,7 @@ import asyncio
 import requests
 import requests.adapters
 import time
+from json import JSONDecodeError
 from typing import AsyncIterator
 from requests.auth import HTTPBasicAuth
 from apps.log.constants.victoriametrics import VictoriaLogsConstants
@@ -60,9 +61,44 @@ class VictoriaMetricsAPI:
         )
         response.raise_for_status()
         result = []
-        for line in response.text.strip().splitlines():
-            if line:
+        skipped_lines = 0
+
+        for line_number, line in enumerate(response.iter_lines(decode_unicode=True), start=1):
+            if not line:
+                continue
+
+            try:
                 result.append(json.loads(line))
+            except JSONDecodeError as exc:
+                skipped_lines += 1
+                error_window_start = max(exc.pos - 120, 0)
+                error_window_end = min(exc.pos + 120, len(line))
+                error_window = repr(line[error_window_start:error_window_end])[:200]
+                warning_message = (
+                    "VictoriaLogs query 返回非法 JSON 行，已跳过 | "
+                    f"line_number={line_number} | "
+                    f"line_length={len(line)} | "
+                    f"error_position={exc.pos} | "
+                    f"error={exc} | "
+                    f"error_window_repr={error_window}"
+                )
+                logger.warning(
+                    warning_message,
+                    extra={
+                        "line_number": line_number,
+                        "error": str(exc),
+                        "line_length": len(line),
+                        "error_position": exc.pos,
+                        "error_window_repr": error_window,
+                    },
+                )
+
+        if skipped_lines:
+            logger.warning(
+                "VictoriaLogs query 解析存在非法行",
+                extra={"skipped_lines": skipped_lines, "parsed_lines": len(result)},
+            )
+
         return result
 
     def hits(self, query, start, end, field, fields_limit=5, step="5m"):

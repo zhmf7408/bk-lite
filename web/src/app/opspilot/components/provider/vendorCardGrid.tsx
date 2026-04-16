@@ -7,6 +7,7 @@ import { VENDOR_ICON_MAP, VENDOR_LABEL_MAP } from '@/app/opspilot/constants/prov
 import type { ModelVendor } from '@/app/opspilot/types/provider';
 import { useProviderApi } from '@/app/opspilot/api/provider';
 import { ProviderGridSkeleton } from '@/app/opspilot/components/provider/skeleton';
+import { useTheme } from '@/context/theme';
 
 interface VendorCardGridProps {
   vendors: ModelVendor[];
@@ -26,8 +27,10 @@ const VendorCardGrid: React.FC<VendorCardGridProps> = ({
   onChange,
 }) => {
   const { t } = useTranslation();
+  const { themeName } = useTheme();
   const { patchVendor } = useProviderApi();
   const [switchLoadingId, setSwitchLoadingId] = useState<number | null>(null);
+  const isDark = themeName === 'dark';
 
   const getModelCount = (vendor: ModelVendor) => {
     if (typeof vendor.model_count === 'number') {
@@ -92,9 +95,11 @@ const VendorCardGrid: React.FC<VendorCardGridProps> = ({
             className="group h-full overflow-hidden rounded-[26px] border-0 transition-all duration-300 hover:-translate-y-1"
             bodyStyle={{ padding: 0, height: '100%' }}
             style={{
-              background: '#ffffff',
-              boxShadow: '0 14px 28px rgba(148, 163, 184, 0.10)',
-              border: '1px solid rgba(191, 219, 254, 0.7)',
+              background: isDark
+                ? 'linear-gradient(180deg, rgba(12, 37, 54, 0.96) 0%, rgba(7, 29, 44, 0.98) 38%, rgba(20, 20, 20, 1) 100%)'
+                : '#ffffff',
+              boxShadow: isDark ? '0 14px 28px rgba(0, 0, 0, 0.24)' : '0 14px 28px rgba(148, 163, 184, 0.10)',
+              border: `1px solid ${isDark ? 'var(--color-border-1)' : 'rgba(191, 219, 254, 0.7)'}`,
             }}
             onClick={() => onOpen(vendor)}
           >
@@ -102,12 +107,14 @@ const VendorCardGrid: React.FC<VendorCardGridProps> = ({
               <div
                 className="pointer-events-none absolute inset-x-0 top-0 h-22"
                 style={{
-                  background: 'linear-gradient(180deg, rgba(239, 246, 255, 0.95) 0%, rgba(255, 255, 255, 0) 100%)',
+                  background: isDark
+                    ? 'linear-gradient(180deg, rgba(21, 90, 239, 0.14) 0%, rgba(7, 29, 44, 0) 100%)'
+                    : 'linear-gradient(180deg, rgba(239, 246, 255, 0.95) 0%, rgba(255, 255, 255, 0) 100%)',
                 }}
               />
               <div
                 className="pointer-events-none absolute -top-8 left-8 h-18 w-32 rounded-full blur-3xl"
-                style={{ background: 'rgba(147, 197, 253, 0.18)' }}
+                style={{ background: isDark ? 'rgba(21, 90, 239, 0.14)' : 'rgba(147, 197, 253, 0.18)' }}
               />
 
               <div className="relative flex flex-1 flex-col">
@@ -116,8 +123,10 @@ const VendorCardGrid: React.FC<VendorCardGridProps> = ({
                     <div
                       className="flex h-11 w-11 shrink-0 items-center justify-center rounded-[14px] border shadow-[0_10px_24px_rgba(96,165,250,0.14)] backdrop-blur-sm"
                       style={{
-                        borderColor: 'rgba(191, 219, 254, 0.9)',
-                        background: 'linear-gradient(145deg, rgba(248, 251, 255, 0.96) 0%, rgba(231, 242, 255, 0.92) 100%)',
+                        borderColor: isDark ? 'var(--color-border-1)' : 'rgba(191, 219, 254, 0.9)',
+                        background: isDark
+                          ? 'linear-gradient(145deg, rgba(12, 37, 54, 0.96) 0%, rgba(22, 45, 62, 0.92) 100%)'
+                          : 'linear-gradient(145deg, rgba(248, 251, 255, 0.96) 0%, rgba(231, 242, 255, 0.92) 100%)',
                       }}
                     >
                       <Image
@@ -133,7 +142,12 @@ const VendorCardGrid: React.FC<VendorCardGridProps> = ({
                       <div className="truncate text-[16px] font-semibold leading-tight tracking-[-0.01em] text-(--color-text-1)">{vendor.name}</div>
                       <Tag
                         color="blue"
-                        className="mt-1 rounded-full border-blue-200/80 bg-white/90 px-2 py-0 text-[10px] font-medium leading-4.5 text-blue-600 shadow-[0_4px_10px_rgba(59,130,246,0.08)]"
+                        className="mt-1 rounded-full px-2 py-0 text-[10px] font-medium leading-4.5 shadow-[0_4px_10px_rgba(59,130,246,0.08)]"
+                        style={{
+                          borderColor: isDark ? 'var(--color-border-1)' : 'rgba(191, 219, 254, 0.8)',
+                          background: isDark ? 'rgba(255, 255, 255, 0.08)' : 'rgba(255, 255, 255, 0.9)',
+                          color: 'var(--color-primary)',
+                        }}
                       >
                         {VENDOR_LABEL_MAP[vendor.vendor_type]}
                       </Tag>
@@ -146,7 +160,7 @@ const VendorCardGrid: React.FC<VendorCardGridProps> = ({
                   >
                     <button
                       type="button"
-                      className="flex h-8 w-8 items-center justify-center rounded-lg bg-transparent text-[14px] text-[#8FA5C3] transition-all duration-200 hover:bg-[#F3F7FF] hover:text-[#5A82E8] hover:shadow-[inset_0_0_0_1px_rgba(191,215,255,0.9)]"
+                      className="flex h-8 w-8 items-center justify-center rounded-lg bg-transparent text-(--color-text-3) transition-all duration-200 hover:bg-(--color-fill-1) hover:text-(--color-primary) hover:shadow-[inset_0_0_0_1px_var(--color-border-1)]"
                       onClick={() => onEdit(vendor)}
                     >
                       <EditOutlined />
@@ -154,7 +168,7 @@ const VendorCardGrid: React.FC<VendorCardGridProps> = ({
 
                     <button
                       type="button"
-                      className="flex h-8 w-8 items-center justify-center rounded-lg bg-transparent text-[14px] text-[#8FA5C3] transition-all duration-200 hover:bg-[#F3F7FF] hover:text-[#5A82E8] hover:shadow-[inset_0_0_0_1px_rgba(191,215,255,0.9)]"
+                      className="flex h-8 w-8 items-center justify-center rounded-lg bg-transparent text-(--color-text-3) transition-all duration-200 hover:bg-(--color-fill-1) hover:text-(--color-primary) hover:shadow-[inset_0_0_0_1px_var(--color-border-1)]"
                       onClick={() => showDeleteConfirm(vendor)}
                     >
                       <DeleteOutlined />
@@ -163,15 +177,15 @@ const VendorCardGrid: React.FC<VendorCardGridProps> = ({
                 </div>
 
                 {description && (
-                  <div className="mt-3 line-clamp-1 text-[13px] leading-6 text-slate-600">
+                  <div className="mt-3 line-clamp-1 text-[13px] leading-6 text-(--color-text-2)">
                     {description}
                   </div>
                 )}
 
                 <div className={`${description ? 'mt-auto pt-3' : 'mt-auto pt-6'}`}>
-                  <div className="h-px w-full bg-linear-to-r from-sky-100 via-slate-100 to-transparent" />
+                  <div className="h-px w-full bg-[linear-gradient(90deg,var(--color-border-2)_0%,var(--color-border-1)_55%,transparent_100%)]" />
                   <div className="flex items-center justify-between gap-4 pt-3.5">
-                    <div className="text-[12px] font-medium tracking-[0.01em] text-slate-600">{totalModels} 个模型</div>
+                    <div className="text-[12px] font-medium tracking-[0.01em] text-(--color-text-2)">{totalModels} 个模型</div>
 
                     <div onClick={(event) => event.stopPropagation()}>
                       <Tooltip title={vendor.enabled ? t('common.enable') : t('common.disable')}>

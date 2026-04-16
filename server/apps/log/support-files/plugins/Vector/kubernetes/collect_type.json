@@ -1,0 +1,20 @@
+{
+  "name": "kubernetes",
+  "collector": "Vector",
+  "icon": "cc-k8s-cluster",
+  "description": "Collects logs from Kubernetes clusters via active reporting",
+  "default_query": "collect_type: kubernetes | last 1 by (_time) partition by (instance_id)",
+  "attrs": [
+    "collect_type",
+    "collector",
+    "instance_id",
+    "k8s_namespace",
+    "k8s_pod_name",
+    "k8s_container_name",
+    "k8s_node_name",
+    "message",
+    "log_message",
+    "timestamp"
+  ],
+  "display_category": "k8s"
+}

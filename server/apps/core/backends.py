@@ -189,6 +189,7 @@ class AuthBackend(ModelBackend):
             user.locale = user_info.get("locale", DEFAULT_LOCALE)
             user.save()
             # 设置运行时属性
+            user.timezone = user_info.get("timezone", "Asia/Shanghai")
             user.rules = rules
             user.permission = {key: set(value) for key, value in user_info.get("permission", {}).items()}
             user.role_ids = user_info.get("role_ids", [])

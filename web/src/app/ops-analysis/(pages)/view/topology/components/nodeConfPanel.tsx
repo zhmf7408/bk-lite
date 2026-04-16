@@ -105,8 +105,8 @@ const NodeConfPanel: React.FC<NodeConfPanelProps> = ({
   const getIconUrl = useCallback((iconKey: string) => {
     const iconItem = iconList.find((item) => item.key === iconKey);
     return iconItem
-      ? `/app/assets/assetModelIcon/${iconItem.url}.svg`
-      : `/app/assets/assetModelIcon/cc-default_默认.svg`;
+      ? `/assets/icons/${iconItem.url}.svg`
+      : `/assets/icons/cc-default_默认.svg`;
   }, []);
 
   const handleThresholdChange = useCallback(

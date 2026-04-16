@@ -35,6 +35,23 @@ func TestRegressionLocalExecuteOutputDecoding(t *testing.T) {
 	}
 }
 
+func TestRegressionLocalExecuteOutputDecodingStrategy(t *testing.T) {
+	utf16Output := []byte{0xff, 0xfe, 0x2d, 0x4e, 0x87, 0x65, 0x93, 0x8f, 0xfa, 0x51}
+	if got, strategy := decodeExecuteOutputWithStrategy(utf16Output, ShellTypeCmd); got != "中文输出" || strategy != "utf16le" {
+		t.Fatalf("expected UTF-16LE strategy, got output=%q strategy=%q", got, strategy)
+	}
+
+	gbkOutput := []byte{0xd6, 0xd0, 0xce, 0xc4, 0xca, 0xe4, 0xb3, 0xf6}
+	if got, strategy := decodeExecuteOutputWithStrategy(gbkOutput, ShellTypeCmd); got != "中文输出" || strategy != "gbk" {
+		t.Fatalf("expected GBK strategy, got output=%q strategy=%q", got, strategy)
+	}
+
+	utf8Output := []byte("plain text")
+	if got, strategy := decodeExecuteOutputWithStrategy(utf8Output, ShellTypeCmd); got != "plain text" || strategy != "utf8" {
+		t.Fatalf("expected UTF-8 strategy, got output=%q strategy=%q", got, strategy)
+	}
+}
+
 func TestRegressionLocalHandlerTimeoutContract(t *testing.T) {
 	payload := []byte(`{"args":[{"command":"sleep 2","execute_timeout":1,"shell":"sh"}],"kwargs":{}}`)
 	response, ok := handleLocalExecuteMessage(payload, "instance-1")

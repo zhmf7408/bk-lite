@@ -10,7 +10,7 @@ declare const require: {
 };
 export function getSvgIcon() {
   const data = require
-    .context('../public/assets/assetModelIcon', false, /\.svg$/)
+    .context('../../../../public/assets/icons', false, /\.svg$/)
     .keys();
   for (const i in data) {
     data[i] = data[i].replace(/\.\//g, '').replace(/\.svg/g, '');

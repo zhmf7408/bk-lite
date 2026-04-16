@@ -4,16 +4,20 @@ import { useTranslation } from '@/utils/i18n';
 import { useSkillApi } from '@/app/opspilot/api/skill';
 import { useChannelApi } from '@/app/system-manager/api/channel';
 import { useStudioApi } from '@/app/opspilot/api/studio';
+import type { LlmModel } from '@/app/opspilot/types/skill';
 
 export const useNodeConfigData = () => {
   const { t } = useTranslation();
-  const { fetchSkill } = useSkillApi();
+  const { fetchSkill, fetchLlmModels } = useSkillApi();
   const { getChannelData } = useChannelApi();
   const { getAllUsers } = useStudioApi();
 
   const [skills, setSkills] = useState<any[]>([]);
   const [loadingSkills, setLoadingSkills] = useState(false);
   const [skillsLoaded, setSkillsLoaded] = useState(false);
+  const [llmModels, setLlmModels] = useState<LlmModel[]>([]);
+  const [loadingLlmModels, setLoadingLlmModels] = useState(false);
+  const [llmModelsLoaded, setLlmModelsLoaded] = useState(false);
   const [notificationChannels, setNotificationChannels] = useState<any[]>([]);
   const [loadingChannels, setLoadingChannels] = useState(false);
   const [allUsers, setAllUsers] = useState<any[]>([]);
@@ -36,6 +40,22 @@ export const useNodeConfigData = () => {
       setLoadingSkills(false);
     }
   }, [fetchSkill, skillsLoaded, t]);
+
+  const loadLlmModels = useCallback(async () => {
+    if (llmModelsLoaded) return;
+    try {
+      setLoadingLlmModels(true);
+      const data = await fetchLlmModels();
+      setLlmModels(data || []);
+      setLlmModelsLoaded(true);
+    } catch (error) {
+      console.error('Failed to load llm models:', error);
+      message.error(t('chatflow.fetchLlmModelsFailed'));
+      setLlmModels([]);
+    } finally {
+      setLoadingLlmModels(false);
+    }
+  }, [fetchLlmModels, llmModelsLoaded, t]);
 
   const loadChannels = useCallback(async (channelType: 'email' | 'enterprise_wechat_bot') => {
     try {
@@ -71,6 +91,9 @@ export const useNodeConfigData = () => {
     skills,
     loadingSkills,
     loadSkills,
+    llmModels,
+    loadingLlmModels,
+    loadLlmModels,
     notificationChannels,
     loadingChannels,
     loadChannels,

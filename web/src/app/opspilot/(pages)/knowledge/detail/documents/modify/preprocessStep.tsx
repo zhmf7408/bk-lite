@@ -14,6 +14,7 @@ import semanticImgEn from '@/app/opspilot/img/semantic_chunk-en.png';
 import semanticImgZh from '@/app/opspilot/img/semantic_chunk-zh.png';
 import noneImg from '@/app/opspilot/img/none_chunk.png';
 import { useKnowledgeApi } from '@/app/opspilot/api/knowledge';
+import { getModelOptionText, renderModelOptionLabel } from '@/app/opspilot/utils/modelOption';
 
 const { Option } = Select;
 
@@ -32,29 +33,29 @@ const PreprocessStep: React.FC<{
     desc: string;
     icon: string;
   }> = [
-    { 
+    {
       key: 'fixed_size',
-      title: t('knowledge.documents.fixedChunk'), 
-      desc: t('knowledge.documents.fixedChunkDesc'), 
-      icon: 'fenge' 
+      title: t('knowledge.documents.fixedChunk'),
+      desc: t('knowledge.documents.fixedChunkDesc'),
+      icon: 'fenge'
     },
-    { 
+    {
       key: 'recursive',
       title: t('knowledge.documents.overlapChunk'),
-      desc: t('knowledge.documents.overlapChunkDesc'), 
-      icon: 'paichuzhongdie' 
+      desc: t('knowledge.documents.overlapChunkDesc'),
+      icon: 'paichuzhongdie'
     },
-    { 
-      key: 'semantic', 
+    {
+      key: 'semantic',
       title: t('knowledge.documents.semanticChunk'),
-      desc: t('knowledge.documents.semanticChunkDesc'), 
-      icon: 'yuyirenwu' 
+      desc: t('knowledge.documents.semanticChunkDesc'),
+      icon: 'yuyirenwu'
     },
-    { 
-      key: 'full', 
-      title: t('knowledge.documents.noChunk'), 
-      desc: t('knowledge.documents.noChunkDesc'), 
-      icon: 'fenge1' 
+    {
+      key: 'full',
+      title: t('knowledge.documents.noChunk'),
+      desc: t('knowledge.documents.noChunkDesc'),
+      icon: 'fenge1'
     },
   ];
 
@@ -91,7 +92,7 @@ const PreprocessStep: React.FC<{
   };
 
   const { previewChunk, fetchEmbeddingModels } = useKnowledgeApi();
-  const [embeddingModels, setEmbeddingModels] = useState<{ id: number; name: string }[]>([]);
+  const [embeddingModels, setEmbeddingModels] = useState<{ id: number; name: string; vendor_name?: string }[]>([]);
   const [loadingModels, setLoadingModels] = useState<boolean>(true);
 
   useEffect(() => {
@@ -130,11 +131,11 @@ const PreprocessStep: React.FC<{
       chunk_type: newChunkType,
     });
   };
-  
+
   const handleChunkTypeChange = (type: keyof typeof chunkImages) => {
     updateConfig({ chunkType: type });
   };
-  
+
   const handleChange = (field: string, value: any) => {
     updateConfig({ [field]: value });
   };
@@ -235,8 +236,8 @@ const PreprocessStep: React.FC<{
                       loading={loadingModels}
                     >
                       {embeddingModels.map((model) => (
-                        <Option key={model.id} value={model.id}>
-                          {model.name}
+                        <Option key={model.id} value={model.id} title={getModelOptionText(model)}>
+                          {renderModelOptionLabel(model)}
                         </Option>
                       ))}
                     </Select>

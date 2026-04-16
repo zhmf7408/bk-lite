@@ -104,6 +104,8 @@ const BatchEditModal = forwardRef<ModalRef, BatchEditModalProps>(
           widget = (
             <Select
               disabled={isDisabled}
+              showSearch
+              optionFilterProp="label"
               placeholder={column.widget_props?.placeholder || ''}
               options={
                 column.name === 'node_ids' ? nodeList : column.options || []

@@ -22,6 +22,7 @@ export const useGroupApi = () => {
 
   async function getGroupDetailWithRoles(params: { group_id: number | string }): Promise<{
     group_id: number;
+    group_name: string;
     allow_inherit_roles: boolean;
     own_role_ids: number[];
     inherited_role_ids: number[];

@@ -10,10 +10,7 @@ import {
 } from '@ant-design/icons';
 import { useTranslation } from '@/utils/i18n';
 import { ComponentSelectorProps } from '@/app/ops-analysis/types/dashBoard';
-import { useDataSourceApi } from '@/app/ops-analysis/api/dataSource';
 import { useOpsAnalysis } from '@/app/ops-analysis/context/common';
-import { useUserInfoContext } from '@/context/userInfo';
-import { addAuthToDataSources } from '@/app/ops-analysis/utils/permissionChecker';
 import type {
   DatasourceItem,
   ChartType,
@@ -25,16 +22,20 @@ const ComponentSelector: React.FC<ComponentSelectorProps> = ({
   onOpenConfig,
 }) => {
   const { t } = useTranslation();
-  const { selectedGroup } = useUserInfoContext();
   const [search, setSearch] = useState('');
   const [selectedTagId, setSelectedTagId] = useState<number | null>(null);
   const [currentDataSources, setCurrentDataSources] = useState<
     DatasourceItem[]
   >([]);
-  const [dataSourcesLoading, setDataSourcesLoading] = useState(false);
 
-  const { tagList, tagsLoading, fetchTags } = useOpsAnalysis();
-  const { getDataSourceList } = useDataSourceApi();
+  const {
+    tagList,
+    tagsLoading,
+    fetchTags,
+    fetchDataSources,
+    dataSources,
+    dataSourcesLoading,
+  } = useOpsAnalysis();
 
   const getChartIcon = (chartTypes: ChartType[]) => {
     const iconClass = 'text-[16px] text-[var(--color-primary)]';
@@ -63,39 +64,38 @@ const ComponentSelector: React.FC<ComponentSelectorProps> = ({
     return <div className="flex gap-1">{icons}</div>;
   };
 
-  const fetchDataSourcesByTag = async (tagItemId: number) => {
-    try {
-      setDataSourcesLoading(true);
-      const list = await getDataSourceList({
-        tags: tagItemId,
-        all_groups: true,
-      });
-      // 添加权限检查
-      const listWithAuth = addAuthToDataSources(list || [], selectedGroup?.id);
-      setCurrentDataSources(listWithAuth);
-    } catch (error) {
-      console.error('获取数据源列表失败:', error);
-      setCurrentDataSources([]);
-    } finally {
-      setDataSourcesLoading(false);
-    }
-  };
-
   useEffect(() => {
     if (visible) {
-      fetchTags();
+      void fetchTags();
+      void fetchDataSources();
     } else {
       setSelectedTagId(null);
       setCurrentDataSources([]);
       setSearch('');
     }
-  }, [visible, fetchTags]);
+  }, [visible, fetchDataSources, fetchTags]);
 
   useEffect(() => {
-    if (selectedTagId) {
-      fetchDataSourcesByTag(selectedTagId);
+    if (!selectedTagId) {
+      setCurrentDataSources([]);
+      return;
     }
-  }, [selectedTagId]);
+
+    const nextDataSources = dataSources.filter((item) => {
+      if (!Array.isArray(item.tag)) {
+        return false;
+      }
+
+      return item.tag.some((tag) => {
+        if (typeof tag === 'number' || typeof tag === 'string') {
+          return Number(tag) === selectedTagId;
+        }
+
+        return Number((tag as { id?: number | string })?.id) === selectedTagId;
+      });
+    });
+    setCurrentDataSources(nextDataSources);
+  }, [dataSources, selectedTagId]);
 
   useEffect(() => {
     if (visible && tagList.length > 0 && !selectedTagId) {

@@ -7,17 +7,15 @@ class CollectorConstants:
     # 采集器下发目录
     DOWNLOAD_DIR = {
         NodeConstants.LINUX_OS: "/opt/fusion-collectors/bin",
-        NodeConstants.WINDOWS_OS: "C:\\gse\\fusion-collectors\\bin",
+        NodeConstants.WINDOWS_OS: "C:\\fusion-collectors\\bin",
     }
 
     TAG_ENUM = {
         "monitor": {"is_app": True, "name": "Monitor"},
         "log": {"is_app": True, "name": "Log"},
         "cmdb": {"is_app": True, "name": "CMDB"},
-
         "linux": {"is_app": False, "name": "Linux"},
         "windows": {"is_app": False, "name": "Windows"},
-
         "jmx": {"is_app": False, "name": "JMX"},
         "exporter": {"is_app": False, "name": "Exporter"},
         "beat": {"is_app": False, "name": "Beat"},
@@ -29,8 +27,8 @@ class CollectorConstants:
     IGNORE_ERROR_COLLECTORS = ["Metricbeat", "Auditbeat", "Filebeat", "Packetbeat"]
     IGNORE_ERROR_COLLECTORS_MESSAGES = [
         "Exiting: one or more modules must be configured\n",
-        "Exiting: no modules or inputs enabled and configuration reloading disabled. What files do you want me to watch?\n"
+        "Exiting: no modules or inputs enabled and configuration reloading disabled. What files do you want me to watch?\n",
     ]
 
     # 忽略的采集器
-    IGNORE_COLLECTORS = ["natsexecutor_windows",  "natsexecutor_linux", "ansibleexecutor_linux"]
+    IGNORE_COLLECTORS = ["natsexecutor_windows", "natsexecutor_linux", "ansibleexecutor_linux"]

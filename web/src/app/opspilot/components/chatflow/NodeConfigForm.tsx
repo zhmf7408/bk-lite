@@ -32,6 +32,8 @@ export const NodeConfigForm: React.FC<any> = ({
   setUploadedFiles,
   skills,
   loadingSkills,
+  llmModels,
+  loadingLlmModels,
   notificationChannels,
   loadingChannels,
   notificationType,
@@ -151,7 +153,12 @@ export const NodeConfigForm: React.FC<any> = ({
       {nodeType === 'condition' && <ConditionNodeConfig t={t} nodes={nodes} />}
 
       {nodeType === 'intent_classification' && (
-        <IntentClassificationNodeConfig t={t} skills={skills} loadingSkills={loadingSkills} />
+        <IntentClassificationNodeConfig
+          t={t}
+          llmModels={llmModels}
+          loadingLlmModels={loadingLlmModels}
+          form={form}
+        />
       )}
 
       {nodeType === 'notification' && (

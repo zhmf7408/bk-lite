@@ -444,6 +444,7 @@
       "templateName": "Template Name",
       "templateId": "Template ID",
       "templateType": "Template Type",
+      "pullTemplateHint": "PULL templates do not support joint collection of parent-child objects. If you need this, please use PUSH mode.",
       "templateDescription": "Template Description",
       "noConfigData": "No configuration data available, please check plugin settings",
       "searchRuleName": "Search Rule Name",

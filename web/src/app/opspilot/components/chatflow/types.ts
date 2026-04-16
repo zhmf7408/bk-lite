@@ -46,7 +46,9 @@ export interface ConditionNodeConfig extends BaseNodeConfig {
 
 /** 意图分类节点配置 */
 export interface IntentClassificationNodeConfig extends BaseNodeConfig {
-  agent: number | null;
+  llmModel: number | null;
+  llmModelName?: string;
+  classificationRules?: string;
   intents: Array<{ name: string; description?: string }>;
 }
 
