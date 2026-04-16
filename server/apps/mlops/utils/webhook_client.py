@@ -203,13 +203,21 @@ class WebhookClient:
             # )
 
             if response.status_code != 200:
+                error_msg = f"Webhookd 返回错误状态码: {response.status_code}"
+                error_code = None
+            
                 try:
                     error_data = response.json()
-                    error_msg = error_data.get("message", f"Webhookd 返回错误状态码: {response.status_code}")
+                    error_msg = error_data.get("message") or error_msg
                     error_code = error_data.get("code")
-                except (ValueError, KeyError):
-                    error_msg = f"Webhookd 返回错误状态码: {response.status_code}"
-                    error_code = None
+                    error_detail = error_data.get("detail") or error_data.get("error")
+                    if error_detail:
+                        error_msg = f"{error_msg}: {error_detail}"
+                except ValueError:
+                    response_text = response.text.strip()
+                    if response_text:
+                        error_msg = f"{error_msg}: {response_text}"
+            
                 raise WebhookError(error_msg, code=error_code)
 
             return response.json()
