@@ -194,7 +194,12 @@ class Controller:
                 try:
                     template_config = self.render_template(
                         template["content"],
-                        {**config_info, "config_id": config_id.upper()},
+                        {
+                            **config_info,
+                            "config_id": config_id.upper(),
+                            "plugin_id": plugin_id,
+                            "monitor_plugin_id": plugin_id,
+                        },
                     )
                 except (ValueError, Exception) as e:
                     logger.error(f"渲染模板失败：type={type_name}, config_id={config_id}, instance_id={config_info.get('instance_id')}, 错误: {e}")
