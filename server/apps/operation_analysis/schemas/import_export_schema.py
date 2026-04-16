@@ -129,7 +129,7 @@ class DashboardItem(BaseModel):
     key: str
     name: str
     desc: str = Field(default="")
-    filters: dict = Field(default_factory=dict)
+    filters: list = Field(default_factory=list)
     other: dict = Field(default_factory=dict)
     view_sets: list = Field(default_factory=list)
     refs: CanvasRefs = Field(default_factory=CanvasRefs)

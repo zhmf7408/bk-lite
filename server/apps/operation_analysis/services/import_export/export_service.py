@@ -198,7 +198,7 @@ class ExportService:
 
         # Dashboard有额外的filters字段
         if object_type == ObjectType.DASHBOARD and hasattr(canvas, "filters"):
-            base_data["filters"] = canvas.filters or {}
+            base_data["filters"] = canvas.filters or []
 
         return base_data
 

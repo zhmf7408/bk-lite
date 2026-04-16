@@ -215,7 +215,7 @@ const AutoAssociationRulesPage: React.FC = () => {
                   ? `${pair.src_field_id} = ${pair.dst_field_id}`
                   : `${pair.dst_field_id} = ${pair.src_field_id}`}
               </Tag>
-            ))}
+              ))}
           </Space>
         ) : '--';
       },
