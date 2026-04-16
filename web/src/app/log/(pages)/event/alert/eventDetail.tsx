@@ -6,7 +6,7 @@ import React, {
   useImperativeHandle,
   useMemo,
   useEffect,
-  useRef,
+  useRef
 } from 'react';
 import { Button } from 'antd';
 import OperateModal from '@/app/log/components/operate-drawer';
@@ -16,7 +16,7 @@ import {
   ModalConfig,
   TableDataItem,
   TimeLineItem,
-  ColumnItem,
+  ColumnItem
 } from '@/app/log/types';
 import useLogApi from '@/app/log/api/event';
 import CustomTable from '@/components/custom-table';
@@ -40,7 +40,7 @@ const EventDetail = forwardRef<ModalRef, ModalConfig>(({}, ref) => {
       setTitle(title);
       setFormData(form);
       getTableData(form);
-    },
+    }
   }));
 
   // 动态计算表格滚动高度
@@ -96,22 +96,21 @@ const EventDetail = forwardRef<ModalRef, ModalConfig>(({}, ref) => {
         sorter: (a: any, b: any) => a.id - b.id,
         render: (val, { _time }) => (
           <>{val ? convertToLocalizedTime(_time) : '--'}</>
-        ),
+        )
       },
       {
         title: 'message',
         dataIndex: '_msg',
         key: '_msg',
         width: 350,
-        render: (val) => <>{val || '--'}</>,
-      },
+        render: (val) => <>{val || '--'}</>
+      }
     ];
     if (!isAggregate && formData.show_fields?.length) {
       const displayColumns = formData.show_fields.map((item: string) => ({
         title: item,
         dataIndex: item,
-        key: item,
-        width: 120,
+        key: item
       }));
       columns = [...columns, ...displayColumns];
     }
@@ -121,8 +120,7 @@ const EventDetail = forwardRef<ModalRef, ModalConfig>(({}, ref) => {
         .map((item) => ({
           title: item,
           dataIndex: item,
-          key: item,
-          width: 120,
+          key: item
         }));
     }
     return columns;
@@ -137,7 +135,7 @@ const EventDetail = forwardRef<ModalRef, ModalConfig>(({}, ref) => {
       const result = !isAggregate ? data || [] : aggregateData;
       const rawData = result.map((item: TableDataItem, index: number) => ({
         ...item,
-        id: index,
+        id: index
       }));
       setTableData(rawData);
     } finally {

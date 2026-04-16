@@ -67,8 +67,7 @@ const Information: React.FC<TableDataItem> = ({
       const displayColumns = formData.show_fields.map((item: string) => ({
         title: item,
         dataIndex: item,
-        key: item,
-        width: 120
+        key: item
       }));
       columns = [...columns, ...displayColumns];
     }
@@ -78,8 +77,7 @@ const Information: React.FC<TableDataItem> = ({
         .map((item) => ({
           title: item,
           dataIndex: item,
-          key: item,
-          width: 120
+          key: item
         }));
     }
     return columns;
