@@ -92,6 +92,9 @@ display_category:
   general:
     name: General
     description: General file stream, syslog and basic collection
+  k8s:
+    name: K8s
+    description: Kubernetes cluster log collection
   database:
     name: Database
     description: RDBMS, NoSQL, cache and data storage system logs

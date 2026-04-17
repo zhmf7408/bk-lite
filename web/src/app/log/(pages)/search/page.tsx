@@ -113,6 +113,7 @@ const SearchView: React.FC = () => {
   const conditionRef = useRef<ModalRef>(null);
   const conditionListRef = useRef<ModalRef>(null);
   const searchTextRef = useRef<string>(queryText);
+  const [hasSearchText, setHasSearchText] = useState<boolean>(!!queryText);
   const [frequence, setFrequence] = useState<number>(0);
   const [defaultSearchText, setDefaultSearchText] = useState<string>(queryText);
   const [tableData, setTableData] = useState<TableDataItem[]>([]);
@@ -156,7 +157,7 @@ const SearchView: React.FC = () => {
 
   const disableStore = useMemo(
     () => !groups.length || !searchTextRef.current,
-    [groups]
+    [groups, hasSearchText]
   );
 
   useEffect(() => {
@@ -349,6 +350,7 @@ const SearchView: React.FC = () => {
       }
     }
     setDefaultSearchText(searchTextRef.current);
+    setHasSearchText(!!searchTextRef.current);
   };
 
   const onXRangeChange = (arr: [Dayjs, Dayjs]) => {
@@ -401,6 +403,7 @@ const SearchView: React.FC = () => {
     const end = +new Date(time_range.end);
     setGroups(log_groups);
     searchTextRef.current = query;
+    setHasSearchText(!!query);
     setDefaultSearchText(query);
     setTimeDefaultValue({
       selectValue: (time_range.origin_value as number) || 0,
@@ -491,6 +494,7 @@ const SearchView: React.FC = () => {
               }
               onChange={(value) => {
                 searchTextRef.current = value;
+                setHasSearchText(!!value);
               }}
               onPressEnter={handleSearch}
             />

@@ -103,7 +103,8 @@ const copyPublicDirectories = () => {
   );
 
   const mainDestinationPath = path.resolve(process.cwd(), 'public', 'app');
-  fs.ensureDirSync(mainDestinationPath);
+  fs.emptyDirSync(mainDestinationPath);
+  fs.ensureFileSync(path.join(mainDestinationPath, '.gitkeep'));
 
   apps.forEach(app => {
     const sourcePath = path.join(srcDir, app, 'public');
@@ -114,7 +115,8 @@ const copyPublicDirectories = () => {
         fs.ensureDirSync(destinationPath);
         fs.copySync(sourcePath, destinationPath, {
           dereference: true,
-          overwrite: false,
+          overwrite: true,
+          filter: itemPath => path.basename(itemPath) !== '.DS_Store',
         });
         console.log(`Copied contents of ${sourcePath} to ${destinationPath}`);
       } catch (err) {

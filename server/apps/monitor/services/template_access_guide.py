@@ -5,7 +5,6 @@ from apps.monitor.models import Metric, MonitorObject, MonitorPlugin
 from apps.rpc.node_mgmt import NodeMgmt
 
 
-DEFAULT_TELEGRAF_HTTP_LISTENER_PORT = 19090
 DEFAULT_TELEGRAF_HTTP_LISTENER_PATH = "/telegraf/api"
 
 
@@ -33,29 +32,23 @@ class TemplateAccessGuideService:
         if not isinstance(env_config, dict):
             raise BaseAppException("获取云区域环境变量失败")
 
-        endpoint = env_config.get("TELEGRAF_HTTP_LISTENER_URL")
-        if endpoint:
-            path = DEFAULT_TELEGRAF_HTTP_LISTENER_PATH
-            parts = urlsplit(endpoint)
-            if parts.scheme and parts.netloc:
-                normalized_path = path if path.startswith("/") else f"/{path}"
-                return urlunsplit((parts.scheme, parts.netloc, normalized_path, "", ""))
-            return endpoint
-
         node_server_url = env_config.get("NODE_SERVER_URL")
         if not node_server_url:
             raise BaseAppException("当前云区域未配置 NODE_SERVER_URL，无法拼接 Telegraf 接入地址")
 
         parts = urlsplit(node_server_url)
-        if not parts.hostname:
+        if not parts.scheme or not parts.netloc:
             raise BaseAppException("NODE_SERVER_URL 配置不合法，无法拼接 Telegraf 接入地址")
 
-        scheme = parts.scheme or "http"
+        normalized_path = DEFAULT_TELEGRAF_HTTP_LISTENER_PATH
+        if not normalized_path.startswith("/"):
+            normalized_path = f"/{normalized_path}"
+
         return urlunsplit(
             (
-                scheme,
-                f"{parts.hostname}:{DEFAULT_TELEGRAF_HTTP_LISTENER_PORT}",
-                DEFAULT_TELEGRAF_HTTP_LISTENER_PATH,
+                parts.scheme,
+                parts.netloc,
+                normalized_path,
                 "",
                 "",
             )

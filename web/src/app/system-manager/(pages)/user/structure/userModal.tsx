@@ -41,6 +41,7 @@ const UserModal = forwardRef<ModalRef, ModalProps>(({ onSuccess, treeData }, ref
     personalRoleIds,
     groupRules,
     organizationRoleIds,
+    organizationRoleSourceMap,
     isSuperuser,
     setIsSuperuser,
     showModal,
@@ -174,6 +175,7 @@ const UserModal = forwardRef<ModalRef, ModalProps>(({ onSuccess, treeData }, ref
                 loading={roleLoading}
                 forceOrganizationRole={false}
                 organizationRoleIds={organizationRoleIds}
+                organizationRoleSourceMap={organizationRoleSourceMap}
                 onChange={handleRoleChange}
               />
             ) : (

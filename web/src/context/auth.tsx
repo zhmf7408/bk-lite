@@ -7,6 +7,7 @@ import type { Session } from 'next-auth';
 import { useRouter, usePathname } from 'next/navigation';
 import { Spin, message } from 'antd';
 import { useLocale } from '@/context/locale';
+import { useTheme } from '@/context/theme';
 import { useTranslation } from '@/utils/i18n';
 import { saveAuthToken } from '@/utils/crossDomainAuth';
 import SigninClient from '@/app/(core)/auth/signin/SigninClient';
@@ -29,6 +30,7 @@ type ExtendedSession = Session & {
     username?: string;
     token?: string;
     locale?: string;
+    timezone?: string;
     name?: string | null;
     email?: string | null;
     image?: string | null;
@@ -58,6 +60,7 @@ export const useAuth = () => {
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const { data: session, status } = useSession();
   const extendedSession = session as unknown as ExtendedSession | null;
+  const { themeName } = useTheme();
   const [token, setToken] = useState<string | null>(null);
   const [isAuthenticated, setIsAuthenticated] = useState<boolean>(false);
   const [isCheckingAuth, setIsCheckingAuth] = useState<boolean>(true);
@@ -169,6 +172,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             username: userData.username,
             token: userData.token,
             locale: userData.locale || 'en',
+            timezone: userData.timezone || 'Asia/Shanghai',
             temporary_pwd: userData.temporary_pwd || false,
             enable_otp: userData.enable_otp || false,
             qrcode: userData.qrcode || false,
@@ -181,6 +185,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
               username: userDataForAuth.username || '',
               token: userData.token,
               locale: userDataForAuth.locale,
+              timezone: userDataForAuth.timezone,
               temporary_pwd: userDataForAuth.temporary_pwd,
               enable_otp: userDataForAuth.enable_otp,
               qrcode: userDataForAuth.qrcode,
@@ -334,11 +339,13 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       setIsAuthenticated(true);
       setIsCheckingAuth(false);
       const userLocale = extendedSession.user?.locale || 'en';
+      const userTimezone = extendedSession.user?.timezone || 'Asia/Shanghai';
       const savedLocale = localStorage.getItem('locale') || 'en';
       if (userLocale !== savedLocale) {
         setLocale(userLocale);
       }
       localStorage.setItem('locale', userLocale);
+      localStorage.setItem('timezone', userTimezone);
     }
   }, [status, session, pathname, setLocale, router, isAutoSigningIn, hasCheckedExistingAuth, isCheckingExistingAuth, isCurrentAuthPath, sessionExpiredOpen]);
 
@@ -374,13 +381,20 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           style={{ backdropFilter: 'blur(4px)' }}
         >
           <div
-            className="relative w-full overflow-hidden rounded-[28px] border border-white/60 bg-[rgba(255,255,255,0.96)] shadow-[0_30px_90px_rgba(15,23,42,0.28)] backdrop-blur-xl"
-            style={{ maxWidth: 460 }}
+            className="relative w-full overflow-hidden rounded-[28px] border backdrop-blur-xl"
+            style={{
+              maxWidth: 460,
+              borderColor: themeName === 'dark' ? 'var(--color-border-1)' : 'rgba(255,255,255,0.6)',
+              background: themeName === 'dark' ? 'rgba(12,37,54,0.94)' : 'rgba(255,255,255,0.96)',
+              boxShadow: themeName === 'dark' ? '0 30px 90px rgba(0,0,0,0.42)' : '0 30px 90px rgba(15,23,42,0.28)',
+            }}
           >
             <div
               className="pointer-events-none absolute inset-x-0 top-0 h-24"
               style={{
-                background: 'linear-gradient(180deg, rgba(236, 244, 255, 0.9) 0%, rgba(255, 255, 255, 0) 100%)',
+                background: themeName === 'dark'
+                  ? 'linear-gradient(180deg, rgba(21,90,239,0.18) 0%, rgba(12,37,54,0) 100%)'
+                  : 'linear-gradient(180deg, rgba(236, 244, 255, 0.9) 0%, rgba(255, 255, 255, 0) 100%)',
               }}
             />
             <div className="relative px-7 pb-7 pt-6">
@@ -390,11 +404,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
                     {t('common.sessionExpiredTitle')}
                   </div>
 
-                  <div className="mx-auto mt-2 max-w-sm text-[12px] leading-5 text-[#7A879A]">
+                  <div className="mx-auto mt-2 max-w-sm text-[12px] leading-5 text-(--color-text-2)">
                     {t('common.sessionExpiredDescription')}
                   </div>
 
-                  <div className="mx-auto mt-4 h-px w-14 bg-linear-to-r from-transparent via-[#D5DEEA] to-transparent" />
+                  <div className="mx-auto mt-4 h-px w-14 bg-[linear-gradient(90deg,transparent_0%,var(--color-border-2)_50%,transparent_100%)]" />
                 </div>
               </div>
               <SigninClient

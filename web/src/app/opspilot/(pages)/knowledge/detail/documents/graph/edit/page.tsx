@@ -9,6 +9,7 @@ import CustomTable from '@/components/custom-table';
 import { useKnowledgeApi } from '@/app/opspilot/api/knowledge';
 import { useSkillApi } from '@/app/opspilot/api/skill';
 import { getDocumentTypeLabel } from '@/app/opspilot/utils/knowledgeBaseUtils';
+import { filterModelOption, getModelOptionText, renderModelOptionLabel } from '@/app/opspilot/utils/modelOption';
 
 const { TabPane } = Tabs;
 
@@ -32,20 +33,20 @@ const KnowledgeGraphEditPage: React.FC = () => {
   const router = useRouter();
   const searchParams = useSearchParams();
   const [form] = Form.useForm();
-  
+
   const id = searchParams?.get('id');
   const desc = searchParams?.get('desc');
   const name = searchParams?.get('name');
-  
+
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [isEditMode, setIsEditMode] = useState(false);
   const [graphId, setGraphId] = useState<number | null>(null);
-  
+
   const [llmModels, setLlmModels] = useState<any[]>([]);
   const [rerankModels, setRerankModels] = useState<any[]>([]);
   const [embedModels, setEmbedModels] = useState<any[]>([]);
-  
+
   const [documentData, setDocumentData] = useState<{[key: string]: DocumentItem[]}>({
     file: [],
     web_page: [],
@@ -62,7 +63,7 @@ const KnowledgeGraphEditPage: React.FC = () => {
   const [currentPage, setCurrentPage] = useState<number>(1);
   const [pageSize, setPageSize] = useState<number>(10);
   const [activeDocumentTab, setActiveDocumentTab] = useState<string>('file');
-  
+
   const [config, setConfig] = useState<GraphConfig>({
     selectedDocuments: [],
     llmModel: 0,
@@ -70,10 +71,10 @@ const KnowledgeGraphEditPage: React.FC = () => {
     embedModel: 0,
   });
 
-  const { 
-    fetchDocuments, 
-    fetchSemanticModels, 
-    fetchEmbeddingModels, 
+  const {
+    fetchDocuments,
+    fetchSemanticModels,
+    fetchEmbeddingModels,
     saveKnowledgeGraph,
     updateKnowledgeGraph,
     fetchKnowledgeGraphDetails,
@@ -83,7 +84,7 @@ const KnowledgeGraphEditPage: React.FC = () => {
 
   const fetchDocumentsByType = useCallback(async (type: string, page: number, pageSize: number) => {
     if (!id) return;
-    
+
     setLoading(true);
     try {
       const result = await fetchDocuments({
@@ -92,24 +93,24 @@ const KnowledgeGraphEditPage: React.FC = () => {
         page,
         page_size: pageSize
       });
-      
+
       const processedItems = result.items.map((item: any) => ({
         key: item.id.toString(),
         title: item.name,
         status: item.train_status_display,
         type: type
       }));
-      
+
       setDocumentData(prev => ({
         ...prev,
         [type]: processedItems
       }));
-      
+
       setDocumentTotalCounts(prev => ({
         ...prev,
         [type]: result.count || result.items.length
       }));
-      
+
     } catch {
       message.error(t('common.fetchFailed'));
     } finally {
@@ -126,33 +127,33 @@ const KnowledgeGraphEditPage: React.FC = () => {
           fetchSemanticModels(),
           fetchEmbeddingModels()
         ]);
-        
+
         setLlmModels(llmData);
         setRerankModels(rerankData);
         setEmbedModels(embedData);
-        
+
         let existingConfig = null;
         let currentGraphId = null;
         let selectedDocIds: string[] = [];
-        
+
         if (id) {
           try {
             const graphDetails = await fetchKnowledgeGraphDetails(Number(id));
-            
+
             if (graphDetails.is_exists && graphDetails.graph_id) {
               setIsEditMode(true);
               currentGraphId = graphDetails.graph_id;
               setGraphId(currentGraphId);
-              
+
               try {
                 existingConfig = await fetchKnowledgeGraphById(currentGraphId);
-                
+
                 selectedDocIds = existingConfig.doc_list.map((doc: any) => doc.id.toString());
-                
+
                 await preloadDocumentData(existingConfig.doc_list);
-                
+
                 setSelectedDocuments(selectedDocIds);
-                
+
               } catch (error) {
                 console.warn('获取知识图谱配置失败，将使用新建模式:', error);
                 setIsEditMode(false);
@@ -168,17 +169,17 @@ const KnowledgeGraphEditPage: React.FC = () => {
             setGraphId(null);
           }
         }
-        
+
         const defaultConfig = {
           selectedDocuments: selectedDocIds,
           llmModel: existingConfig?.llm_model || (llmData.length > 0 ? llmData[0].id : 0),
           rerankModel: existingConfig?.rerank_model || (rerankData.length > 0 ? rerankData[0].id : 0),
           embedModel: existingConfig?.embed_model || (embedData.length > 0 ? embedData[0].id : 0),
         };
-        
+
         setConfig(defaultConfig);
         form.setFieldsValue(defaultConfig);
-        
+
       } catch (error) {
         console.error('Failed to initialize data:', error);
         message.error(t('common.initializeFailed'));
@@ -205,8 +206,8 @@ const KnowledgeGraphEditPage: React.FC = () => {
               page: 1,
               page_size: 1000
             });
-            
-            const matchedItems = result.items.filter((item: any) => 
+
+            const matchedItems = result.items.filter((item: any) =>
               ids.includes(item.id)
             ).map((item: any) => ({
               key: item.id.toString(),
@@ -214,7 +215,7 @@ const KnowledgeGraphEditPage: React.FC = () => {
               status: item.train_status_display,
               type: type
             }));
-            
+
             return { type, items: matchedItems };
           } catch (error) {
             console.warn(`Failed to fetch documents for type ${type}:`, error);
@@ -223,7 +224,7 @@ const KnowledgeGraphEditPage: React.FC = () => {
         });
 
         const results = await Promise.all(promises);
-        
+
         const newDocumentData = { ...documentData };
         results.forEach(({ type, items }: { type: string; items: any[] }) => {
           if (!newDocumentData[type]) {
@@ -236,9 +237,9 @@ const KnowledgeGraphEditPage: React.FC = () => {
             }
           });
         });
-        
+
         setDocumentData(newDocumentData);
-        
+
       } catch (error) {
         console.error('Failed to preload document data:', error);
       }
@@ -292,12 +293,12 @@ const KnowledgeGraphEditPage: React.FC = () => {
   const tempSelectedDocumentsList = useMemo(() => {
     return tempSelectedDocuments.map(key => {
       const docInfo = getSelectedDocumentInfo(key);
-      return docInfo ? { ...docInfo } : { 
-        key, 
-        title: `文档 ${key}`, 
-        type: 'unknown', 
-        description: '', 
-        status: '未知' 
+      return docInfo ? { ...docInfo } : {
+        key,
+        title: `文档 ${key}`,
+        type: 'unknown',
+        description: '',
+        status: '未知'
       };
     }).filter(Boolean);
   }, [tempSelectedDocuments]);
@@ -310,7 +311,7 @@ const KnowledgeGraphEditPage: React.FC = () => {
     try {
       const values = await form.validateFields();
       setSaving(true);
-      
+
       const saveParams = {
         knowledge_base: Number(id),
         llm_model: values.llmModel,
@@ -324,7 +325,7 @@ const KnowledgeGraphEditPage: React.FC = () => {
           };
         })
       };
-      
+
       if (isEditMode && graphId) {
         await updateKnowledgeGraph(graphId, saveParams);
         message.success(t('common.updateSuccess'));
@@ -332,9 +333,9 @@ const KnowledgeGraphEditPage: React.FC = () => {
         await saveKnowledgeGraph(saveParams);
         message.success(t('knowledge.knowledgeGraph.rebuildSuccess'));
       }
-      
+
       router.push(`/opspilot/knowledge/detail/documents?type=knowledge_graph&id=${id}&name=${name}&desc=${desc}`);
-      
+
     } catch (error) {
       console.error('Failed to save config:', error);
       message.error(isEditMode ? t('common.updateFailed') : t('common.saveFailed'));
@@ -380,17 +381,15 @@ const KnowledgeGraphEditPage: React.FC = () => {
           label={t('knowledge.knowledgeGraph.llmModel')}
           rules={[{ required: true, message: t('common.pleaseSelect') + t('knowledge.knowledgeGraph.llmModel') }]}
         >
-          <Select 
-            placeholder={t('common.pleaseSelect') + t('knowledge.knowledgeGraph.llmModel')} 
+          <Select
+            placeholder={t('common.pleaseSelect') + t('knowledge.knowledgeGraph.llmModel')}
             loading={llmModels.length === 0}
             showSearch
-            filterOption={(input, option) =>
-              typeof option?.children === 'string' && (option.children as string).toLowerCase().includes(input.toLowerCase())
-            }
+            filterOption={filterModelOption}
           >
             {llmModels.map(model => (
-              <Select.Option key={model.id} value={model.id}>
-                {model.name}
+              <Select.Option key={model.id} value={model.id} title={getModelOptionText(model)}>
+                {renderModelOptionLabel(model)}
               </Select.Option>
             ))}
           </Select>
@@ -401,17 +400,15 @@ const KnowledgeGraphEditPage: React.FC = () => {
           label={t('knowledge.knowledgeGraph.rerankModel')}
           rules={[{ required: true, message: t('common.pleaseSelect') + t('knowledge.knowledgeGraph.rerankModel') }]}
         >
-          <Select 
-            placeholder={t('common.pleaseSelect') + t('knowledge.knowledgeGraph.rerankModel')} 
+          <Select
+            placeholder={t('common.pleaseSelect') + t('knowledge.knowledgeGraph.rerankModel')}
             loading={rerankModels.length === 0}
             showSearch
-            filterOption={(input, option) =>
-              typeof option?.children === 'string' && (option.children as string).toLowerCase().includes(input.toLowerCase())
-            }
+            filterOption={filterModelOption}
           >
             {rerankModels.map(model => (
-              <Select.Option key={model.id} value={model.id}>
-                {model.name}
+              <Select.Option key={model.id} value={model.id} title={getModelOptionText(model)}>
+                {renderModelOptionLabel(model)}
               </Select.Option>
             ))}
           </Select>
@@ -422,17 +419,15 @@ const KnowledgeGraphEditPage: React.FC = () => {
           label={t('knowledge.form.embedModel')}
           rules={[{ required: true, message: t('common.pleaseSelect') + t('knowledge.form.embedModel') }]}
         >
-          <Select 
-            placeholder={t('common.pleaseSelect') + t('knowledge.form.embedModel')} 
+          <Select
+            placeholder={t('common.pleaseSelect') + t('knowledge.form.embedModel')}
             loading={embedModels.length === 0}
             showSearch
-            filterOption={(input, option) =>
-              typeof option?.children === 'string' && (option.children as string).toLowerCase().includes(input.toLowerCase())
-            }
+            filterOption={filterModelOption}
           >
             {embedModels.map(model => (
-              <Select.Option key={model.id} value={model.id}>
-                {model.name}
+              <Select.Option key={model.id} value={model.id} title={getModelOptionText(model)}>
+                {renderModelOptionLabel(model)}
               </Select.Option>
             ))}
           </Select>
@@ -469,8 +464,8 @@ const KnowledgeGraphEditPage: React.FC = () => {
 
       <div className="fixed bottom-6 right-6 z-50">
         <div className="flex gap-3 pb-4">
-          <Button 
-            disabled={saving} 
+          <Button
+            disabled={saving}
             onClick={handleBack}>
             {t('common.cancel')}
           </Button>
@@ -498,8 +493,8 @@ const KnowledgeGraphEditPage: React.FC = () => {
             <Button onClick={() => setDrawerVisible(false)}>
               {t('common.cancel')}
             </Button>
-            <Button 
-              type="primary" 
+            <Button
+              type="primary"
               onClick={() => {
                 setSelectedDocuments(tempSelectedDocuments);
                 setDrawerVisible(false);
@@ -522,7 +517,7 @@ const KnowledgeGraphEditPage: React.FC = () => {
               <TabPane tab={t('knowledge.webLink')} key="web_page" />
               <TabPane tab={t('knowledge.cusText')} key="manual" />
             </Tabs>
-            
+
             <div className="flex-1 mt-4">
               <CustomTable
                 size="small"
@@ -553,7 +548,7 @@ const KnowledgeGraphEditPage: React.FC = () => {
                   onChange: handlePaginationChange,
                 }}
                 loading={loading}
-                scroll={{ 
+                scroll={{
                   y: 'calc(100vh - 370px)',
                 }}
               />
@@ -579,12 +574,12 @@ const KnowledgeGraphEditPage: React.FC = () => {
                   </Button>
                 )}
               </div>
-              
+
               <Divider className="my-2" />
-              
+
               <div className="flex-1 overflow-auto">
                 {tempSelectedDocumentsList.length === 0 ? (
-                  <Empty 
+                  <Empty
                     description={t('knowledge.qaPairs.noDocumentsSelected')}
                     image={Empty.PRESENTED_IMAGE_SIMPLE}
                     className="mt-8"
@@ -605,7 +600,7 @@ const KnowledgeGraphEditPage: React.FC = () => {
                               {doc.status}
                             </Tag>
                           </div>
-                          <div 
+                          <div
                             className="text-sm font-medium text-gray-900 truncate"
                             title={doc.title}
                           >
@@ -625,7 +620,7 @@ const KnowledgeGraphEditPage: React.FC = () => {
                   </div>
                 )}
               </div>
-              
+
               {tempSelectedDocuments.length > 0 && (
                 <div className="mt-4 pt-3 border-t border-[var(--color-border-3)] flex-shrink-0">
                   <div className="text-xs text-blue-600 text-center">

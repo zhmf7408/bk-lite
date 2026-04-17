@@ -22,8 +22,8 @@ ADD . .
 RUN chmod +x ./support-files/release/startup.sh && \
     chmod +x ./support-files/scripts/train-model.sh
 
-# 使用 pip 安装项目依赖
-RUN pip3 install -e ".[dev]"
+# 使用 pip 安装发布依赖
+RUN pip3 install .
 
 # 清理 matplotlib 字体缓存，让其重新扫描字体
 RUN rm -rf /root/.cache/matplotlib /root/.cache/fontconfig

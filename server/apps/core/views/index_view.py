@@ -295,6 +295,7 @@ def login_info(request):
                 "is_first_login": is_first_login,
                 "group_tree": getattr(request.user, "group_tree", []),
                 "locale": getattr(request.user, "locale", "zh-CN"),
+                "timezone": getattr(request.user, "timezone", "Asia/Shanghai"),
             },
         }
 

@@ -1,7 +1,9 @@
 from rest_framework import serializers
+from django.db import transaction
 
 from apps.monitor.models import MonitorPlugin
 from apps.monitor.services.custom_pull_plugin import CustomPullPluginService
+from apps.monitor.services.custom_snmp_plugin import CustomSnmpPluginService
 
 
 class MonitorPluginSerializer(serializers.ModelSerializer):
@@ -23,7 +25,7 @@ class MonitorPluginSerializer(serializers.ModelSerializer):
         display_name = attrs.get("display_name", getattr(instance, "display_name", ""))
         monitor_objects = attrs.get("monitor_object")
 
-        if template_type in {"api", "pull"}:
+        if template_type in {"api", "pull", "snmp"}:
             if not template_id:
                 raise serializers.ValidationError({"template_id": "模板ID不能为空"})
             if not display_name:
@@ -63,6 +65,15 @@ class MonitorPluginSerializer(serializers.ModelSerializer):
         # 如果没有父对象，返回 None
         return None
 
+    @staticmethod
+    def build_default_status_query(plugin):
+        monitor_object = plugin.monitor_object.order_by("id").first()
+        instance_id_keys = []
+        if monitor_object and isinstance(monitor_object.instance_id_keys, list):
+            instance_id_keys = [str(key) for key in monitor_object.instance_id_keys if key not in (None, "")]
+        group_by = ", ".join(instance_id_keys or ["instance_id"])
+        return f"any({{plugin_id='{plugin.id}'}}) by ({group_by})"
+
     def create(self, validated_data):
         """
         在创建时，手动设置 is_pre 为 False
@@ -76,8 +87,17 @@ class MonitorPluginSerializer(serializers.ModelSerializer):
         elif template_type == "pull":
             validated_data["collect_type"] = "bkpull"
             validated_data["collector"] = "Telegraf"
+        elif template_type == "snmp":
+            validated_data["collect_type"] = "snmp"
+            validated_data["collector"] = "Telegraf"
 
-        plugin = super().create(validated_data)
-        if template_type == "pull":
-            CustomPullPluginService.initialize_templates(plugin)
+        with transaction.atomic():
+            plugin = super().create(validated_data)
+            if template_type in {"api", "pull"} and not (plugin.status_query or "").strip():
+                plugin.status_query = self.build_default_status_query(plugin)
+                plugin.save(update_fields=["status_query", "updated_at"])
+            if template_type == "pull":
+                CustomPullPluginService.initialize_templates(plugin)
+            elif template_type == "snmp":
+                CustomSnmpPluginService.initialize_templates(plugin)
         return plugin

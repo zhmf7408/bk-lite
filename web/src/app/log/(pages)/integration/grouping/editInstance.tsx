@@ -6,7 +6,7 @@ import React, {
   forwardRef,
   useImperativeHandle,
   useEffect,
-  useMemo,
+  useMemo
 } from 'react';
 import { Button, Form, message, Input, Select } from 'antd';
 import { PlusOutlined, CloseOutlined } from '@ant-design/icons';
@@ -22,7 +22,7 @@ const { Option } = Select;
 import groupingStyle from './index.module.scss';
 import {
   useConditionList,
-  useTermList,
+  useTermList
 } from '@/app/log/hooks/integration/common/other';
 import { v4 as uuidv4 } from 'uuid';
 
@@ -44,8 +44,8 @@ const EditInstance = forwardRef<ModalRef, ModalProps>(
       {
         field: null,
         op: null,
-        value: '',
-      },
+        value: ''
+      }
     ]);
 
     const isAdd = useMemo(() => {
@@ -67,7 +67,7 @@ const EditInstance = forwardRef<ModalRef, ModalProps>(
           setTerm(form.rule?.mode || null);
           setConditions(form.rule?.conditions || []);
         }
-      },
+      }
     }));
 
     useEffect(() => {
@@ -76,7 +76,7 @@ const EditInstance = forwardRef<ModalRef, ModalProps>(
         formRef.current?.setFieldsValue({
           name: configForm.name,
           organizations: configForm.organizations || [],
-          collect_type_id: configForm.collect_type,
+          collect_type_id: configForm.collect_type
         });
       }
     }, [visible, configForm]);
@@ -109,9 +109,9 @@ const EditInstance = forwardRef<ModalRef, ModalProps>(
           ...values,
           rule: {
             mode: term,
-            conditions,
+            conditions
           },
-          id: isAdd ? uuidv4() : configForm.id,
+          id: isAdd ? uuidv4() : configForm.id
         };
         handleOperate(params);
       });
@@ -123,8 +123,8 @@ const EditInstance = forwardRef<ModalRef, ModalProps>(
         {
           field: null,
           op: null,
-          value: '',
-        },
+          value: ''
+        }
       ]);
       setTerm(null);
     };
@@ -155,7 +155,7 @@ const EditInstance = forwardRef<ModalRef, ModalProps>(
       _conditions.push({
         field: null,
         op: null,
-        value: '',
+        value: ''
       });
       setConditions(_conditions);
     };
@@ -226,11 +226,12 @@ const EditInstance = forwardRef<ModalRef, ModalProps>(
                       className="ml-[8px] flex-1"
                       placeholder={t('log.integration.rule')}
                       showSearch
+                      optionFilterProp="label"
                       value={term}
                       onChange={(val) => setTerm(val)}
                     >
                       {TERM_LIST.map((item: ListItem) => (
-                        <Option value={item.id} key={item.id}>
+                        <Option value={item.id} key={item.id} label={item.name}>
                           {item.name}
                         </Option>
                       ))}
@@ -246,7 +247,7 @@ const EditInstance = forwardRef<ModalRef, ModalProps>(
                           >
                             <Select
                               style={{
-                                width: '180px',
+                                width: '180px'
                               }}
                               placeholder={t('log.label')}
                               showSearch
@@ -261,7 +262,7 @@ const EditInstance = forwardRef<ModalRef, ModalProps>(
                             </Select>
                             <Select
                               style={{
-                                width: '118px',
+                                width: '118px'
                               }}
                               placeholder={t('log.term')}
                               value={conditionItem.op}
@@ -277,7 +278,7 @@ const EditInstance = forwardRef<ModalRef, ModalProps>(
                             </Select>
                             <Input
                               style={{
-                                width: '180px',
+                                width: '180px'
                               }}
                               placeholder={t('log.value')}
                               value={conditionItem.value}

@@ -4,6 +4,7 @@ import { ModelOption, ConfigDataProps, ConfigProps } from '@/app/opspilot/types/
 import { QuestionCircleOutlined } from '@ant-design/icons';
 import { useTranslation } from '@/utils/i18n';
 import { useKnowledgeApi } from '@/app/opspilot/api/knowledge';
+import { filterModelOption, getModelOptionText, renderModelOptionLabel } from '@/app/opspilot/utils/modelOption';
 
 const { Option } = Select;
 
@@ -65,14 +66,12 @@ const ConfigComponent: React.FC<ConfigProps> = ({ configData, setConfigData }) =
           loading={loadingModels}
           value={configData.selectedEmbedModel}
           showSearch
-          filterOption={(input, option) =>
-            typeof option?.children === 'string' && (option.children as string).toLowerCase().includes(input.toLowerCase())
-          }
+          filterOption={filterModelOption}
           onChange={(value) => setConfigData(prevData => ({ ...prevData, selectedEmbedModel: value }))}
         >
           {modelOptions.map((model) => (
-            <Option key={model.id} value={model.id} disabled={!model.enabled}>
-              {model.name}
+            <Option key={model.id} value={model.id} disabled={!model.enabled} title={getModelOptionText(model)}>
+              {renderModelOptionLabel(model)}
             </Option>
           ))}
         </Select>
@@ -86,15 +85,15 @@ const ConfigComponent: React.FC<ConfigProps> = ({ configData, setConfigData }) =
               <div
                 key={config.key}
                 className={`relative flex-1 px-4 py-2 pb-0 border rounded-md cursor-pointer transition-all duration-200 overflow-hidden ${
-                  configData[config.key] 
-                    ? 'shadow-sm' 
+                  configData[config.key]
+                    ? 'shadow-sm'
                     : 'hover:shadow-sm'
                 }`}
                 onClick={() => setConfigData(prevData => ({ ...prevData, [config.key]: !prevData[config.key] }))}
               >
                 {configData[config.key] && (
                   <div className="absolute top-0 right-0 w-6 h-6">
-                    <div 
+                    <div
                       className="absolute top-0 right-0"
                       style={{
                         width: '0',
@@ -104,7 +103,7 @@ const ConfigComponent: React.FC<ConfigProps> = ({ configData, setConfigData }) =
                       }}
                     />
                     <div className="absolute top-0 right-1">
-                      <svg 
+                      <svg
                         className="w-3 h-3 text-white"
                         fill="currentColor"
                         viewBox="0 0 16 16"
@@ -114,7 +113,7 @@ const ConfigComponent: React.FC<ConfigProps> = ({ configData, setConfigData }) =
                     </div>
                   </div>
                 )}
-                
+
                 <div className="mb-3">
                   <h3 className={`font-medium text-sm transition-colors duration-200 ${
                     configData[config.key] ? 'text-gray-700' : 'text-gray-700'
@@ -141,7 +140,7 @@ const ConfigComponent: React.FC<ConfigProps> = ({ configData, setConfigData }) =
               </div>
             ))}
           </div>
-          
+
           {/* Conditional Retrieval Strategy Section */}
           {shouldShowRetrievalStrategy && (
             <div className="p-4 pb-0 border rounded-md mb-4">
@@ -150,8 +149,8 @@ const ConfigComponent: React.FC<ConfigProps> = ({ configData, setConfigData }) =
                 <Card
                   size="small"
                   className={`flex-1 cursor-pointer transition-all duration-200 ${
-                    configData.searchType === 'mmr' 
-                      ? 'border-blue-500 shadow-sm' 
+                    configData.searchType === 'mmr'
+                      ? 'border-blue-500 shadow-sm'
                       : 'hover:shadow-sm'
                   }`}
                   onClick={() => setConfigData(prevData => ({ ...prevData, searchType: 'mmr' }))}
@@ -164,8 +163,8 @@ const ConfigComponent: React.FC<ConfigProps> = ({ configData, setConfigData }) =
                 <Card
                   size="small"
                   className={`flex-1 cursor-pointer transition-all duration-200 ${
-                    configData.searchType === 'similarity_score_threshold' 
-                      ? 'border-blue-500 shadow-sm' 
+                    configData.searchType === 'similarity_score_threshold'
+                      ? 'border-blue-500 shadow-sm'
                       : 'hover:shadow-sm'
                   }`}
                   onClick={() => setConfigData(prevData => ({ ...prevData, searchType: 'similarity_score_threshold' }))}
@@ -176,7 +175,7 @@ const ConfigComponent: React.FC<ConfigProps> = ({ configData, setConfigData }) =
                   </div>
                 </Card>
               </div>
-              
+
               {configData.searchType === 'similarity_score_threshold' && (
                 <div className="flex items-center justify-between mb-4">
                   <label className="text-sm w-[80px]">{t('knowledge.threshold')}</label>
@@ -233,14 +232,12 @@ const ConfigComponent: React.FC<ConfigProps> = ({ configData, setConfigData }) =
                     loading={loadingModels}
                     value={configData.selectedRerankModel}
                     showSearch
-                    filterOption={(input, option) =>
-                      typeof option?.children === 'string' && (option.children as string).toLowerCase().includes(input.toLowerCase())
-                    }
+                    filterOption={filterModelOption}
                     onChange={(value) => setConfigData(prevData => ({ ...prevData, selectedRerankModel: value }))}
                   >
                     {rerankModelOptions.map((model) => (
-                      <Option key={model.id} value={model.id} disabled={!model.enabled}>
-                        {model.name}
+                      <Option key={model.id} value={model.id} disabled={!model.enabled} title={getModelOptionText(model)}>
+                        {renderModelOptionLabel(model)}
                       </Option>
                     ))}
                   </Select>

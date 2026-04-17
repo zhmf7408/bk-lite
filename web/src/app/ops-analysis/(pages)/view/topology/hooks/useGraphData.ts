@@ -141,7 +141,6 @@ export const useGraphData = (
     try {
       const chartData = await fetchWidgetData({
         config: valueConfig,
-        globalTimeRange: undefined,
         getSourceDataByApiId,
       });
 

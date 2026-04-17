@@ -1,8 +1,71 @@
 import CredentialsProvider from "next-auth/providers/credentials";
 import type { JWT } from "next-auth/jwt";
+import { normalizeLocale, normalizeTimezone } from "@/utils/userPreferences";
 
 type AuthOptions = any;
+type ExtendedJWT = JWT & { timezone?: string };
 import WeChatProvider from "../lib/wechatProvider";
+
+const buildAuthUser = (userData: any) => ({
+  id: userData.id || userData.username,
+  username: userData.username,
+  token: userData.token,
+  locale: normalizeLocale(userData.locale || 'en'),
+  timezone: normalizeTimezone(userData.timezone || 'Asia/Shanghai'),
+  temporary_pwd: userData.temporary_pwd || false,
+  enable_otp: userData.enable_otp || false,
+  qrcode: userData.qrcode || false,
+  provider: userData.provider,
+  wechatOpenId: userData.wechatOpenId,
+  wechatUnionId: userData.wechatUnionId,
+  wechatWorkId: userData.wechatWorkId,
+});
+
+const applyUserToToken = (token: ExtendedJWT, user: any, account?: any) => {
+  token.id = user.id;
+  token.username = user.username || user.name || '';
+  token.locale = normalizeLocale(user.locale || token.locale || 'en');
+  token.timezone = normalizeTimezone(user.timezone || token.timezone || 'Asia/Shanghai');
+  token.zoneinfo = token.timezone;
+  token.token = user.token;
+  token.temporary_pwd = user.temporary_pwd;
+  token.enable_otp = user.enable_otp;
+  token.qrcode = user.qrcode;
+  token.provider = account?.provider || user.provider;
+  token.wechatOpenId = user.wechatOpenId;
+  token.wechatUnionId = user.wechatUnionId;
+  token.wechatWorkId = user.wechatWorkId;
+  return token;
+};
+
+const applySessionUpdateToToken = (token: ExtendedJWT, session: any) => {
+  const sessionUser = session?.user || {};
+  token.locale = normalizeLocale(sessionUser.locale || session?.locale || token.locale || 'en');
+  token.timezone = normalizeTimezone(sessionUser.timezone || session?.timezone || token.timezone || 'Asia/Shanghai');
+  token.zoneinfo = token.timezone;
+  return token;
+};
+
+const buildSessionFromToken = (session: any, token: ExtendedJWT) => {
+  session.user = {
+    id: token.id || '',
+    username: token.username,
+    locale: token.locale,
+    timezone: token.timezone,
+    token: token.token,
+    temporary_pwd: token.temporary_pwd,
+    enable_otp: token.enable_otp,
+    qrcode: token.qrcode,
+    provider: token.provider,
+    wechatOpenId: token.wechatOpenId,
+    wechatUnionId: token.wechatUnionId,
+    wechatWorkId: token.wechatWorkId,
+  };
+  session.locale = token.locale;
+  session.timezone = token.timezone;
+  session.zoneinfo = token.timezone;
+  return session;
+};
 
 async function getWeChatConfig() {
   try {
@@ -61,20 +124,8 @@ export async function getAuthOptions(): Promise<AuthOptions> {
               console.error("Invalid userData: missing id and username");
               return null;
             }
-            
-            return {
-              id: userData.id || userData.username,
-              username: userData.username,
-              token: userData.token,
-              locale: userData.locale || 'en',
-              temporary_pwd: userData.temporary_pwd || false,
-              enable_otp: userData.enable_otp || false,
-              qrcode: userData.qrcode || false,
-              provider: userData.provider,
-              wechatOpenId: userData.wechatOpenId,
-              wechatUnionId: userData.wechatUnionId,
-              wechatWorkId: userData.wechatWorkId,
-            };
+
+            return buildAuthUser(userData);
           }
 
           // Otherwise, perform normal login validation (for direct NextAuth usage)
@@ -97,15 +148,7 @@ export async function getAuthOptions(): Promise<AuthOptions> {
           
           if (responseData.result) {
             const user = responseData.data;
-            return {
-              id: user.id || user.username,
-              username: user.username,
-              token: user.token,
-              locale: user.locale || 'en',
-              temporary_pwd: user.temporary_pwd || false,
-              enable_otp: user.enable_otp || false,
-              qrcode: user.qrcode || false,
-            };
+            return buildAuthUser(user);
           }
         } catch (error) {
           console.error("Error during authentication:", error);
@@ -142,37 +185,19 @@ export async function getAuthOptions(): Promise<AuthOptions> {
       maxAge: 60 * 60 * 24,
     },
     callbacks: {
-      async jwt({ token, user, account }: { token: JWT; user: any; account: any }) {
+      async jwt({ token, user, account, trigger, session }: { token: ExtendedJWT; user: any; account: any; trigger?: string; session?: any }) {
         if (user) {
-          token.id = user.id;
-          token.username = user.username || user.name || '';
-          token.locale = user.locale || 'en';
-          token.token = user.token;
-          token.temporary_pwd = user.temporary_pwd;
-          token.enable_otp = user.enable_otp;
-          token.qrcode = user.qrcode;
-          token.provider = account?.provider;
-          token.wechatOpenId = user.wechatOpenId;
-          token.wechatUnionId = user.wechatUnionId;
-          token.wechatWorkId = user.wechatWorkId;
+          return applyUserToToken(token, user, account);
         }
+
+        if (trigger === 'update' && session) {
+          return applySessionUpdateToToken(token, session);
+        }
+
         return token;
       },
-      async session({ session, token }: { session: any; token: JWT }) {
-        session.user = {
-          id: token.id || '',
-          username: token.username,
-          locale: token.locale,
-          token: token.token,
-          temporary_pwd: token.temporary_pwd,
-          enable_otp: token.enable_otp,
-          qrcode: token.qrcode,
-          provider: token.provider,
-          wechatOpenId: token.wechatOpenId,
-          wechatUnionId: token.wechatUnionId,
-          wechatWorkId: token.wechatWorkId,
-        };
-        return session;
+      async session({ session, token }: { session: any; token: ExtendedJWT }) {
+        return buildSessionFromToken(session, token);
       },
     },
   };
@@ -205,20 +230,8 @@ export const authOptions: AuthOptions = {
               console.error("Invalid userData: missing id and username");
               return null;
             }
-            
-            return {
-              id: userData.id || userData.username,
-              username: userData.username,
-              token: userData.token,
-              locale: userData.locale || 'en',
-              temporary_pwd: userData.temporary_pwd || false,
-              enable_otp: userData.enable_otp || false,
-              qrcode: userData.qrcode || false,
-              provider: userData.provider,
-              wechatOpenId: userData.wechatOpenId,
-              wechatUnionId: userData.wechatUnionId,
-              wechatWorkId: userData.wechatWorkId,
-            };
+
+            return buildAuthUser(userData);
           }
 
           // Otherwise, perform normal login validation
@@ -241,15 +254,7 @@ export const authOptions: AuthOptions = {
           
           if (responseData.result) {
             const user = responseData.data;
-            return {
-              id: user.id || user.username,
-              username: user.username,
-              token: user.token,
-              locale: user.locale || 'en',
-              temporary_pwd: user.temporary_pwd || false,
-              enable_otp: user.enable_otp || false,
-              qrcode: user.qrcode || false,
-            };
+            return buildAuthUser(user);
           }
         } catch (error) {
           console.error("Error during authentication:", error);
@@ -269,37 +274,19 @@ export const authOptions: AuthOptions = {
     maxAge: 60 * 60 * 24,
   },
   callbacks: {
-    async jwt({ token, user, account }: { token: JWT; user: any; account: any }) {
+    async jwt({ token, user, account, trigger, session }: { token: ExtendedJWT; user: any; account: any; trigger?: string; session?: any }) {
       if (user) {
-        token.id = user.id;
-        token.username = user.username || user.name || '';
-        token.locale = user.locale || 'en';
-        token.token = user.token;
-        token.temporary_pwd = user.temporary_pwd;
-        token.enable_otp = user.enable_otp;
-        token.qrcode = user.qrcode;
-        token.provider = account?.provider;
-        token.wechatOpenId = user.wechatOpenId;
-        token.wechatUnionId = user.wechatUnionId;
-        token.wechatWorkId = user.wechatWorkId;
+        return applyUserToToken(token, user, account);
       }
+
+      if (trigger === 'update' && session) {
+        return applySessionUpdateToToken(token, session);
+      }
+
       return token;
     },
-    async session({ session, token }: { session: any; token: JWT }) {
-      session.user = {
-        id: token.id || '',
-        username: token.username,
-        locale: token.locale,
-        token: token.token,
-        temporary_pwd: token.temporary_pwd,
-        enable_otp: token.enable_otp,
-        qrcode: token.qrcode,
-        provider: token.provider,
-        wechatOpenId: token.wechatOpenId,
-        wechatUnionId: token.wechatUnionId,
-        wechatWorkId: token.wechatWorkId,
-      };
-      return session;
+    async session({ session, token }: { session: any; token: ExtendedJWT }) {
+      return buildSessionFromToken(session, token);
     },
   },
 };

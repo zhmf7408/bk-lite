@@ -6,6 +6,7 @@ import { Select, Input } from "antd";
 import PasswordResetForm from "./PasswordResetForm";
 import OtpVerificationForm from "./OtpVerificationForm";
 import WechatQrLoginPanel from "./WechatQrLoginPanel";
+import { useTheme } from '@/context/theme';
 import { usePortalBranding } from "@/hooks/usePortalBranding";
 import { saveAuthToken } from "@/utils/crossDomainAuth";
 import { AUTH_POPUP_SUCCESS_MESSAGE, buildOauthCallbackBridgeUrl, buildPopupSigninUrl, buildThirdLoginCallbackUrl, buildWechatPopupUrl, resolveThirdLoginFlag } from "@/utils/authRedirect";
@@ -36,6 +37,7 @@ interface LoginResponse {
   username?: string;
   id?: string;
   locale?: string;
+  timezone?: string;
   redirect_url?: string;
 }
 
@@ -78,6 +80,7 @@ export default function SigninClient({
   const [loginData, setLoginData] = useState<LoginResponse>({});
   const [qrCodeUrl, setQrCodeUrl] = useState<string>("");
   const [wechatSettings, setWechatSettings] = useState<WeChatSettings | null>(null);
+  const { themeName } = useTheme();
   const { logoUrl } = usePortalBranding();
   const [loadingWechatSettings, setLoadingWechatSettings] = useState(true);
   const [bkSettings, setBkSettings] = useState<BkSettings | null>(null);
@@ -85,6 +88,7 @@ export default function SigninClient({
   const [hasTriggeredPopupProvider, setHasTriggeredPopupProvider] = useState(false);
   const [modalThirdPartyView, setModalThirdPartyView] = useState<ModalThirdPartyView>('login');
   const isModalMode = mode === 'modal';
+  const isDarkTheme = themeName === 'dark';
 
   useEffect(() => {
     const userAgent = navigator.userAgent.toLowerCase();
@@ -365,6 +369,7 @@ export default function SigninClient({
         username: userData.username,
         token: userData.token,
         locale: userData.locale || 'en',
+        timezone: userData.timezone || 'Asia/Shanghai',
         temporary_pwd: userData.temporary_pwd || false,
         enable_otp: userData.enable_otp || false,
         qrcode: userData.qrcode || false,
@@ -378,6 +383,7 @@ export default function SigninClient({
           username: userDataForAuth.username || '',
           token: userData.token,
           locale: userDataForAuth.locale,
+          timezone: userDataForAuth.timezone,
           temporary_pwd: userDataForAuth.temporary_pwd,
           enable_otp: userDataForAuth.enable_otp,
           qrcode: userDataForAuth.qrcode,
@@ -508,7 +514,7 @@ export default function SigninClient({
     <form onSubmit={handleLoginSubmit} className={`flex w-full flex-col ${isModalMode ? 'space-y-5' : 'space-y-6'}`}>
       <div className={isModalMode ? 'space-y-1.5' : 'space-y-2'}>
         <div className="flex justify-between items-center">
-          <label htmlFor="domain" className={`font-medium ${isModalMode ? 'text-[13px] text-[#4B5A6D]' : 'text-sm text-(--color-text-1)'}`}>Domain</label>
+          <label htmlFor="domain" className={`font-medium ${isModalMode ? 'text-[13px] text-(--color-text-1)' : 'text-sm text-(--color-text-1)'}`}>Domain</label>
           {loadingDomains && (
             <div className="w-4 h-4 border-2 border-gray-300 border-t-blue-600 rounded-full animate-spin"></div>
           )}
@@ -559,7 +565,7 @@ export default function SigninClient({
       </div>
 
       <div className={isModalMode ? 'space-y-1.5' : 'space-y-2'}>
-        <label htmlFor="username" className={`font-medium ${isModalMode ? 'text-[13px] text-[#4B5A6D]' : 'text-sm text-(--color-text-1)'}`}>Username</label>
+        <label htmlFor="username" className={`font-medium ${isModalMode ? 'text-[13px] text-(--color-text-1)' : 'text-sm text-(--color-text-1)'}`}>Username</label>
         <Input
           id="username"
           placeholder="Enter your username"
@@ -572,7 +578,7 @@ export default function SigninClient({
       </div>
 
       <div className={isModalMode ? 'space-y-1.5' : 'space-y-2'}>
-        <label htmlFor="password" className={`font-medium ${isModalMode ? 'text-[13px] text-[#4B5A6D]' : 'text-sm text-(--color-text-1)'}`}>Password</label>
+        <label htmlFor="password" className={`font-medium ${isModalMode ? 'text-[13px] text-(--color-text-1)' : 'text-sm text-(--color-text-1)'}`}>Password</label>
         <Input.Password
           id="password"
           placeholder="Enter your password"
@@ -635,14 +641,14 @@ export default function SigninClient({
               <div className="w-full border-t border-(--color-border-3)"></div>
             </div>
             <div className={`relative flex justify-center ${isModalMode ? 'text-[12px]' : 'text-sm'}`}>
-              <span className={`px-3 ${isModalMode ? 'bg-transparent text-[#94A3B8]' : 'bg-(--color-bg) text-(--color-text-1)'}`}>Or continue with</span>
+              <span className={`px-3 ${isModalMode ? 'bg-transparent text-(--color-text-3)' : 'bg-(--color-bg) text-(--color-text-1)'}`}>Or continue with</span>
             </div>
           </div>
 
           <div className={isModalMode ? 'mt-5 space-y-2.5' : 'mt-6 space-y-3'}>
-            <div className={`w-full animate-pulse bg-gray-200 ${isModalMode ? 'h-10 rounded-xl' : 'h-12 rounded-lg'}`}></div>
+            <div className={`w-full animate-pulse bg-(--color-fill-2) ${isModalMode ? 'h-10 rounded-xl' : 'h-12 rounded-lg'}`}></div>
             {loadingBkSettings && (
-              <div className={`w-full animate-pulse bg-gray-200 ${isModalMode ? 'h-10 rounded-xl' : 'h-12 rounded-lg'}`}></div>
+              <div className={`w-full animate-pulse bg-(--color-fill-2) ${isModalMode ? 'h-10 rounded-xl' : 'h-12 rounded-lg'}`}></div>
             )}
           </div>
         </div>
@@ -655,14 +661,20 @@ export default function SigninClient({
 
     return (
       <div className={isModalMode ? 'mt-5' : 'mt-6'}>
-        <div className="relative">
-          <div className="absolute inset-0 flex items-center">
-            <div className="w-full border-t border-(--color-border-3)"></div>
+        {isModalMode ? (
+          <div className="flex justify-center text-[12px] text-(--color-text-3)">
+            <span>Or continue with</span>
           </div>
-          <div className={`relative flex justify-center ${isModalMode ? 'text-[12px]' : 'text-sm'}`}>
-            <span className={`px-3 ${isModalMode ? 'bg-transparent text-[#94A3B8]' : 'bg-(--color-bg) text-(--color-text-1)'}`}>Or continue with</span>
+        ) : (
+          <div className="relative">
+            <div className="absolute inset-0 flex items-center">
+              <div className="w-full border-t border-(--color-border-3)"></div>
+            </div>
+            <div className="relative flex justify-center text-sm">
+              <span className="bg-(--color-bg) px-3 text-(--color-text-1)">Or continue with</span>
+            </div>
           </div>
-        </div>
+        )}
 
         <div className={isModalMode ? 'mt-5 space-y-2.5' : 'mt-6 space-y-3'}>
           {hasWechat && (
@@ -685,7 +697,7 @@ export default function SigninClient({
         </div>
 
         {isWechatBrowser && hasWechat && (
-          <div className="mt-4 text-center text-sm text-green-600">
+          <div className="mt-4 text-center text-sm text-[#10B14A]">
             You are using WeChat browser, for best experience use the WeChat login.
           </div>
         )}
@@ -714,13 +726,13 @@ export default function SigninClient({
       )}
 
       {error && (
-        <div className={`mb-6 rounded border text-red-700 ${isModalMode ? 'border-[#F5D4D4] bg-[#FFF7F7] px-3 py-2.5 text-[12px]' : 'border-l-4 border-red-500 bg-red-50 p-4'}`}>
+        <div className={`mb-6 rounded border text-red-700 ${isModalMode ? 'px-3 py-2.5 text-[12px]' : 'border-l-4 border-red-500 bg-red-50 p-4'}`} style={isModalMode ? { borderColor: isDarkTheme ? 'rgba(239, 68, 68, 0.35)' : '#F5D4D4', background: isDarkTheme ? 'rgba(127, 29, 29, 0.18)' : '#FFF7F7' } : undefined}>
           <p className="font-medium">{signinErrors[error.toLowerCase()] || signinErrors.default || error}</p>
         </div>
       )}
 
       {formError && (
-        <div className={`mb-6 rounded border text-red-700 ${isModalMode ? 'border-[#F5D4D4] bg-[#FFF7F7] px-3 py-2.5 text-[12px]' : 'border-l-4 border-red-500 bg-red-50 p-4'}`}>
+        <div className={`mb-6 rounded border text-red-700 ${isModalMode ? 'px-3 py-2.5 text-[12px]' : 'border-l-4 border-red-500 bg-red-50 p-4'}`} style={isModalMode ? { borderColor: isDarkTheme ? 'rgba(239, 68, 68, 0.35)' : '#F5D4D4', background: isDarkTheme ? 'rgba(127, 29, 29, 0.18)' : '#FFF7F7' } : undefined}>
           <p className="font-medium">{formError}</p>
         </div>
       )}
@@ -736,12 +748,16 @@ export default function SigninClient({
               <button
                 type="button"
                 onClick={() => setModalThirdPartyView('login')}
-                className="absolute left-0 top-1/2 inline-flex h-6 w-6 -translate-y-1/2 items-center justify-center rounded-md bg-[#EEF4FF] text-[10px] text-[#4B73B6] transition-colors hover:bg-[#E4EEFF] hover:text-[#2F5FAF]"
+                className="absolute left-0 top-1/2 inline-flex h-6 w-6 -translate-y-1/2 items-center justify-center rounded-md text-[10px] transition-colors"
+                style={{
+                  background: isDarkTheme ? 'var(--color-fill-2)' : '#EEF4FF',
+                  color: isDarkTheme ? 'var(--color-text-2)' : '#4B73B6',
+                }}
                 aria-label="返回"
               >
                 <ArrowLeftOutlined className="text-[9px]" />
               </button>
-              <div className="text-center text-[12px] font-normal tracking-normal text-[#8A98AA]">微信扫码登录</div>
+              <div className="text-center text-[12px] font-normal tracking-normal text-(--color-text-3)">微信扫码登录</div>
             </div>
           </div>
           <WechatQrLoginPanel

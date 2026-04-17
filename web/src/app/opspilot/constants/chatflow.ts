@@ -85,7 +85,9 @@ export const getDefaultConfig = (nodeType: string) => {
     case 'intent_classification':
       return {
         ...baseConfig,
-        agent: null,
+        llmModel: null,
+        llmModelName: '',
+        classificationRules: '',
         intents: [
           { name: '默认意图' }
         ]

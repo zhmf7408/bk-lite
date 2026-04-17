@@ -326,7 +326,7 @@ const OperateModal: React.FC<OperateModalProps> = ({
       prev.map((item) => {
         if (item.id !== id) return item;
         let newValue: any = '';
-        let newFilterType = item.filterType;
+        const newFilterType = item.filterType;
 
         if (val === 'boolean') {
           newValue = false;
@@ -338,10 +338,6 @@ const OperateModal: React.FC<OperateModalProps> = ({
           newValue = 10080;
         } else {
           newValue = '';
-        }
-
-        if (val !== 'timeRange' && newFilterType === 'filter') {
-          newFilterType = 'fixed';
         }
 
         return {
@@ -643,20 +639,10 @@ const OperateModal: React.FC<OperateModalProps> = ({
       key: 'filterType',
       width: 100,
       render: (_: any, record: ParamItem) => {
-        const getFilterTypeOptions = (paramType: string) => {
-          if (paramType === 'timeRange') {
-            return filterTypeOptions;
-          } else {
-            return filterTypeOptions.filter(
-              (option) => option.value === 'fixed' || option.value === 'params'
-            );
-          }
-        };
-
         return (
           <Select
             value={record.filterType || 'fixed'}
-            options={getFilterTypeOptions(record.type || 'string')}
+            options={filterTypeOptions}
             style={{ width: '100%' }}
             onChange={(val) => handleFilterTypeChange(val, record.id!)}
           />

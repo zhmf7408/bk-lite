@@ -173,6 +173,7 @@ export interface LlmModel {
   enabled: boolean;
   provider?: string;
   llm_model_type?: string;
+  vendor_name?: string;
 }
 
 export interface SkillDetailPayload {

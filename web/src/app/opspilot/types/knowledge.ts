@@ -38,6 +38,7 @@ export interface ModelOption {
   id: number;
   name: string;
   enabled: boolean;
+  vendor_name?: string;
 }
 
 export interface ConfigDataProps {
@@ -219,18 +220,21 @@ export interface EmbeddingModel {
   id: number;
   name: string;
   enabled: boolean;
+  vendor_name?: string;
 }
 
 export interface RerankModel {
   id: number;
   name: string;
   enabled: boolean;
+  vendor_name?: string;
 }
 
 export interface OcrModel {
   id: number;
   name: string;
   enabled?: boolean;
+  vendor_name?: string;
 }
 
 export interface KnowledgeBaseListParams {

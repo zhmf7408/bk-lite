@@ -4,6 +4,7 @@ import { createContext, useContext, useState, ReactNode, useEffect } from 'react
 import { IntlProvider } from 'react-intl';
 import { useTranslation } from '@/utils/i18n';
 import Spin from '@/components/spin';
+import { getStoredLocale, normalizeLocale, persistLocale } from '@/utils/userPreferences';
 
 const LocaleContext = createContext<{
   locale: string;
@@ -16,7 +17,7 @@ export const LocaleProvider = ({ children }: { children: ReactNode }) => {
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
-    const savedLocale = localStorage.getItem('locale') || 'en';
+    const savedLocale = getStoredLocale();
     setLocale(savedLocale);
     fetchLocaleMessages(savedLocale);
   }, []);
@@ -38,9 +39,10 @@ export const LocaleProvider = ({ children }: { children: ReactNode }) => {
   };
 
   const changeLocale = (newLocale: string) => {
-    setLocale(newLocale);
-    localStorage.setItem('locale', newLocale);
-    fetchLocaleMessages(newLocale);
+    const normalizedLocale = normalizeLocale(newLocale);
+    setLocale(normalizedLocale);
+    persistLocale(normalizedLocale);
+    fetchLocaleMessages(normalizedLocale);
   };
 
   return (

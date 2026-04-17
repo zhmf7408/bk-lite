@@ -146,13 +146,15 @@ const Asset = () => {
             </Button>
           </Permission>
           <Permission requiredPermissions={['Edit']}>
-            <Button
-              className="ml-[10px]"
-              type="link"
-              onClick={() => openConfigModal(record)}
-            >
-              {t('log.integration.updateConfigration')}
-            </Button>
+            {record.collect_type__name !== 'kubernetes' && (
+              <Button
+                className="ml-[10px]"
+                type="link"
+                onClick={() => openConfigModal(record)}
+              >
+                {t('log.integration.updateConfigration')}
+              </Button>
+            )}
           </Permission>
           <Button
             className="ml-[10px]"

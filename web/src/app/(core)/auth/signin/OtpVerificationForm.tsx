@@ -10,6 +10,7 @@ interface LoginResponse {
   username?: string;
   id?: string;
   locale?: string;
+  timezone?: string;
 }
 
 interface OtpVerificationFormProps {

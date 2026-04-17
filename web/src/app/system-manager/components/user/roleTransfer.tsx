@@ -36,6 +36,7 @@ interface TreeTransferProps {
   loading?: boolean;
   forceOrganizationRole?: boolean;
   organizationRoleIds?: React.Key[];
+  organizationRoleSourceMap?: Record<string, string>;
   enableSubGroupSelect?: boolean;
   inheritedRoleIds?: React.Key[];
   inheritedRoleSourceMap?: Record<string, string>;
@@ -55,6 +56,7 @@ const RoleTransfer: React.FC<TreeTransferProps> = ({
   loading = false,
   forceOrganizationRole = false,
   organizationRoleIds = [],
+  organizationRoleSourceMap = {},
   enableSubGroupSelect = false,
   inheritedRoleIds = [],
   inheritedRoleSourceMap = {},
@@ -204,6 +206,7 @@ const RoleTransfer: React.FC<TreeTransferProps> = ({
                   selectedKeys={selectedKeys}
                   personalRoleIds={personalRoleIds}
                   organizationRoleIds={organizationRoleIds}
+                  organizationRoleSourceMap={organizationRoleSourceMap}
                   inheritedRoleIds={inheritedRoleIds}
                   inheritedRoleSourceMap={inheritedRoleSourceMap}
                   rightSearchValue={rightSearchValue}

@@ -1,0 +1,31 @@
+{
+  "model": {
+    "type": "PELT",
+    "name": "anomaly_pelt_model"
+  },
+
+  "hyperparams": {
+    "use_feature_engineering": false,
+    "cost_model": "l2",
+    "event_window": 1,
+    "random_state": 42,
+    "max_evals": 20,
+    "metric": "changepoint_f1",
+    "search_space": {
+      "pen": [10, 20, 30],
+      "min_size": [3, 5, 10],
+      "jump": [1, 2, 5]
+    }
+  },
+
+  "preprocessing": {
+    "handle_missing": "interpolate",
+    "max_missing_ratio": 0.3,
+    "interpolation_limit": 5,
+    "label_column": "label"
+  },
+
+  "mlflow": {
+    "experiment_name": "anomaly_detection_pelt"
+  }
+}

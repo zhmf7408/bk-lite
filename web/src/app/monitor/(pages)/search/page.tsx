@@ -138,7 +138,8 @@ const SearchView: React.FC = () => {
     let finalQuery = _query.replace(/__\$labels__/g, query);
     if (group.aggregation && group.aggregation !== 'AVG') {
       const aggFunc = group.aggregation.toLowerCase();
-      finalQuery = `${aggFunc}(${finalQuery})`;
+      const byClause = querykeys.length ? ` by (${querykeys.join(',')})` : '';
+      finalQuery = `${aggFunc}(${finalQuery})${byClause}`;
     }
     params.query = finalQuery;
     return params;

@@ -4,6 +4,7 @@ import React from 'react';
 import { Tooltip } from 'antd';
 import WithSideMenuLayout from '@/components/sub-layout';
 import { useRouter, useSearchParams } from 'next/navigation';
+import type { MenuItem } from '@/types';
 
 const IntegrationDetailLayout = ({
   children
@@ -16,6 +17,7 @@ const IntegrationDetailLayout = ({
   const desc = searchParams.get('plugin_description');
   const objId = searchParams.get('id') || '';
   const icon = searchParams.get('icon');
+  const templateType = searchParams.get('template_type') || '';
 
   const handleBackButtonClick = () => {
     const params = new URLSearchParams({ objId });
@@ -45,12 +47,41 @@ const IntegrationDetailLayout = ({
     </div>
   );
 
+  const detailMenuItems: MenuItem[] = [
+    {
+      name: 'configure',
+      title: '配置',
+      url: '/monitor/integration/list/detail/configure',
+      icon: '',
+      operation: []
+    },
+    {
+      name: 'metric',
+      title: '指标',
+      url: '/monitor/integration/list/detail/metric',
+      icon: '',
+      operation: []
+    },
+    ...(templateType === 'snmp'
+      ? [
+          {
+            name: 'collect',
+            title: '采集',
+            url: '/monitor/integration/list/detail/collect',
+            icon: '',
+            operation: []
+          }
+        ]
+      : [])
+  ];
+
   return (
     <WithSideMenuLayout
       topSection={<TopSection />}
       showBackButton={true}
       onBackButtonClick={handleBackButtonClick}
       layoutType="sideMenu"
+      customMenuItems={detailMenuItems}
     >
       {children}
     </WithSideMenuLayout>

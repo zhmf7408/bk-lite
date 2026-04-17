@@ -187,7 +187,7 @@ data:
         source: |
           # 添加采集相关的元数据
           .collect_type = "kubernetes"
-          .instance_id = "lite"
+          .instance_id = "${CLUSTER_NAME}"
           .streams = ["default", "${CLUSTER_NAME}"]
           .node_name = get_env_var!("VECTOR_NODE_NAME")
           

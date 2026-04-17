@@ -324,6 +324,7 @@
         "chooseAsset": "选择资产",
         "everyMinute": "每",
         "executeOnce": "执行一次",
+        "database": "数据库",
         "port": "端口",
         "syncStatus": {
             "add": "新增",

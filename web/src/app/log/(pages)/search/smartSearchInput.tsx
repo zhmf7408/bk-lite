@@ -4,7 +4,7 @@ import React, {
   useCallback,
   useMemo,
   useEffect,
-  useRef,
+  useRef
 } from 'react';
 import { AutoComplete, Input } from 'antd';
 import { DefaultOptionType } from 'antd/es/select';
@@ -49,7 +49,7 @@ const SmartSearchInput: React.FC<SmartSearchInputProps> = React.memo(
     fields = [],
     getTimeRange,
     addonAfter,
-    disabled = false,
+    disabled = false
   }) => {
     const { t } = useTranslation();
     const [options, setOptions] = useState<DefaultOptionType[]>([]);
@@ -128,7 +128,7 @@ const SmartSearchInput: React.FC<SmartSearchInputProps> = React.memo(
           startPos: segmentStart,
           endPos: segmentEnd,
           currentSegment,
-          hasExistingValue: false,
+          hasExistingValue: false
         };
       }
 
@@ -147,7 +147,7 @@ const SmartSearchInput: React.FC<SmartSearchInputProps> = React.memo(
           startPos: segmentStart,
           endPos: segmentStart + colonIndex,
           currentSegment,
-          hasExistingValue: false,
+          hasExistingValue: false
         };
       }
 
@@ -166,7 +166,7 @@ const SmartSearchInput: React.FC<SmartSearchInputProps> = React.memo(
         startPos: segmentStart + colonIndex + 1,
         endPos: segmentEnd,
         currentSegment,
-        hasExistingValue,
+        hasExistingValue
       };
     });
 
@@ -187,7 +187,7 @@ const SmartSearchInput: React.FC<SmartSearchInputProps> = React.memo(
             filed: fieldName,
             start_time: times[0] ? new Date(times[0]).toISOString() : '',
             end_time: times[1] ? new Date(times[1]).toISOString() : '',
-            limit: 50,
+            limit: 50
           };
 
           const values = await getFieldValues(params);
@@ -217,7 +217,7 @@ const SmartSearchInput: React.FC<SmartSearchInputProps> = React.memo(
             filed: fieldName,
             start_time: times[0] ? new Date(times[0]).toISOString() : '',
             end_time: times[1] ? new Date(times[1]).toISOString() : '',
-            limit: 50,
+            limit: 50
           };
 
           const values = await getFieldValues(params);
@@ -263,8 +263,8 @@ const SmartSearchInput: React.FC<SmartSearchInputProps> = React.memo(
                 <span>{t('log.search.loadingEllipsis')}</span>
               </div>
             ),
-            disabled: true,
-          },
+            disabled: true
+          }
         ]);
 
         const values = await getFieldValuesFromAPI.current(fieldName);
@@ -345,8 +345,8 @@ const SmartSearchInput: React.FC<SmartSearchInputProps> = React.memo(
                   <span>{t('log.search.noMatchValues')}</span>
                 </div>
               ),
-              disabled: true,
-            },
+              disabled: true
+            }
           ]);
           setDropdownOpen(true);
           return;
@@ -356,12 +356,19 @@ const SmartSearchInput: React.FC<SmartSearchInputProps> = React.memo(
           return {
             value: item.value,
             label: (
-              <div className="flex items-center justify-between">
-                <span className="mr-[10px]">{item.value}</span>
-                <span className="text-gray-400 text-xs">{item.hits} hits</span>
+              <div className="flex items-center max-w-full gap-2">
+                <span
+                  className="min-w-0 flex-1 overflow-hidden text-ellipsis whitespace-nowrap"
+                  title={item.value}
+                >
+                  {item.value}
+                </span>
+                <span className="text-gray-400 text-xs shrink-0">
+                  {item.hits} hits
+                </span>
               </div>
             ),
-            type: 'value',
+            type: 'value'
           };
         });
 
@@ -392,10 +399,7 @@ const SmartSearchInput: React.FC<SmartSearchInputProps> = React.memo(
             return;
           }
 
-          if (
-            currentFieldValues.length > 0 &&
-            currentFieldName === fieldName
-          ) {
+          if (currentFieldValues.length > 0 && currentFieldName === fieldName) {
             generateValueOptions(currentFieldValues, prefix);
             return;
           }
@@ -418,8 +422,8 @@ const SmartSearchInput: React.FC<SmartSearchInputProps> = React.memo(
                   <span>{t('log.search.loadingEllipsis')}</span>
                 </div>
               ),
-              disabled: true,
-            },
+              disabled: true
+            }
           ]);
           setDropdownOpen(true);
           debouncedGetFieldValues.current(fieldName);
@@ -456,7 +460,7 @@ const SmartSearchInput: React.FC<SmartSearchInputProps> = React.memo(
                   </span>
                 </div>
               ),
-              type: 'field',
+              type: 'field'
             })
           );
 
@@ -472,7 +476,7 @@ const SmartSearchInput: React.FC<SmartSearchInputProps> = React.memo(
         currentFieldValues,
         currentFieldName,
         generateValueOptions,
-        requestedFields,
+        requestedFields
       ] // 添加 requestedFields 依赖
     );
 
@@ -568,8 +572,8 @@ const SmartSearchInput: React.FC<SmartSearchInputProps> = React.memo(
                         <span>{t('log.search.loadingEllipsis')}</span>
                       </div>
                     ),
-                    disabled: true,
-                  },
+                    disabled: true
+                  }
                 ]);
                 setDropdownOpen(true);
                 debouncedGetFieldValues.current(currentContext.fieldName);
@@ -599,7 +603,7 @@ const SmartSearchInput: React.FC<SmartSearchInputProps> = React.memo(
         currentFieldValues,
         currentFieldName,
         parseContext,
-        requestedFields,
+        requestedFields
       ]
     );
 
@@ -687,7 +691,9 @@ const SmartSearchInput: React.FC<SmartSearchInputProps> = React.memo(
     const handleKeyDown = useCallback(
       (e: React.KeyboardEvent<HTMLInputElement>) => {
         if (e.key === 'Enter') {
-          const hasSelectableOptions = options.some((option) => !option.disabled);
+          const hasSelectableOptions = options.some(
+            (option) => !option.disabled
+          );
 
           if (dropdownOpen && hasSelectableOptions) {
             return;
@@ -745,8 +751,7 @@ const SmartSearchInput: React.FC<SmartSearchInputProps> = React.memo(
         onDropdownVisibleChange={setDropdownOpen} // 同步下拉状态
         notFoundContent={loading ? t('log.search.loadingEllipsis') : ''}
         filterOption={false} // 禁用默认过滤，使用自定义逻辑
-        dropdownMatchSelectWidth={false}
-        dropdownStyle={{ minWidth: 300 }}
+        dropdownMatchSelectWidth
       >
         {customInput}
       </AutoComplete>

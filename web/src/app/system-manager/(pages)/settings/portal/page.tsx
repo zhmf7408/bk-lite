@@ -433,6 +433,7 @@ const PortalSettingsPage: React.FC = () => {
         <div className="sticky top-3 self-start max-[1280px]:static">
           <PortalConsolePreview
             portalName={portalName}
+            portalLogoUrl={portalLogoUrl}
             portalFaviconUrl={portalFaviconUrl}
             watermarkEnabled={watermarkEnabled}
             watermarkText={watermarkText}

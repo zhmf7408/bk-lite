@@ -75,16 +75,8 @@ from apps.opspilot.metis.llm.tools.redis.stream import (
 from apps.opspilot.metis.llm.tools.redis.string import redis_append, redis_get, redis_getdel, redis_mget, redis_set, redis_strlen
 
 CONSTRUCTOR_PARAMS = [
-    {"name": "url", "type": "string", "required": False, "description": "Redis连接URI（不包含账号密码），例如 redis://127.0.0.1:6379/0"},
-    {"name": "username", "type": "string", "required": False, "description": "Redis用户名"},
-    {"name": "password", "type": "string", "required": False, "description": "Redis密码"},
-    {"name": "ssl", "type": "boolean", "required": False, "description": "是否启用SSL/TLS"},
-    {"name": "ssl_ca_path", "type": "string", "required": False, "description": "CA证书路径"},
-    {"name": "ssl_keyfile", "type": "string", "required": False, "description": "SSL私钥路径"},
-    {"name": "ssl_certfile", "type": "string", "required": False, "description": "SSL证书路径"},
-    {"name": "ssl_cert_reqs", "type": "string", "required": False, "description": "SSL证书校验策略"},
-    {"name": "ssl_ca_certs", "type": "string", "required": False, "description": "CA证书文件"},
-    {"name": "cluster_mode", "type": "boolean", "required": False, "description": "是否启用Redis Cluster模式"},
+    {"name": "redis_instances", "type": "string", "required": False, "description": "Redis多实例JSON配置"},
+    {"name": "redis_default_instance_id", "type": "string", "required": False, "description": "默认Redis实例ID"},
 ]
 
 __all__ = [

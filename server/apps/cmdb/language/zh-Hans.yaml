@@ -33,7 +33,7 @@ MODEL:
   mssql: MSSQL
   redis: Redis
   mongodb: MongoDB
-  elasticsearch: ElasticSearch
+  elasticsearch: Elasticsearch
   postgresql: PostgreSQL
   db2: DB2
   db_cluster: 数据库集群
@@ -102,7 +102,7 @@ MODEL:
   aws_s3_bucket: AWS S3 Bucket
   dameng: 达梦
   datacenter: 数据中心
-  es: ElasticSearch
+  es: Elasticsearch
   etcd: ETCD
   fusioninsight: FusionInsight平台
   fusioninsight_cluster: FusionInsight集群

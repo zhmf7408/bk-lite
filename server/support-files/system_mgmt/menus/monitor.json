@@ -100,6 +100,13 @@
           ]
         },
         {
+          "id": "integration_collect",
+          "name": "Integration-collect",
+          "operation": [
+            "View"
+          ]
+        },
+        {
           "id": "asset",
           "name": "Asset",
           "operation": [

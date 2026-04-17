@@ -210,12 +210,12 @@ const AutoAssociationRulesPage: React.FC = () => {
         return pairs.length ? (
             <Space wrap>
               {pairs.map((pair) => (
-              <Tag key={`${record.model_asst_id}-${record.rule_id}-${pair.src_field_id}-${pair.dst_field_id}`}>
-                {getCurrentSide(record) === 'src'
-                  ? `${pair.src_field_id} = ${pair.dst_field_id}`
-                  : `${pair.dst_field_id} = ${pair.src_field_id}`}
-              </Tag>
-            ))}
+                <Tag key={`${record.model_asst_id}-${record.rule_id}-${pair.src_field_id}-${pair.dst_field_id}`}>
+                  {getCurrentSide(record) === 'src'
+                    ? `${pair.src_field_id} = ${pair.dst_field_id}`
+                    : `${pair.dst_field_id} = ${pair.src_field_id}`}
+                </Tag>
+              ))}
           </Space>
         ) : '--';
       },

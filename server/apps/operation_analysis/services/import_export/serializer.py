@@ -137,7 +137,7 @@ class YAMLSerializer:
             "key": YAMLSerializer.generate_canvas_key(ObjectType.DASHBOARD.value, dashboard.name),
             "name": dashboard.name,
             "desc": dashboard.desc or "",
-            "filters": dashboard.filters or {},
+            "filters": dashboard.filters or [],
             "other": dashboard.other or {},
             "view_sets": rewrite_canvas_view_sets_refs_for_yaml(
                 normalize_canvas_view_sets_for_yaml(dashboard.view_sets or [], ObjectType.DASHBOARD),

@@ -3,6 +3,7 @@ interface AuthData {
   username: string;
   token: string;
   locale: string;
+  timezone?: string;
   temporary_pwd: boolean;
   enable_otp: boolean;
   qrcode: boolean;

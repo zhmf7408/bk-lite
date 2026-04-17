@@ -9,16 +9,23 @@ from typing import List
 # 支持的模型类型
 SUPPORTED_MODELS: List[str] = [
     "ECOD",
+    "PELT",
     # 未来可扩展: "IsolationForest", "LOF", "KNN"
 ]
 
 
 # 支持的优化指标
-SUPPORTED_METRICS: List[str] = [
+SUPPORTED_METRICS: List[str] = ["f1", "precision", "recall", "auc"]
+
+# PELT 支持的优化指标（包含点级兼容指标 + 变点级专属指标）
+SUPPORTED_PELT_METRICS: List[str] = [
     "f1",
     "precision",
     "recall",
-    "auc"
+    "auc",
+    "changepoint_precision",
+    "changepoint_recall",
+    "changepoint_f1",
 ]
 
 
@@ -28,5 +35,9 @@ SUPPORTED_MISSING_HANDLERS: List[str] = [
     "ffill",
     "bfill",
     "drop",
-    "median"
+    "median",
 ]
+
+
+# PELT 支持的 ruptures cost model
+SUPPORTED_PELT_COST_MODELS: List[str] = ["l1", "l2", "rbf"]

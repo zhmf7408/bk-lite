@@ -1,5 +1,5 @@
 [build-system]
-requires = ["setuptools>=68", "setuptools-scm"]
+requires = ["setuptools==80.9.0"]
 build-backend = "setuptools.build_meta"
 
 [project]
@@ -26,6 +26,7 @@ dependencies = [
     "llvmlite>=0.43.0",
     "matplotlib>=3.9.0",
     "hyperopt>=0.2.7",
+    "ruptures>=1.1.9",
     "setuptools==80.9.0",
     "minio>=7.2.20",
 ]

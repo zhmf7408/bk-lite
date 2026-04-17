@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, forwardRef, useImperativeHandle } from 'react';
-import { Button, Alert, message } from 'antd';
+import { Alert, message } from 'antd';
 import OperateDrawer from '@/app/node-manager/components/operate-drawer';
 import { ModalRef } from '@/app/node-manager/types';
 import {
@@ -16,7 +16,7 @@ import { useAuth } from '@/context/auth';
 import axios from 'axios';
 import {
   LinuxOperationGuidanceSection,
-  WindowsOperationGuidanceSection,
+  WindowsOperationGuidanceSection
 } from './operationGuidanceSections';
 
 const OperationGuidance = forwardRef<ModalRef>(({}, ref) => {
@@ -35,7 +35,7 @@ const OperationGuidance = forwardRef<ModalRef>(({}, ref) => {
     installerVersion: '',
     defaultInstallerVersion: '',
     installerSession: '',
-    nodeData: null,
+    nodeData: null
   });
   const [installerManifest, setInstallerManifest] =
     useState<InstallerManifest | null>(null);
@@ -45,21 +45,21 @@ const OperationGuidance = forwardRef<ModalRef>(({}, ref) => {
   useImperativeHandle(ref, () => ({
     showModal: async ({ form }) => {
       setVisible(true);
-        const newNodeInfo = {
-          ip: form?.ip || '',
-          nodeName: form?.node_name || '',
-          os: form?.os || '',
-          installerVersion: '',
-          defaultInstallerVersion: '',
-          installerSession: '',
-          nodeData: form || null,
-        };
+      const newNodeInfo = {
+        ip: form?.ip || '',
+        nodeName: form?.node_name || '',
+        os: form?.os || '',
+        installerVersion: '',
+        defaultInstallerVersion: '',
+        installerSession: '',
+        nodeData: form || null
+      };
       setNodeInfo(newNodeInfo);
       if (form) {
         fetchInstallerManifest(form?.os || 'windows');
         fetchInstallCommand(form);
       }
-    },
+    }
   }));
 
   const fetchInstallerManifest = async (os: string) => {
@@ -85,10 +85,10 @@ const OperationGuidance = forwardRef<ModalRef>(({}, ref) => {
     setLoading(true);
     try {
       const result = await getInstallCommand(nodeData);
-        setNodeInfo((prev) => ({
-          ...prev,
-          installerSession: result || '',
-        }));
+      setNodeInfo((prev) => ({
+        ...prev,
+        installerSession: result || ''
+      }));
     } finally {
       setLoading(false);
     }
@@ -100,7 +100,7 @@ const OperationGuidance = forwardRef<ModalRef>(({}, ref) => {
 
   const handleCopyCommand = () => {
     handleCopy({
-      value: nodeInfo.installerSession || '',
+      value: nodeInfo.installerSession || ''
     });
   };
 
@@ -118,16 +118,17 @@ const OperationGuidance = forwardRef<ModalRef>(({}, ref) => {
         method: 'GET',
         responseType: 'blob',
         headers: {
-          Authorization: `Bearer ${token}`,
-        },
+          Authorization: `Bearer ${token}`
+        }
       });
       // 创建Blob对象
       const blob = new Blob([response.data], {
-        type: response.headers['content-type'] || 'application/zip',
+        type: response.headers['content-type'] || 'application/zip'
       });
       // 尝试从响应头获取文件名
       const contentDisposition = response.headers['content-disposition'];
-      let filename = installerMetadata?.filename || 'bk_controller_installer.exe';
+      let filename =
+        installerMetadata?.filename || 'bk_controller_installer.exe';
       if (contentDisposition) {
         // 优先匹配 filename*=UTF-8''xxx 格式
         let filenameMatch = contentDisposition.match(/filename\*=UTF-8''(.+)/i);
@@ -181,7 +182,9 @@ const OperationGuidance = forwardRef<ModalRef>(({}, ref) => {
           <span className="text-[12px] text-[var(--color-text-3)] ml-[16px]">
             {t('node-manager.cloudregion.node.installerVersion')}：
           </span>
-          <span className="text-[12px]">{nodeInfo.installerVersion || '--'}</span>
+          <span className="text-[12px]">
+            {nodeInfo.installerVersion || '--'}
+          </span>
           <span className="text-[12px] text-[var(--color-text-3)] ml-[16px]">
             {t('node-manager.cloudregion.node.defaultInstallerVersion')}：
           </span>

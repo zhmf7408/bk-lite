@@ -57,6 +57,9 @@ const NodeConfigDrawer: React.FC<NodeConfigDrawerProps> = ({
     skills,
     loadingSkills,
     loadSkills,
+    llmModels,
+    loadingLlmModels,
+    loadLlmModels,
     notificationChannels,
     loadingChannels,
     loadChannels,
@@ -116,9 +119,9 @@ const NodeConfigDrawer: React.FC<NodeConfigDrawerProps> = ({
         loadSkills();
       }
 
-      // 加载智能体列表（意图分类节点）
+      // 加载模型列表（意图分类节点）
       if (node.data.type === 'intent_classification') {
-        loadSkills();
+        loadLlmModels();
       }
 
       // 加载通知渠道和用户
@@ -226,6 +229,8 @@ const NodeConfigDrawer: React.FC<NodeConfigDrawerProps> = ({
             setUploadedFiles={setUploadedFiles}
             skills={skills}
             loadingSkills={loadingSkills}
+            llmModels={llmModels}
+            loadingLlmModels={loadingLlmModels}
             notificationChannels={notificationChannels}
             loadingChannels={loadingChannels}
             notificationType={notificationType}

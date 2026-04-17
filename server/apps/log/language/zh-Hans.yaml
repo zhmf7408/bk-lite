@@ -82,6 +82,9 @@ display_category:
   general:
     name: 通用
     description: 通用文件流、系统日志等基础采集
+  k8s:
+    name: K8s
+    description: Kubernetes 集群日志采集
   database:
     name: 数据库
     description: 关系型数据库、NoSQL、缓存等数据存储系统日志

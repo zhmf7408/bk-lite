@@ -381,7 +381,7 @@ monitor_object_metric:
   Hardware Server:
     snmp_uptime:
       name: System Uptime
-      desc: This metric indicates the uptime of the device since the last restart, measured in days. By monitoring the uptime, network administrators can understand the stability and reliability of the device and identify potential reboot or failure issues.
+      desc: This metric indicates the uptime of the device since the last restart. By monitoring the uptime, network administrators can understand the stability and reliability of the device and identify potential reboot or failure issues.
     interface_ifAdminStatus:
       name: Interface Admin Status
       desc: This metric indicates the administrative status of the network switch interface. It serves to indicate whether the interface is enabled (up) or disabled (down) by an administrator, along with other states such as testing or not present. This information is vital for network management and troubleshooting.
@@ -439,7 +439,7 @@ monitor_object_metric:
   Loadbalance:
     snmp_uptime:
       name: System Uptime
-      desc: This metric indicates the uptime of the device since the last restart, measured in days. By monitoring the uptime, network administrators can understand the stability and reliability of the device and identify potential reboot or failure issues.
+      desc: This metric indicates the uptime of the device since the last restart. By monitoring the uptime, network administrators can understand the stability and reliability of the device and identify potential reboot or failure issues.
     interface_ifAdminStatus:
       name: Interface Admin Status
       desc: This metric indicates the administrative status of the network switch interface. It serves to indicate whether the interface is enabled (up) or disabled (down) by an administrator, along with other states such as testing or not present. This information is vital for network management and troubleshooting.
@@ -580,7 +580,7 @@ monitor_object_metric:
   Firewall:
     snmp_uptime:
       name: System Uptime
-      desc: This metric indicates the uptime of the device since the last restart, measured in days. By monitoring the uptime, network administrators can understand the stability and reliability of the device and identify potential reboot or failure issues.
+      desc: This metric indicates the uptime of the device since the last restart. By monitoring the uptime, network administrators can understand the stability and reliability of the device and identify potential reboot or failure issues.
     interface_ifAdminStatus:
       name: Interface Admin Status
       desc: This metric indicates the administrative status of the network switch interface. It serves to indicate whether the interface is enabled (up) or disabled (down) by an administrator, along with other states such as testing or not present. This information is vital for network management and troubleshooting.
@@ -1671,7 +1671,7 @@ monitor_object_metric:
   Switch:
     snmp_uptime:
       name: System Uptime
-      desc: This metric indicates the uptime of the device since the last restart, measured in days. By monitoring the uptime, network administrators can understand the stability and reliability of the device and identify potential reboot or failure issues.
+      desc: This metric indicates the uptime of the device since the last restart. By monitoring the uptime, network administrators can understand the stability and reliability of the device and identify potential reboot or failure issues.
     interface_ifAdminStatus:
       name: Interface Admin Status
       desc: This metric indicates the administrative status of the network switch interface. It serves to indicate whether the interface is enabled (up) or disabled (down) by an administrator, along with other states such as testing or not present. This information is vital for network management and troubleshooting.
@@ -1714,7 +1714,7 @@ monitor_object_metric:
   Router:
     snmp_uptime:
       name: System Uptime
-      desc: This metric indicates the uptime of the device since the last restart, measured in days. By monitoring the uptime, network administrators can understand the stability and reliability of the device and identify potential reboot or failure issues.
+      desc: This metric indicates the uptime of the device since the last restart. By monitoring the uptime, network administrators can understand the stability and reliability of the device and identify potential reboot or failure issues.
     interface_ifAdminStatus:
       name: Interface Admin Status
       desc: This metric indicates the administrative status of the network switch interface. It serves to indicate whether the interface is enabled (up) or disabled (down) by an administrator, along with other states such as testing or not present. This information is vital for network management and troubleshooting.

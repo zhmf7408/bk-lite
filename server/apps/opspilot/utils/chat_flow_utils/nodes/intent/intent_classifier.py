@@ -1,15 +1,16 @@
-"""
-意图分类节点 - 基于LLM识别用户输入的意图并路由到不同分支
-"""
+"""意图分类节点 - 基于LLM识别用户输入的意图并路由到不同分支。"""
 
 from typing import Any, Dict
 
+import jinja2
+
 from apps.core.logger import opspilot_logger as logger
-from apps.opspilot.models import LLMSkill
-from apps.opspilot.utils.chat_flow_utils.nodes.agent.agent import AgentNode
+from apps.opspilot.enum import SkillTypeChoices
+from apps.opspilot.services.chat_service import ChatService
+from apps.opspilot.utils.chat_flow_utils.engine.core.base_executor import BaseNodeExecutor
 
 
-class IntentClassifierNode(AgentNode):
+class IntentClassifierNode(BaseNodeExecutor):
     """意图分类节点
 
     功能：
@@ -48,42 +49,62 @@ class IntentClassifierNode(AgentNode):
 """
 
     def __init__(self, variable_manager, workflow_instance=None):
-        super().__init__(variable_manager, workflow_instance)
+        super().__init__(variable_manager)
+        self.workflow_instance = workflow_instance
 
-    def _build_llm_params(self, skill: LLMSkill, final_message: str, flow_input: Dict[str, Any]) -> Dict[str, Any]:
-        """构建LLM调用参数，追加意图分类专用prompt
+    def _render_prompt(self, prompt: str, node_id: str) -> str:
+        """渲染补充分类规则中的模板变量。"""
+        if not prompt:
+            return ""
 
-        重写父类方法，将 DEFAULT_SYSTEM_PROMPT 追加到原有 skill_prompt 后面
+        try:
+            template_context = self.variable_manager.get_all_variables()
+            template = jinja2.Template(prompt)
+            return template.render(**template_context)
+        except Exception as e:
+            logger.error("意图分类节点 %s 分类规则渲染失败: %s", node_id, str(e))
+            return prompt
 
-        Args:
-            skill: 技能对象
-            final_message: 最终消息
-            flow_input: 流程输入
-
-        Returns:
-            LLM参数字典
-        """
-        # 调用父类方法获取基础参数
-        llm_params = super()._build_llm_params(skill, final_message, flow_input)
-
-        # 获取意图列表并格式化
-        intent_names = flow_input.get("_intent_names", [])
+    def _build_intent_prompt(self, node_id: str, intent_names: list[str], classification_rules: str) -> str:
+        """构造最终用于分类的系统提示词。"""
         default_intent = intent_names[0] if intent_names else "未知"
-
-        # 格式化意图列表（带序号，更清晰）
         intent_list = "\n".join([f"- {name}" for name in intent_names]) if intent_names else "- 未知"
-
-        # 渲染意图分类专用prompt
         intent_prompt = self.DEFAULT_SYSTEM_PROMPT.format(intent_list=intent_list, default_intent=default_intent)
+        rendered_rules = self._render_prompt(classification_rules, node_id).strip()
 
-        # 将意图分类prompt追加到原有skill_prompt后面
-        original_prompt = llm_params.get("skill_prompt", "")
-        if original_prompt:
-            llm_params["skill_prompt"] = f"{original_prompt}\n\n{intent_prompt}"
-        else:
-            llm_params["skill_prompt"] = intent_prompt
+        if not rendered_rules:
+            return intent_prompt
 
-        return llm_params
+        return f"{intent_prompt}\n\n### 补充分类规则\n{rendered_rules}"
+
+    def _build_llm_params(self, node_id: str, config: Dict[str, Any], message: Any, flow_input: Dict[str, Any], intent_names: list[str]) -> Dict[str, Any]:
+        """构造意图分类节点的最小 LLM 调用参数。"""
+        llm_model = config.get("llmModel")
+        if not llm_model:
+            raise ValueError(f"意图分类节点 {node_id} 缺少 llmModel 参数")
+
+        return {
+            "llm_model": llm_model,
+            "skill_prompt": self._build_intent_prompt(node_id, intent_names, config.get("classificationRules", "")),
+            "temperature": 0.1,
+            "chat_history": [{"event": "user", "message": message}],
+            "user_message": message,
+            "conversation_window_size": 1,
+            "enable_rag": False,
+            "enable_rag_knowledge_source": False,
+            "show_think": False,
+            "tools": [],
+            "skill_type": SkillTypeChoices.BASIC_TOOL,
+            "group": 0,
+            "user_id": flow_input.get("user_id", "anonymous"),
+            "enable_km_route": False,
+            "km_llm_model": None,
+            "enable_suggest": False,
+            "enable_query_rewrite": False,
+            "locale": flow_input.get("locale", "en"),
+            "thread_id": flow_input.get("execution_id", ""),
+            "execution_id": flow_input.get("execution_id", ""),
+        }
 
     def execute(self, node_id: str, node_config: Dict[str, Any], input_data: Dict[str, Any]) -> Dict[str, Any]:
         """执行意图分类节点
@@ -91,14 +112,12 @@ class IntentClassifierNode(AgentNode):
         节点配置示例：
         {
             "config": {
-                "llmModelId": "1",
-                "agent": 1689,
+                "llmModel": 1,
+                "classificationRules": "",
                 "intents": [
                     {"name": "知识问答"},
                     {"name": "工单问题"}
                 ],
-                "systemPrompt": "",
-                "temperature": 0.1,
                 "inputParams": "last_message",
                 "outputParams": "last_message"
             }
@@ -135,11 +154,11 @@ class IntentClassifierNode(AgentNode):
         self.variable_manager.set_variable("flow_input", flow_input)
 
         try:
-            # 调用父类Agent节点执行LLM意图分类
-            result = super().execute(node_id, node_config, input_data)
+            llm_params = self._build_llm_params(node_id, config, previous_node_output, flow_input, intent_names)
+            result, _, _ = ChatService.invoke_chat(llm_params)
 
             # 获取LLM返回的意图文本（如："知识问答"、"工单问题"）
-            intent_text = result.get(output_key, "").strip()
+            intent_text = result.get("message", "").strip()
             logger.info("意图分类节点 %s LLM返回意图: %r", node_id, intent_text)
 
             # 验证意图是否在配置的intents列表中

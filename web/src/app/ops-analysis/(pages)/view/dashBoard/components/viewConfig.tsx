@@ -6,6 +6,10 @@ import {
   TableFilterFieldConfig,
   TableColumnConfigItem,
   TableConfig,
+  UnifiedFilterDefinition,
+  FilterBindings,
+  ValueConfig,
+  FilterValue,
 } from '@/app/ops-analysis/types/dashBoard';
 import {
   Drawer,
@@ -23,6 +27,7 @@ import {
   PlusCircleOutlined,
   MinusCircleOutlined,
   ExclamationCircleOutlined,
+  QuestionCircleOutlined,
 } from '@ant-design/icons';
 import { useDataSourceManager } from '@/app/ops-analysis/hooks/useDataSource';
 import {
@@ -31,8 +36,15 @@ import {
 } from '@/app/ops-analysis/constants/common';
 import DataSourceParamsConfig from '@/app/ops-analysis/components/paramsConfig';
 import DataSourceSelect from '@/app/ops-analysis/components/dataSourceSelect';
+import { FilterBindingPanel } from '@/app/ops-analysis/components/unifiedFilter';
 import CustomTable from '@/components/custom-table';
 import { useDataSourceApi } from '@/app/ops-analysis/api/dataSource';
+import {
+  formatTimeRange,
+  getFilterDefinitionId,
+  getBindableFilterParams,
+  buildDefaultFilterBindings,
+} from '@/app/ops-analysis/utils/widgetDataTransform';
 import type {
   DatasourceItem,
   ParamItem,
@@ -56,6 +68,7 @@ type DisplayColumnRow = TableColumnConfigItem & {
 
 interface ViewConfigPropsWithManager extends ViewConfigProps {
   dataSourceManager: ReturnType<typeof useDataSourceManager>;
+  filterDefinitions?: UnifiedFilterDefinition[];
 }
 
 const ViewConfig: React.FC<ViewConfigPropsWithManager> = ({
@@ -64,6 +77,7 @@ const ViewConfig: React.FC<ViewConfigPropsWithManager> = ({
   onConfirm,
   onClose,
   dataSourceManager,
+  filterDefinitions = [],
 }) => {
   const { t } = useTranslation();
   const [form] = Form.useForm();
@@ -75,6 +89,7 @@ const ViewConfig: React.FC<ViewConfigPropsWithManager> = ({
     (TableFilterFieldConfig & { id: string })[]
       >([]);
   const [displayColumns, setDisplayColumns] = useState<DisplayColumnRow[]>([]);
+  const [filterBindings, setFilterBindings] = useState<FilterBindings>({});
   const { getSourceDataByApiId } = useDataSourceApi();
   const {
     dataSources,
@@ -105,6 +120,43 @@ const ViewConfig: React.FC<ViewConfigPropsWithManager> = ({
   const getDataSourceChartTypes = React.useMemo(() => {
     return getFilteredChartTypes(selectedDataSource);
   }, [selectedDataSource]);
+
+  const computePreviewDefinitions = (
+    existingDefinitions: UnifiedFilterDefinition[],
+    dataSource: DatasourceItem | undefined,
+  ): UnifiedFilterDefinition[] => {
+    const existingMap = new Map(
+      existingDefinitions.map((def) => [def.id, def]),
+    );
+
+    const bindableParams = getBindableFilterParams(dataSource?.params);
+
+    bindableParams.forEach((param, index) => {
+      const id = getFilterDefinitionId(param.name, param.type);
+      if (!existingMap.has(id)) {
+        existingMap.set(id, {
+          id,
+          key: param.name,
+          name: param.alias_name || param.name,
+          type: param.type,
+          defaultValue: (param.value as FilterValue) ?? null,
+          order: existingDefinitions.length + index,
+          enabled: true,
+        });
+      }
+    });
+
+    return Array.from(existingMap.values());
+  };
+
+  /**
+   * 预览式统一筛选定义：合并已有定义 + 当前数据源的 filter 参数
+   * 这样用户在第一次配置新组件时，就能看到并控制即将新增的统一筛选项
+   */
+  const previewFilterDefinitions = useMemo(
+    () => computePreviewDefinitions(filterDefinitions, selectedDataSource),
+    [filterDefinitions, selectedDataSource],
+  );
 
   const availableFields = useMemo((): ResponseFieldDefinition[] => {
     return selectedDataSource?.field_schema || [];
@@ -293,7 +345,11 @@ const ViewConfig: React.FC<ViewConfigPropsWithManager> = ({
       sourceParams,
     );
     processedParams.forEach((param) => {
-      payload[param.name] = param.value;
+      if (param.type === 'timeRange') {
+        payload[param.name] = formatTimeRange(param.value);
+      } else {
+        payload[param.name] = param.value;
+      }
     });
 
     if (chartType === 'table') {
@@ -716,6 +772,21 @@ const ViewConfig: React.FC<ViewConfigPropsWithManager> = ({
             formValues.params,
           );
         }
+
+        const previewDefs = computePreviewDefinitions(filterDefinitions, targetDataSource);
+        setFilterBindings(
+          buildDefaultFilterBindings(
+            formValues.dataSourceParams?.length
+              ? formValues.dataSourceParams
+              : targetDataSource.params,
+            previewDefs,
+            (valueConfig as ValueConfig | undefined)?.filterBindings,
+          ),
+        );
+      } else {
+        setFilterBindings(
+          (valueConfig as ValueConfig | undefined)?.filterBindings || {},
+        );
       }
 
       if (valueConfig?.tableConfig?.columns?.length) {
@@ -777,6 +848,7 @@ const ViewConfig: React.FC<ViewConfigPropsWithManager> = ({
     setParamsChangedAfterProbe(false);
     setFilterFields([]);
     setDisplayColumns([]);
+    setFilterBindings({});
   };
 
   const handleFormValuesChange = (changedValues: Record<string, any>) => {
@@ -884,7 +956,11 @@ const ViewConfig: React.FC<ViewConfigPropsWithManager> = ({
         }
       }
 
-      onConfirm?.(values);
+      const result = filterBindings && Object.keys(filterBindings).length > 0
+        ? { ...values, filterBindings }
+        : values;
+
+      onConfirm?.(result);
     } catch (error) {
       console.error('Form validation failed:', error);
     }
@@ -959,6 +1035,23 @@ const ViewConfig: React.FC<ViewConfigPropsWithManager> = ({
             includeFilterTypes={['params', 'fixed']}
           />
         </div>
+
+        {previewFilterDefinitions.length > 0 && selectedDataSource?.params && (
+          <div className="mb-6">
+            <div className="font-bold text-(--color-text-1) mb-4 flex items-center gap-1">
+              {t('dashboard.unifiedFilterBinding')}
+              <Tooltip title={t('dashboard.unifiedFilterBindingTip')}>
+                <QuestionCircleOutlined className="text-(--color-text-3) cursor-help" />
+              </Tooltip>
+            </div>
+            <FilterBindingPanel
+              definitions={previewFilterDefinitions}
+              dataSourceParams={selectedDataSource.params}
+              filterBindings={filterBindings}
+              onChange={setFilterBindings}
+            />
+          </div>
+        )}
 
         <div className="mb-6">
           <div className="font-bold text-(--color-text-1) mb-4">

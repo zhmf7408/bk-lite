@@ -610,14 +610,20 @@ const Alert: React.FC = () => {
                   <Select
                     style={{ width: 200 }}
                     dropdownStyle={{ width: 130 }}
+                    showSearch
                     allowClear
                     mode="multiple"
+                    optionFilterProp="label"
                     maxTagCount="responsive"
                     value={filters.level}
                     onChange={(val) => onFilterChange(val, 'level')}
                   >
                     {LEVEL_LIST.map((item) => (
-                      <Option key={item.value} value={item.value}>
+                      <Option
+                        key={item.value}
+                        value={item.value}
+                        label={item.label}
+                      >
                         <Tag
                           icon={<AlertOutlined />}
                           color={LEVEL_MAP[item.value as string] as string}
@@ -635,8 +641,10 @@ const Alert: React.FC = () => {
                   </span>
                   <Select
                     style={{ width: 200 }}
+                    showSearch
                     allowClear
                     mode="multiple"
+                    optionFilterProp="label"
                     maxTagCount="responsive"
                     value={filters.state}
                     onChange={(val) => onFilterChange(val, 'state')}

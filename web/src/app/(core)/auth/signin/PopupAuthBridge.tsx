@@ -12,6 +12,7 @@ interface PopupAuthBridgeProps {
     username?: string;
     token?: string;
     locale?: string;
+    timezone?: string;
     temporary_pwd?: boolean;
     enable_otp?: boolean;
     qrcode?: boolean;
@@ -28,6 +29,7 @@ export default function PopupAuthBridge({ callbackUrl, thirdLogin, user }: Popup
         username: user.username || '',
         token: user.token,
         locale: user.locale || 'en',
+        timezone: user.timezone || 'Asia/Shanghai',
         temporary_pwd: user.temporary_pwd || false,
         enable_otp: user.enable_otp || false,
         qrcode: user.qrcode || false,

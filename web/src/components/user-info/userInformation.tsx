@@ -29,6 +29,9 @@ import { useClientData } from '@/context/client';
 import { useUserInfoContext } from '@/context/userInfo';
 import useApiClient from '@/utils/request';
 import { ZONEINFO_OPTIONS, LOCALE_OPTIONS } from '@/app/system-manager/constants/userDropdowns';
+import { useLocale } from '@/context/locale';
+import { useSession } from 'next-auth/react';
+import { normalizeLocale, normalizeTimezone, persistTimezone } from '@/utils/userPreferences';
 import PasswordModal from './passwordModal';
 import Icon from '@/components/icon';
 
@@ -45,6 +48,8 @@ const UserInformation: React.FC<UserInformationProps> = ({ visible, onClose }) =
   const { get, post } = useApiClient();
   const { clientData } = useClientData();
   const { refreshUserInfo } = useUserInfoContext();
+  const { setLocale } = useLocale();
+  const { data: session, update } = useSession();
 
 
   // 状态管理
@@ -97,13 +102,36 @@ const UserInformation: React.FC<UserInformationProps> = ({ visible, onClose }) =
   const handleSave = async () => {
     try {
       const values = await form.validateFields();
+      const nextLocale = normalizeLocale(values.locale);
+      const nextTimezone = normalizeTimezone(values.timezone);
       setLoading(true);
       await post('/console_mgmt/update_user_base_info/', {
         email: userInfo.email,
         display_name: values.display_name,
-        timezone: values.timezone,
-        locale: values.locale
+        timezone: nextTimezone,
+        locale: nextLocale
       });
+
+      setLocale(nextLocale);
+      persistTimezone(nextTimezone);
+
+      await update({
+        ...session,
+        locale: nextLocale,
+        timezone: nextTimezone,
+        user: {
+          ...(session?.user || {}),
+          locale: nextLocale,
+          timezone: nextTimezone,
+        },
+      });
+
+      setUserInfo((previous: any) => ({
+        ...previous,
+        display_name: values.display_name,
+        timezone: nextTimezone,
+        locale: nextLocale,
+      }));
       message.success(t('common.saveSuccess'));
       // 刷新右上角用户信息
       await refreshUserInfo();

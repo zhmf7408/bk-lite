@@ -1,7 +1,7 @@
 'use client';
 import React, { useState, useEffect, useRef } from 'react';
 import { useSearchParams } from 'next/navigation';
-import { Form, message, Spin } from 'antd';
+import { Alert, Button, Form, message, Spin } from 'antd';
 import { useTranslation } from '@/utils/i18n';
 import DynamicForm from '@/components/dynamic-form';
 import OperateModal from '@/components/operate-modal'
@@ -49,9 +49,11 @@ const ChannelModal: React.FC<ChannelModalProps> = ({
   const [form] = Form.useForm();
   const searchParams = useSearchParams();
   const channelType = (searchParams?.get('id') || 'email') as ChannelType;
-  const { addChannel, updateChannel, getChannelDetail } = useChannelApi();
+  const { addChannel, updateChannel, getChannelDetail, testChannel } = useChannelApi();
   const [loading, setLoading] = useState<boolean>(false);
   const [confirmLoading, setConfirmLoading] = useState<boolean>(false);
+  const [testLoading, setTestLoading] = useState<boolean>(false);
+  const [testError, setTestError] = useState<string>('');
   const [channelData, setChannelData] = useState<any>({ config: {} });
   const [originalSmtpPwd, setOriginalSmtpPwd] = useState<string | undefined>(undefined);
   const [originalWebhookUrl, setOriginalWebhookUrl] = useState<string | undefined>(undefined);
@@ -82,6 +84,7 @@ const ChannelModal: React.FC<ChannelModalProps> = ({
   const fetchChannelDetail = async (id: string) => {
     setLoading(true);
     try {
+      setTestError('');
       const data = await getChannelDetail(id);
       setOriginalSmtpPwd(data.config?.smtp_pwd);
       setOriginalWebhookUrl(data.config?.webhook_url);
@@ -131,6 +134,7 @@ const ChannelModal: React.FC<ChannelModalProps> = ({
   useEffect(() => {
     if (!visible) return;
     form.resetFields();
+    setTestError('');
     setPendingFormFill(null);
     isFillingForm.current = false;
     setOriginalSmtpPwd(undefined);
@@ -167,46 +171,9 @@ const ChannelModal: React.FC<ChannelModalProps> = ({
   const handleOk = async () => {
     try {
       setConfirmLoading(true);
+      setTestError('');
       const values = await form.validateFields();
-      const {
-        name, description, team,
-        smtp_pwd, webhook_url, sign_secret,
-        request_method, headers, body_template,
-        ...config
-      } = values;
-
-      delete config.sub_type;
-
-      const finalConfig: Record<string, unknown> = { ...config };
-
-      if (smtp_pwd !== undefined && smtp_pwd !== originalSmtpPwd) {
-        finalConfig.smtp_pwd = smtp_pwd;
-      }
-      if (webhook_url !== undefined && webhook_url !== originalWebhookUrl) {
-        finalConfig.webhook_url = webhook_url;
-      }
-      if (sign_secret !== undefined && sign_secret !== originalSignSecret) {
-        finalConfig.sign_secret = sign_secret;
-      }
-      if (request_method !== undefined) {
-        finalConfig.request_method = request_method;
-      }
-      if (headers !== undefined) {
-        finalConfig.headers = headers;
-      }
-      if (body_template !== undefined) {
-        finalConfig.body_template = body_template;
-      }
-
-      const effectiveChannelType = isWebhookChannel ? subType : channelType;
-
-      const payload = {
-        channel_type: effectiveChannelType,
-        name,
-        description,
-        team,
-        config: finalConfig,
-      };
+      const payload = buildChannelPayload(values);
 
       if (type === 'add') {
         await addChannel(payload);
@@ -225,6 +192,72 @@ const ChannelModal: React.FC<ChannelModalProps> = ({
       }
     } finally {
       setConfirmLoading(false);
+    }
+  };
+
+  const buildChannelPayload = (values: Record<string, any>, options?: { preserveEncryptedFields?: boolean }) => {
+    const {
+      name, description, team,
+      smtp_pwd, webhook_url, sign_secret,
+      request_method, headers, body_template,
+      ...config
+    } = values;
+
+    delete config.sub_type;
+
+    const finalConfig: Record<string, unknown> = { ...config };
+
+    const preserveEncryptedFields = options?.preserveEncryptedFields ?? false;
+
+    if (smtp_pwd !== undefined && (preserveEncryptedFields || smtp_pwd !== originalSmtpPwd)) {
+      finalConfig.smtp_pwd = smtp_pwd;
+    }
+    if (webhook_url !== undefined && (preserveEncryptedFields || webhook_url !== originalWebhookUrl)) {
+      finalConfig.webhook_url = webhook_url;
+    }
+    if (sign_secret !== undefined && (preserveEncryptedFields || sign_secret !== originalSignSecret)) {
+      finalConfig.sign_secret = sign_secret;
+    }
+    if (request_method !== undefined) {
+      finalConfig.request_method = request_method;
+    }
+    if (headers !== undefined) {
+      finalConfig.headers = headers;
+    }
+    if (body_template !== undefined) {
+      finalConfig.body_template = body_template;
+    }
+
+    return {
+      channel_type: isWebhookChannel ? subType : channelType,
+      name,
+      description,
+      team,
+      config: finalConfig,
+    };
+  };
+
+  const handleTest = async () => {
+    try {
+      setTestLoading(true);
+      setTestError('');
+      const values = await form.validateFields();
+      const payload = buildChannelPayload(values, { preserveEncryptedFields: true });
+      await testChannel(payload);
+      message.success(t('system.channel.settings.testSuccess'));
+    } catch (error: any) {
+      if (error?.errorFields?.length) {
+        const firstFieldErrorMessage = error.errorFields[0].errors[0];
+        setTestError(firstFieldErrorMessage || t('common.valFailed'));
+      } else {
+        const rawMessage = error?.response?.data?.message || error?.message || t('system.channel.settings.testFailed');
+        const normalizedMessage = typeof rawMessage === 'string'
+          ? rawMessage.replace(/^result:?false[,;]?message:?/i, '').trim()
+          : t('system.channel.settings.testFailed');
+        setTestError(normalizedMessage || t('system.channel.settings.testFailed'));
+      }
+    } finally {
+      setTestLoading(false);
     }
   };
 
@@ -332,11 +365,23 @@ const ChannelModal: React.FC<ChannelModalProps> = ({
     <OperateModal
       title={type === 'add' ? t('system.channel.settings.addChannel') : t('system.channel.settings.editChannel')}
       visible={visible}
-      onOk={handleOk}
       onCancel={handleCancel}
-      confirmLoading={confirmLoading}
+      footer={[
+        <Button key="cancel" onClick={handleCancel}>
+          {t('common.cancel')}
+        </Button>,
+        <Button key="test" onClick={handleTest} loading={testLoading}>
+          {t('system.channel.settings.test')}
+        </Button>,
+        <Button key="ok" type="primary" onClick={handleOk} loading={confirmLoading}>
+          {t('common.confirm')}
+        </Button>,
+      ]}
     >
       <Spin spinning={loading}>
+        {testError ? (
+          <Alert className="mb-4" type="error" showIcon message={testError} />
+        ) : null}
         <DynamicForm
           form={form}
           fields={formFields}

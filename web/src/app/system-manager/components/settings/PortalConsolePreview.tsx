@@ -9,6 +9,7 @@ import { useUserInfoContext } from '@/context/userInfo';
 
 interface PortalConsolePreviewProps {
   portalName: string;
+  portalLogoUrl: string;
   portalFaviconUrl: string;
   watermarkEnabled: boolean;
   watermarkText: string;
@@ -51,6 +52,7 @@ const applyTemplate = (template: string, portalName: string, variables: Record<s
 
 const PortalConsolePreview: React.FC<PortalConsolePreviewProps> = ({
   portalName,
+  portalLogoUrl,
   portalFaviconUrl,
   watermarkEnabled,
   watermarkText,
@@ -80,14 +82,31 @@ const PortalConsolePreview: React.FC<PortalConsolePreviewProps> = ({
   const previewApps = displayApps.slice(0, 6);
   const portalInitials = useMemo(() => getInitials(portalName), [portalName]);
   const hasFavicon = Boolean(portalFaviconUrl?.trim());
+  const hasLogo = Boolean(portalLogoUrl?.trim());
 
-  const PreviewIdentity = ({ size, textSize }: { size: string; textSize: string }) => {
+  const PreviewBrowserIdentity = ({ size, textSize }: { size: string; textSize: string }) => {
     if (hasFavicon) {
       return <img src={portalFaviconUrl} alt={portalName} className={`${size} shrink-0 rounded-md object-contain`} />;
     }
 
     return (
       <span className={`inline-flex ${size} shrink-0 items-center justify-center rounded-md bg-[linear-gradient(135deg,#4a8dff_0%,#2f6fed_100%)] ${textSize} font-bold text-white`}>
+        {portalInitials}
+      </span>
+    );
+  };
+
+  const PreviewConsoleIdentity = ({ className }: { className: string }) => {
+    if (hasLogo) {
+      return <img src={portalLogoUrl} alt={portalName} className={className} />;
+    }
+
+    if (hasFavicon) {
+      return <img src={portalFaviconUrl} alt={portalName} className={className} />;
+    }
+
+    return (
+      <span className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-[linear-gradient(135deg,#4a8dff_0%,#2f6fed_100%)] text-[11px] font-bold text-white">
         {portalInitials}
       </span>
     );
@@ -103,7 +122,7 @@ const PortalConsolePreview: React.FC<PortalConsolePreviewProps> = ({
           <div className="border-b border-(--color-portal-preview-divider) bg-(--color-portal-surface-soft)">
             <div className="rounded-t-[20px] bg-(--color-portal-surface-soft) px-4 pt-3">
               <div className="flex h-11 w-full items-center gap-2.5 rounded-t-2xl border border-(--color-portal-preview-border-strong) bg-(--color-bg-1) px-4 shadow-[inset_0_1px_0_var(--color-portal-surface-overlay)]">
-                <PreviewIdentity size="h-5 w-5" textSize="text-[11px]" />
+                <PreviewBrowserIdentity size="h-5 w-5" textSize="text-[11px]" />
                 <span className="truncate text-[10px] font-semibold text-(--color-text-2)">{portalName}</span>
               </div>
             </div>
@@ -115,7 +134,7 @@ const PortalConsolePreview: React.FC<PortalConsolePreviewProps> = ({
             <div className="relative z-2 -mx-6 -mt-7 mb-7 border-b border-(--color-portal-preview-divider) bg-(--color-portal-preview-shell) px-5 py-3 shadow-[0_6px_18px_var(--color-portal-card-shadow)] backdrop-blur-sm">
               <div className="flex items-center justify-between gap-3">
                 <div className="flex min-w-0 flex-1 items-center gap-2.5">
-                  <PreviewIdentity size="h-5.5 w-5.5" textSize="text-[12px]" />
+                  <PreviewConsoleIdentity className="block h-8 w-auto max-w-36 shrink-0 object-contain" />
                   <div className="flex min-w-0 items-center gap-2">
                     <span className="max-w-36 truncate text-[10px] font-bold text-(--color-text-1)">{portalName}</span>
                     <span className="inline-flex h-7 shrink-0 items-center whitespace-nowrap rounded-lg border border-(--color-portal-preview-border-strong) bg-(--color-bg-1) px-2.5 text-[9px] font-semibold leading-none text-(--color-text-2) shadow-[0_3px_8px_var(--color-portal-card-shadow)]">

@@ -51,7 +51,7 @@ const AutoAssociationRuleModal = forwardRef<AutoAssociationRuleModalRef, Props>(
   const [associations, setAssociations] = useState<AutoAssociationRuleFormAssociationItem[]>([]);
   const [currentModelAttrs, setCurrentModelAttrs] = useState<AttrFieldType[]>([]);
   const [allModelAttrsMap, setAllModelAttrsMap] = useState<Record<string, AttrFieldType[]>>({});
-  const previousAssociationIdRef = useRef<string | undefined>();
+  const previousAssociationIdRef = useRef<string | undefined>(undefined);
 
   useImperativeHandle(ref, () => ({
     showModal: (config) => {

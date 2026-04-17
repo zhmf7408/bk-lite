@@ -1,9 +1,11 @@
 import json
 import random
+from zoneinfo import ZoneInfo
 
 from django.contrib.auth.hashers import check_password, make_password
 from django.db import transaction
 from django.http import JsonResponse
+from django.utils import timezone as django_timezone
 
 from apps.core.utils.loader import LanguageLoader
 from apps.rpc.system_mgmt import SystemMgmt
@@ -11,6 +13,19 @@ from apps.system_mgmt.models import Group, Role, User
 from apps.system_mgmt.models.app import App
 from apps.system_mgmt.utils.group_utils import GroupUtils
 from apps.system_mgmt.utils.operation_log_utils import log_operation
+
+
+def _format_datetime_for_user(value, timezone_name=None):
+    if not value:
+        return None
+
+    try:
+        if timezone_name:
+            return django_timezone.localtime(value, ZoneInfo(timezone_name)).isoformat()
+    except Exception:
+        pass
+
+    return django_timezone.localtime(value).isoformat()
 
 
 def get_user_group_paths(user_group_list):
@@ -257,8 +272,11 @@ def get_user_info(request):
             "domain": user.domain,
             "group_list": group_paths,
             "role_list": role_info,
-            "last_login": user.last_login.isoformat() if user.last_login else None,
-            "password_last_modified": user.password_last_modified.isoformat() if user.password_last_modified else None,
+            "last_login": _format_datetime_for_user(user.last_login, getattr(request.user, "timezone", None)),
+            "password_last_modified": _format_datetime_for_user(
+                user.password_last_modified,
+                getattr(request.user, "timezone", None),
+            ),
             "temporary_pwd": user.temporary_pwd,
         }
         return JsonResponse({"result": True, "data": user_info})
