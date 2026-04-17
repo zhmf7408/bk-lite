@@ -34,6 +34,7 @@ const FilterBindingPanel: React.FC<FilterBindingPanelProps> = ({
   onChange,
 }) => {
   const { t } = useTranslation();
+  const safeFilterBindings = filterBindings || {};
 
   const bindableParams = useMemo((): BindableParam[] => {
     const filterParams = getBindableFilterParams(dataSourceParams);
@@ -56,7 +57,7 @@ const FilterBindingPanel: React.FC<FilterBindingPanelProps> = ({
 
   const handleBindingChange = (filterId: string, enabled: boolean) => {
     onChange({
-      ...filterBindings,
+      ...safeFilterBindings,
       [filterId]: enabled,
     });
   };
@@ -79,7 +80,7 @@ const FilterBindingPanel: React.FC<FilterBindingPanelProps> = ({
   return (
     <div className="space-y-2">
       {bindableParams.map(({ param, matchedDefinition, canBind, filterId }) => {
-        const isEnabled = filterBindings[filterId] ?? false;
+        const isEnabled = safeFilterBindings[filterId] ?? false;
         const displayName = matchedDefinition?.name || param.alias_name || param.name;
 
         return (

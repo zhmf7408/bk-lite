@@ -393,6 +393,11 @@ const Dashboard = forwardRef<DashboardRef, DashboardProps>(
           dataSourceParams: config.dataSourceParams || [],
           tableConfig: config.tableConfig,
           filterBindings: config.filterBindings,
+          selectedFields: config.selectedFields,
+          unit: config.unit,
+          conversionFactor: config.conversionFactor,
+          decimalPlaces: config.decimalPlaces,
+          thresholdColors: config.thresholdColors,
         },
       };
       const nextLayout = [...layout, newWidget];
@@ -498,6 +503,11 @@ const Dashboard = forwardRef<DashboardRef, DashboardProps>(
                 dataSourceParams: values.dataSourceParams,
                 tableConfig: values.tableConfig,
                 filterBindings: values.filterBindings,
+                selectedFields: values.selectedFields,
+                unit: values.unit,
+                conversionFactor: values.conversionFactor,
+                decimalPlaces: values.decimalPlaces,
+                thresholdColors: values.thresholdColors,
               },
             };
           }

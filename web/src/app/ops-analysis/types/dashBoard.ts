@@ -73,6 +73,8 @@ export interface TableConfig {
   columns?: TableColumnConfigItem[];
 }
 
+import { ThresholdColorConfig } from '@/app/ops-analysis/utils/thresholdUtils';
+
 export interface ValueConfig {
   chartType?: string;
   dataSource?: string | number;
@@ -80,6 +82,11 @@ export interface ValueConfig {
   dataSourceParams?: ParamItem[];
   tableConfig?: TableConfig;
   filterBindings?: FilterBindings;
+  selectedFields?: string[];
+  unit?: string;
+  conversionFactor?: number;
+  decimalPlaces?: number;
+  thresholdColors?: ThresholdColorConfig[];
 }
 
 export interface WidgetConfig extends ValueConfig {

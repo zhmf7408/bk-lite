@@ -110,7 +110,7 @@ export const useGraphOperations = (
         }, {});
       }
 
-      const resData = await getSourceDataByApiId(valueConfig.dataSource, requestParams);
+      const resData = await getSourceDataByApiId(Number(valueConfig.dataSource), requestParams);
       if (resData && Array.isArray(resData) && resData.length > 0) {
         const latestData = resData[resData.length - 1];
         const field = valueConfig.selectedFields[0];

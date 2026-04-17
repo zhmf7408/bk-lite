@@ -3,13 +3,12 @@ import { useTranslation } from '@/utils/i18n';
 import {
   ViewConfigProps,
   ViewConfigItem,
-  TableFilterFieldConfig,
-  TableColumnConfigItem,
   TableConfig,
   UnifiedFilterDefinition,
   FilterBindings,
   ValueConfig,
   FilterValue,
+  WidgetConfig,
 } from '@/app/ops-analysis/types/dashBoard';
 import {
   Drawer,
@@ -17,18 +16,10 @@ import {
   Form,
   Input,
   Radio,
-  Select,
-  Switch,
-  Empty,
   Tooltip,
   message,
 } from 'antd';
-import {
-  PlusCircleOutlined,
-  MinusCircleOutlined,
-  ExclamationCircleOutlined,
-  QuestionCircleOutlined,
-} from '@ant-design/icons';
+import { QuestionCircleOutlined } from '@ant-design/icons';
 import { useDataSourceManager } from '@/app/ops-analysis/hooks/useDataSource';
 import {
   getChartTypeList,
@@ -37,10 +28,8 @@ import {
 import DataSourceParamsConfig from '@/app/ops-analysis/components/paramsConfig';
 import DataSourceSelect from '@/app/ops-analysis/components/dataSourceSelect';
 import { FilterBindingPanel } from '@/app/ops-analysis/components/unifiedFilter';
-import CustomTable from '@/components/custom-table';
 import { useDataSourceApi } from '@/app/ops-analysis/api/dataSource';
 import {
-  formatTimeRange,
   getFilterDefinitionId,
   getBindableFilterParams,
   buildDefaultFilterBindings,
@@ -50,6 +39,16 @@ import type {
   ParamItem,
   ResponseFieldDefinition,
 } from '@/app/ops-analysis/types/dataSource';
+import { DEFAULT_THRESHOLD_COLORS } from '@/app/ops-analysis/constants/threshold';
+
+import { useTableConfig } from './viewConfig/hooks/useTableConfig';
+import { useSingleValueConfig } from './viewConfig/hooks/useSingleValueConfig';
+import { TableSettingsSection } from './viewConfig/sections/tableSettingsSection';
+import { SingleValueSettingsSection } from './viewConfig/sections/singleValueSettingsSection';
+import {
+  buildDisplayColumnsFromSchema,
+  isDisplayableDefaultField,
+} from './viewConfig/utils/columnProbing';
 
 interface FormValues {
   name: string;
@@ -59,12 +58,11 @@ interface FormValues {
   dataSourceParams?: ParamItem[];
   params?: Record<string, string | number | boolean | [number, number] | null>;
   tableConfig?: TableConfig;
+  selectedFields?: string[];
+  unit?: string;
+  conversionFactor?: number;
+  decimalPlaces?: number;
 }
-
-type DisplayColumnRow = TableColumnConfigItem & {
-  id: string;
-  isDefault?: boolean;
-};
 
 interface ViewConfigPropsWithManager extends ViewConfigProps {
   dataSourceManager: ReturnType<typeof useDataSourceManager>;
@@ -82,15 +80,9 @@ const ViewConfig: React.FC<ViewConfigPropsWithManager> = ({
   const { t } = useTranslation();
   const [form] = Form.useForm();
   const [chartType, setChartType] = useState<string>('');
-  const [isProbingColumns, setIsProbingColumns] = useState(false);
-  const [paramsChangedAfterProbe, setParamsChangedAfterProbe] = useState(false);
-  const [displayColumnsError, setDisplayColumnsError] = useState('');
-  const [filterFields, setFilterFields] = useState<
-    (TableFilterFieldConfig & { id: string })[]
-      >([]);
-  const [displayColumns, setDisplayColumns] = useState<DisplayColumnRow[]>([]);
   const [filterBindings, setFilterBindings] = useState<FilterBindings>({});
   const { getSourceDataByApiId } = useDataSourceApi();
+
   const {
     dataSources,
     selectedDataSource,
@@ -101,23 +93,41 @@ const ViewConfig: React.FC<ViewConfigPropsWithManager> = ({
     processFormParamsForSubmit,
   } = dataSourceManager;
 
+  const availableFields = useMemo((): ResponseFieldDefinition[] => {
+    return selectedDataSource?.field_schema || [];
+  }, [selectedDataSource]);
+
+  const tableConfig = useTableConfig({
+    form,
+    chartType,
+    selectedDataSource,
+    availableFields,
+    getSourceDataByApiId,
+    processFormParamsForSubmit,
+    t,
+  });
+
+  const singleValueConfig = useSingleValueConfig({
+    form,
+    selectedDataSource,
+    getSourceDataByApiId,
+  });
+
   const getFilteredChartTypes = (
     dataSource: DatasourceItem | undefined,
   ): ChartTypeItem[] => {
     if (!dataSource?.chart_type?.length) {
       return [];
     }
-
     const allChartTypes = getChartTypeList();
     return dataSource.chart_type
       .map((type: string) =>
         allChartTypes.find((chart) => chart.value === type),
       )
-      .filter((item): item is ChartTypeItem => Boolean(item))
-      .filter((item: ChartTypeItem) => item.value !== 'single');
+      .filter((item): item is ChartTypeItem => Boolean(item));
   };
 
-  const getDataSourceChartTypes = React.useMemo(() => {
+  const getDataSourceChartTypes = useMemo(() => {
     return getFilteredChartTypes(selectedDataSource);
   }, [selectedDataSource]);
 
@@ -128,9 +138,7 @@ const ViewConfig: React.FC<ViewConfigPropsWithManager> = ({
     const existingMap = new Map(
       existingDefinitions.map((def) => [def.id, def]),
     );
-
     const bindableParams = getBindableFilterParams(dataSource?.params);
-
     bindableParams.forEach((param, index) => {
       const id = getFilterDefinitionId(param.name, param.type);
       if (!existingMap.has(id)) {
@@ -145,25 +153,16 @@ const ViewConfig: React.FC<ViewConfigPropsWithManager> = ({
         });
       }
     });
-
     return Array.from(existingMap.values());
   };
 
-  /**
-   * 预览式统一筛选定义：合并已有定义 + 当前数据源的 filter 参数
-   * 这样用户在第一次配置新组件时，就能看到并控制即将新增的统一筛选项
-   */
   const previewFilterDefinitions = useMemo(
     () => computePreviewDefinitions(filterDefinitions, selectedDataSource),
     [filterDefinitions, selectedDataSource],
   );
 
-  const availableFields = useMemo((): ResponseFieldDefinition[] => {
-    return selectedDataSource?.field_schema || [];
-  }, [selectedDataSource]);
-
   const filterFieldOptions = useMemo(() => {
-    const columnOptions = displayColumns
+    const columnOptions = tableConfig.displayColumns
       .filter((col) => !!col.key?.trim())
       .map((col) => ({
         label: col.key,
@@ -184,12 +183,12 @@ const ViewConfig: React.FC<ViewConfigPropsWithManager> = ({
       label: f.key,
       value: f.key,
     }));
-  }, [displayColumns, availableFields]);
+  }, [tableConfig.displayColumns, availableFields]);
 
   const invalidConfiguredFieldKeys = useMemo(() => {
     const availableFieldKeySet = new Set([
       ...availableFields.map((field) => field.key),
-      ...displayColumns
+      ...tableConfig.displayColumns
         .filter((col) => col.isDefault)
         .map((col) => (col.key || '').trim())
         .filter(Boolean),
@@ -200,530 +199,21 @@ const ViewConfig: React.FC<ViewConfigPropsWithManager> = ({
     }
 
     const configuredKeys = [
-      ...displayColumns.map((col) => (col.key || '').trim()),
-      ...filterFields.map((field) => (field.key || '').trim()),
+      ...tableConfig.displayColumns.map((col) => (col.key || '').trim()),
+      ...tableConfig.filterFields.map((field) => (field.key || '').trim()),
     ].filter(Boolean);
 
     return Array.from(
       new Set(configuredKeys.filter((key) => !availableFieldKeySet.has(key))),
     );
-  }, [availableFields, displayColumns, filterFields]);
-
-  const filterInputTypeOptions = [
-    { label: t('dashboard.keyword'), value: 'keyword' },
-    { label: t('dashboard.timeRange'), value: 'time_range' },
-  ];
-
-  const createDefaultFilterField = (): TableFilterFieldConfig & {
-    id: string;
-  } => ({
-    id: `filter_${Date.now()}`,
-    key: '',
-    label: '',
-    inputType: 'keyword',
-  });
-
-  const createDefaultDisplayColumn = (): DisplayColumnRow => ({
-    id: `column_${Date.now()}_${Math.random().toString(16).slice(2, 8)}`,
-    key: '',
-    title: '',
-    visible: true,
-    order: displayColumns.length,
-    isDefault: false,
-  });
-
-  const isDisplayableDefaultField = (key: string): boolean => {
-    const normalized = (key || '').trim();
-    if (!normalized) {
-      return false;
-    }
-    return !normalized.startsWith('_');
-  };
-
-  const buildDisplayColumnsFromSchema = (
-    fields: ResponseFieldDefinition[],
-  ): DisplayColumnRow[] => {
-    return (fields || [])
-      .filter((field) => isDisplayableDefaultField(field.key))
-      .map((field, idx) => ({
-        id: `column_schema_${Date.now()}_${idx}`,
-        key: field.key,
-        title: field.title || field.key,
-        visible: true,
-        order: idx,
-        isDefault: true,
-      }));
-  };
-
-  const extractFirstRecordFromSourceData = (
-    sourceData: any,
-  ): Record<string, unknown> | null => {
-    const findFirstRecord = (rows: any[]): Record<string, unknown> | null => {
-      for (const row of rows) {
-        if (row && typeof row === 'object') {
-          const rowData = row.data;
-
-          // 表格类：data 是对象，包含 {items: [...], count}
-          if (
-            rowData &&
-            typeof rowData === 'object' &&
-            !Array.isArray(rowData) &&
-            Array.isArray(rowData.items)
-          ) {
-            const firstInNested = rowData.items.find(
-              (item: any) => item && typeof item === 'object',
-            );
-            if (firstInNested) {
-              return firstInNested;
-            }
-            continue;
-          }
-
-          // 图表类：data 是数组
-          if (Array.isArray(rowData)) {
-            const firstInGroup = rowData.find(
-              (item: any) => item && typeof item === 'object',
-            );
-            if (firstInGroup) {
-              return firstInGroup;
-            }
-            continue;
-          }
-
-          // 格式不符合，跳过
-          continue;
-        }
-      }
-      return null;
-    };
-
-    if (Array.isArray(sourceData)) {
-      return findFirstRecord(sourceData);
-    }
-
-    if (sourceData && typeof sourceData === 'object') {
-      const rows = sourceData.items || sourceData.data || sourceData.list;
-      if (Array.isArray(rows)) {
-        return findFirstRecord(rows);
-      }
-    }
-
-    return null;
-  };
-
-  const mergeDetectedFieldsWithSchema = (
-    detectedFieldKeys: string[],
-    schemaFields: ResponseFieldDefinition[],
-  ): DisplayColumnRow[] => {
-    const schemaTitleMap = new Map(
-      (schemaFields || []).map((field) => [
-        field.key,
-        field.title || field.key,
-      ]),
-    );
-
-    return detectedFieldKeys
-      .filter((key) => isDisplayableDefaultField(key))
-      .map((key, idx) => ({
-        id: `column_detected_${Date.now()}_${idx}`,
-        key,
-        title: schemaTitleMap.get(key) || key,
-        visible: true,
-        order: idx,
-        isDefault: true,
-      }));
-  };
-
-  const buildProbeParams = (
-    targetDataSource: DatasourceItem,
-    formParams: Record<string, any>,
-  ): Record<string, any> => {
-    const payload: Record<string, any> = {};
-    const sourceParams = targetDataSource.params || [];
-    const processedParams = processFormParamsForSubmit(
-      formParams,
-      sourceParams,
-    );
-    processedParams.forEach((param) => {
-      if (param.type === 'timeRange') {
-        payload[param.name] = formatTimeRange(param.value);
-      } else {
-        payload[param.name] = param.value;
-      }
-    });
-
-    if (chartType === 'table') {
-      payload.page = 1;
-      payload.page_size = 20;
-    }
-
-    return payload;
-  };
-
-  const probeDefaultDisplayColumns = async (
-    targetDataSource: DatasourceItem,
-    formParams: Record<string, any>,
-  ): Promise<DisplayColumnRow[]> => {
-    try {
-      const payload = buildProbeParams(targetDataSource, formParams);
-      const sourceData = await getSourceDataByApiId(
-        targetDataSource.id,
-        payload,
-      );
-      const firstRecord = extractFirstRecordFromSourceData(sourceData);
-      if (!firstRecord) {
-        return [];
-      }
-
-      const detectedKeys = Object.keys(firstRecord);
-      if (detectedKeys.length === 0) {
-        return [];
-      }
-
-      return mergeDetectedFieldsWithSchema(
-        detectedKeys,
-        targetDataSource?.field_schema || [],
-      );
-    } catch {
-      return [];
-    }
-  };
-
-  const handleAddFilterField = (index: number) => {
-    const newField = createDefaultFilterField();
-    const newFields = [...filterFields];
-    newFields.splice(index + 1, 0, newField);
-    setFilterFields(newFields);
-  };
-
-  const handleDeleteFilterField = (id: string) => {
-    setFilterFields(filterFields.filter((f) => f.id !== id));
-  };
-
-  const handleFilterFieldChange = (
-    id: string,
-    fieldName: keyof TableFilterFieldConfig,
-    value: string,
-  ) => {
-    setFilterFields(
-      filterFields.map((f) => {
-        if (f.id !== id) return f;
-        if (fieldName === 'key') {
-          const selectedField = filterFieldOptions.find(
-            (option) => option.value === value,
-          );
-          return {
-            ...f,
-            key: value,
-            label: selectedField?.label || value,
-          };
-        }
-        return { ...f, [fieldName]: value };
-      }),
-    );
-  };
-
-  const handleAddDisplayColumn = (index: number) => {
-    const newColumn = createDefaultDisplayColumn();
-    const nextColumns = [...displayColumns];
-    nextColumns.splice(index + 1, 0, newColumn);
-    setDisplayColumns(nextColumns.map((col, idx) => ({ ...col, order: idx })));
-  };
-
-  const handleDeleteDisplayColumn = (id: string) => {
-    const nextColumns = displayColumns.filter((col) => col.id !== id);
-    setDisplayColumns(nextColumns.map((col, idx) => ({ ...col, order: idx })));
-  };
-
-  const handleDisplayColumnChange = (
-    id: string,
-    fieldName: keyof TableColumnConfigItem,
-    value: string | boolean,
-  ) => {
-    setDisplayColumns(
-      displayColumns.map((col) => {
-        if (col.id !== id) return col;
-        const nextCol = {
-          ...col,
-          [fieldName]: value,
-        } as TableColumnConfigItem & {
-          id: string;
-        };
-        return nextCol;
-      }),
-    );
-  };
-
-  const handleDisplayColumnKeyBlur = (id: string) => {
-    setDisplayColumns((prev) =>
-      prev.map((col) => {
-        if (col.id !== id) {
-          return col;
-        }
-
-        const keyValue = (col.key || '').trim();
-        const titleValue = (col.title || '').trim();
-        if (!keyValue || titleValue) {
-          return col;
-        }
-
-        return {
-          ...col,
-          title: keyValue,
-        };
-      }),
-    );
-  };
-
-  const handleDisplayColumnDragEnd = (
-    targetTableData: typeof displayColumns,
-  ) => {
-    const nextColumns = (targetTableData || []).map((item, idx) => ({
-      ...item,
-      order: idx,
-    }));
-    setDisplayColumns(nextColumns);
-  };
-
-  const mergeProbedDefaultsWithCurrentColumns = (
-    probedColumns: DisplayColumnRow[],
-    currentColumns: DisplayColumnRow[],
-  ): DisplayColumnRow[] => {
-    const existingDefaultMap = new Map(
-      currentColumns
-        .filter((col) => col.isDefault)
-        .map((col) => [col.key, col]),
-    );
-
-    const mergedDefaults = probedColumns.map((col, idx) => {
-      const existing = existingDefaultMap.get(col.key);
-      return {
-        ...col,
-        id: existing?.id || col.id,
-        visible: existing?.visible ?? col.visible,
-        order: idx,
-        isDefault: true,
-      };
-    });
-
-    const customColumns = currentColumns
-      .filter((col) => !col.isDefault)
-      .map((col, idx) => ({
-        ...col,
-        order: mergedDefaults.length + idx,
-      }));
-
-    return [...mergedDefaults, ...customColumns];
-  };
-
-  const handleReProbeColumns = async () => {
-    if (!selectedDataSource || chartType !== 'table') {
-      return;
-    }
-
-    try {
-      setIsProbingColumns(true);
-      const currentParams = (form.getFieldValue('params') || {}) as Record<
-        string,
-        any
-      >;
-      const probedColumns = await probeDefaultDisplayColumns(
-        selectedDataSource,
-        currentParams,
-      );
-
-      if (probedColumns.length > 0) {
-        setDisplayColumns((prev) =>
-          mergeProbedDefaultsWithCurrentColumns(probedColumns, prev),
-        );
-        setParamsChangedAfterProbe(false);
-        message.success(t('dashboard.reProbeSuccess'));
-        return;
-      }
-
-      message.warning(t('dashboard.reProbeNoFields') || '未探测到可用字段');
-    } finally {
-      setIsProbingColumns(false);
-    }
-  };
+  }, [availableFields, tableConfig.displayColumns, tableConfig.filterFields]);
 
   const handleChartTypeChange = async (e: any) => {
     const newChartType = e.target.value;
     setChartType(newChartType);
     form.setFieldsValue({ chartType: newChartType });
-
-    if (
-      newChartType === 'table' &&
-      displayColumns.length === 0 &&
-      selectedDataSource
-    ) {
-      const currentParams = (form.getFieldValue('params') || {}) as Record<
-        string,
-        any
-      >;
-      const probedColumns = await probeDefaultDisplayColumns(
-        selectedDataSource,
-        currentParams,
-      );
-      if (probedColumns.length > 0) {
-        setDisplayColumns(probedColumns);
-      } else if (availableFields.length > 0) {
-        setDisplayColumns(buildDisplayColumnsFromSchema(availableFields));
-      }
-    }
+    await tableConfig.handleChartTypeChange(newChartType);
   };
-
-  const filterFieldColumns = [
-    {
-      title: t('dashboard.filterFieldKey'),
-      dataIndex: 'key',
-      key: 'key',
-      width: 160,
-      render: (_: unknown, record: TableFilterFieldConfig & { id: string }) => (
-        <Select
-          value={record.key || undefined}
-          placeholder={t('common.selectTip')}
-          style={{ width: '100%' }}
-          onChange={(val) => handleFilterFieldChange(record.id, 'key', val)}
-          options={filterFieldOptions}
-          showSearch
-          optionFilterProp="label"
-        />
-      ),
-    },
-    {
-      title: t('dashboard.filterFieldLabel'),
-      dataIndex: 'label',
-      key: 'label',
-      width: 140,
-      render: (_: unknown, record: TableFilterFieldConfig & { id: string }) => (
-        <Input
-          value={record.label}
-          placeholder={t('dashboard.filterFieldLabel')}
-          onChange={(e) =>
-            handleFilterFieldChange(record.id, 'label', e.target.value)
-          }
-        />
-      ),
-    },
-    {
-      title: t('dashboard.filterInputType'),
-      dataIndex: 'inputType',
-      key: 'inputType',
-      width: 120,
-      render: (_: unknown, record: TableFilterFieldConfig & { id: string }) => (
-        <Select
-          value={record.inputType}
-          options={filterInputTypeOptions}
-          style={{ width: '100%' }}
-          onChange={(val) =>
-            handleFilterFieldChange(record.id, 'inputType', val)
-          }
-        />
-      ),
-    },
-    {
-      title: t('dataSource.operation'),
-      key: 'action',
-      width: 80,
-      render: (
-        _: unknown,
-        record: TableFilterFieldConfig & { id: string },
-        index: number,
-      ) => (
-        <div
-          style={{ display: 'flex', gap: '4px', justifyContent: 'flex-start' }}
-        >
-          <Button
-            type="text"
-            size="small"
-            icon={<PlusCircleOutlined />}
-            onClick={() => handleAddFilterField(index)}
-            style={{ border: 'none', padding: '4px' }}
-          />
-          <Button
-            type="text"
-            size="small"
-            icon={<MinusCircleOutlined />}
-            onClick={() => handleDeleteFilterField(record.id)}
-            style={{ border: 'none', padding: '4px' }}
-          />
-        </div>
-      ),
-    },
-  ];
-
-  const displayColumnTableColumns = [
-    {
-      title: t('dashboard.filterFieldKey'),
-      dataIndex: 'key',
-      key: 'key',
-      width: 180,
-      render: (_: unknown, record: DisplayColumnRow) => (
-        <Input
-          value={record.key}
-          placeholder={t('common.inputMsg')}
-          onChange={(e) =>
-            handleDisplayColumnChange(record.id, 'key', e.target.value)
-          }
-          onBlur={() => handleDisplayColumnKeyBlur(record.id)}
-        />
-      ),
-    },
-    {
-      title: t('dashboard.filterFieldLabel'),
-      dataIndex: 'title',
-      key: 'title',
-      width: 180,
-      render: (_: unknown, record: DisplayColumnRow) => (
-        <Input
-          value={record.title}
-          placeholder={t('dashboard.filterFieldLabel')}
-          onChange={(e) =>
-            handleDisplayColumnChange(record.id, 'title', e.target.value)
-          }
-        />
-      ),
-    },
-    {
-      title: t('dashboard.columnVisible') || 'Visible',
-      dataIndex: 'visible',
-      key: 'visible',
-      width: 90,
-      render: (_: unknown, record: DisplayColumnRow) => (
-        <Switch
-          size="small"
-          checked={record.visible}
-          onChange={(e) => handleDisplayColumnChange(record.id, 'visible', e)}
-        />
-      ),
-    },
-    {
-      title: t('dataSource.operation'),
-      key: 'action',
-      width: 100,
-      render: (_: unknown, record: DisplayColumnRow, index: number) => (
-        <div
-          style={{ display: 'flex', gap: '4px', justifyContent: 'flex-start' }}
-        >
-          <Button
-            type="text"
-            size="small"
-            icon={<PlusCircleOutlined />}
-            onClick={() => handleAddDisplayColumn(index)}
-            style={{ border: 'none', padding: '4px' }}
-          />
-          <Button
-            type="text"
-            size="small"
-            icon={<MinusCircleOutlined />}
-            onClick={() => handleDeleteDisplayColumn(record.id)}
-            style={{ border: 'none', padding: '4px' }}
-          />
-        </div>
-      ),
-    },
-  ];
 
   const initializeItemForm = async (
     widgetItem: ViewConfigItem,
@@ -738,19 +228,17 @@ const ViewConfig: React.FC<ViewConfigPropsWithManager> = ({
       params: {},
       tableConfig: valueConfig?.tableConfig,
     };
-    if (!formValues) return;
-
     setChartType(formValues.chartType);
 
     if (valueConfig?.tableConfig?.filterFields) {
-      setFilterFields(
+      tableConfig.setFilterFields(
         valueConfig.tableConfig.filterFields.map((f, idx) => ({
           ...f,
           id: `filter_${idx}_${Date.now()}`,
         })),
       );
     } else {
-      setFilterFields([]);
+      tableConfig.setFilterFields([]);
     }
 
     const targetDataSource = findDataSource(formValues.dataSource);
@@ -773,7 +261,10 @@ const ViewConfig: React.FC<ViewConfigPropsWithManager> = ({
           );
         }
 
-        const previewDefs = computePreviewDefinitions(filterDefinitions, targetDataSource);
+        const previewDefs = computePreviewDefinitions(
+          filterDefinitions,
+          targetDataSource,
+        );
         setFilterBindings(
           buildDefaultFilterBindings(
             formValues.dataSourceParams?.length
@@ -796,7 +287,7 @@ const ViewConfig: React.FC<ViewConfigPropsWithManager> = ({
             .filter((key) => isDisplayableDefaultField(key)),
         );
 
-        const probedColumns = await probeDefaultDisplayColumns(
+        const probedColumns = await tableConfig.probeDefaultDisplayColumns(
           targetDataSource,
           formValues.params || {},
         );
@@ -804,7 +295,7 @@ const ViewConfig: React.FC<ViewConfigPropsWithManager> = ({
           (probedColumns || []).map((col) => col.key),
         );
 
-        setDisplayColumns(
+        tableConfig.setDisplayColumns(
           valueConfig.tableConfig.columns.map((c, idx) => ({
             ...c,
             id: `column_${idx}_${Date.now()}`,
@@ -818,23 +309,53 @@ const ViewConfig: React.FC<ViewConfigPropsWithManager> = ({
         !valueConfig?.tableConfig?.columns?.length &&
         formValues.chartType === 'table'
       ) {
-        // 初始化时：数据源 schema 优先，探测列兜底
         const schemaFields = targetDataSource?.field_schema;
         if (schemaFields && schemaFields.length > 0) {
-          setDisplayColumns(buildDisplayColumnsFromSchema(schemaFields));
+          tableConfig.setDisplayColumns(
+            buildDisplayColumnsFromSchema(schemaFields),
+          );
         } else {
-          const probedColumns = await probeDefaultDisplayColumns(
+          const probedColumns = await tableConfig.probeDefaultDisplayColumns(
             targetDataSource,
             formValues.params || {},
           );
-          setDisplayColumns(probedColumns);
+          tableConfig.setDisplayColumns(probedColumns);
         }
       }
     } else {
       setSelectedDataSource(undefined);
       if (!valueConfig?.tableConfig?.columns?.length) {
-        setDisplayColumns([]);
+        tableConfig.setDisplayColumns([]);
       }
+    }
+
+    if (valueConfig?.selectedFields) {
+      singleValueConfig.setSelectedFields(valueConfig.selectedFields);
+      formValues.selectedFields = valueConfig.selectedFields;
+    } else {
+      singleValueConfig.setSelectedFields([]);
+    }
+
+    if (valueConfig?.unit !== undefined) {
+      formValues.unit = valueConfig.unit;
+    }
+    if (valueConfig?.conversionFactor !== undefined) {
+      formValues.conversionFactor = valueConfig.conversionFactor;
+    }
+    if (valueConfig?.decimalPlaces !== undefined) {
+      formValues.decimalPlaces = valueConfig.decimalPlaces;
+    }
+
+    if (
+      valueConfig?.thresholdColors &&
+      Array.isArray(valueConfig.thresholdColors)
+    ) {
+      const sortedThresholds = [...valueConfig.thresholdColors].sort(
+        (a, b) => parseFloat(b.value) - parseFloat(a.value),
+      );
+      singleValueConfig.setThresholdColors(sortedThresholds);
+    } else {
+      singleValueConfig.setThresholdColors(DEFAULT_THRESHOLD_COLORS);
     }
 
     form.setFieldsValue(formValues);
@@ -844,11 +365,9 @@ const ViewConfig: React.FC<ViewConfigPropsWithManager> = ({
     form.resetFields();
     setSelectedDataSource(undefined);
     setChartType('');
-    setIsProbingColumns(false);
-    setParamsChangedAfterProbe(false);
-    setFilterFields([]);
-    setDisplayColumns([]);
     setFilterBindings({});
+    tableConfig.resetTableConfig();
+    singleValueConfig.resetSingleValueConfig();
   };
 
   const handleFormValuesChange = (changedValues: Record<string, any>) => {
@@ -856,7 +375,7 @@ const ViewConfig: React.FC<ViewConfigPropsWithManager> = ({
       return;
     }
     if ('params' in changedValues && selectedDataSource) {
-      setParamsChangedAfterProbe(true);
+      tableConfig.setParamsChangedAfterProbe(true);
     }
   };
 
@@ -869,11 +388,11 @@ const ViewConfig: React.FC<ViewConfigPropsWithManager> = ({
   }, [open, widgetItem, form, dataSources]);
 
   useEffect(() => {
-    if (!displayColumnsError) {
+    if (!tableConfig.displayColumnsError) {
       return;
     }
 
-    const hasVisibleColumn = displayColumns
+    const hasVisibleColumn = tableConfig.displayColumns
       .map((col) => ({
         ...col,
         key: (col.key || '').trim(),
@@ -881,9 +400,9 @@ const ViewConfig: React.FC<ViewConfigPropsWithManager> = ({
       .some((col) => col.key && col.visible !== false);
 
     if (hasVisibleColumn) {
-      setDisplayColumnsError('');
+      tableConfig.setDisplayColumnsError('');
     }
-  }, [displayColumns, displayColumnsError]);
+  }, [tableConfig.displayColumns, tableConfig.displayColumnsError]);
 
   const handleConfirm = async () => {
     try {
@@ -897,11 +416,11 @@ const ViewConfig: React.FC<ViewConfigPropsWithManager> = ({
       }
 
       if (chartType === 'table') {
-        setDisplayColumnsError('');
-        const tableConfig: TableConfig = {};
+        tableConfig.setDisplayColumnsError('');
+        const tableConfigData: TableConfig = {};
 
-        if (filterFields.length > 0) {
-          tableConfig.filterFields = filterFields
+        if (tableConfig.filterFields.length > 0) {
+          tableConfigData.filterFields = tableConfig.filterFields
             .filter((f) => f.key)
             .map(({ key, label, inputType }) => ({
               key,
@@ -910,7 +429,7 @@ const ViewConfig: React.FC<ViewConfigPropsWithManager> = ({
             }));
         }
 
-        const validDisplayColumns = displayColumns
+        const validDisplayColumns = tableConfig.displayColumns
           .map((col) => ({
             ...col,
             key: col.key.trim(),
@@ -936,14 +455,14 @@ const ViewConfig: React.FC<ViewConfigPropsWithManager> = ({
           (col) => col.visible !== false,
         );
         if (!hasVisibleColumn) {
-          setDisplayColumnsError(
+          tableConfig.setDisplayColumnsError(
             t('dashboard.atLeastOneVisibleColumn') || '请至少保留一列可见',
           );
           return;
         }
 
         if (validDisplayColumns.length > 0) {
-          tableConfig.columns = validDisplayColumns.map((col, index) => ({
+          tableConfigData.columns = validDisplayColumns.map((col, index) => ({
             key: col.key,
             title: col.title,
             visible: col.visible,
@@ -951,18 +470,37 @@ const ViewConfig: React.FC<ViewConfigPropsWithManager> = ({
           }));
         }
 
-        if (tableConfig.filterFields?.length || tableConfig.columns?.length) {
-          values.tableConfig = tableConfig;
+        if (
+          tableConfigData.filterFields?.length ||
+          tableConfigData.columns?.length
+        ) {
+          values.tableConfig = tableConfigData;
         }
       }
 
-      const result = filterBindings && Object.keys(filterBindings).length > 0
-        ? { ...values, filterBindings }
-        : values;
+      let result: WidgetConfig = { ...values } as WidgetConfig;
+
+      if (chartType === 'single') {
+        result.selectedFields = singleValueConfig.selectedFields;
+        result.thresholdColors = singleValueConfig.thresholdColors;
+        const unitValue = form.getFieldValue('unit');
+        const conversionFactorValue = form.getFieldValue('conversionFactor');
+        const decimalPlacesValue = form.getFieldValue('decimalPlaces');
+        if (unitValue !== undefined) result.unit = unitValue;
+        if (conversionFactorValue !== undefined)
+          result.conversionFactor = conversionFactorValue;
+        if (decimalPlacesValue !== undefined)
+          result.decimalPlaces = decimalPlacesValue;
+      }
+
+      if (filterBindings && Object.keys(filterBindings).length > 0) {
+        result = { ...result, filterBindings };
+      }
 
       onConfirm?.(result);
     } catch (error) {
       console.error('Form validation failed:', error);
+      message.error(t('common.saveFailed'));
     }
   };
 
@@ -1074,163 +612,58 @@ const ViewConfig: React.FC<ViewConfigPropsWithManager> = ({
         </div>
 
         {chartType === 'table' && (
-          <div className="mb-6">
-            <div
-              className="font-bold text-(--color-text-1) mb-4"
-              style={{ display: 'flex', alignItems: 'center', gap: 8 }}
-            >
-              <span>{t('dashboard.tableSettings')}</span>
-            </div>
+          <TableSettingsSection
+            t={t}
+            displayColumns={tableConfig.displayColumns}
+            filterFields={tableConfig.filterFields}
+            filterFieldOptions={filterFieldOptions}
+            invalidConfiguredFieldKeys={invalidConfiguredFieldKeys}
+            isProbingColumns={tableConfig.isProbingColumns}
+            paramsChangedAfterProbe={tableConfig.paramsChangedAfterProbe}
+            displayColumnsError={tableConfig.displayColumnsError}
+            onAddFilterField={tableConfig.handleAddFilterField}
+            onDeleteFilterField={tableConfig.handleDeleteFilterField}
+            onFilterFieldChange={tableConfig.handleFilterFieldChange}
+            onAddDisplayColumn={tableConfig.handleAddDisplayColumn}
+            onDeleteDisplayColumn={tableConfig.handleDeleteDisplayColumn}
+            onDisplayColumnChange={tableConfig.handleDisplayColumnChange}
+            onDisplayColumnKeyBlur={tableConfig.handleDisplayColumnKeyBlur}
+            onDisplayColumnDragEnd={tableConfig.handleDisplayColumnDragEnd}
+            onReProbeColumns={tableConfig.handleReProbeColumns}
+            onAddNewFilterField={() =>
+              tableConfig.setFilterFields([
+                ...tableConfig.filterFields,
+                tableConfig.createDefaultFilterField(),
+              ])
+            }
+            onAddNewDisplayColumn={() =>
+              tableConfig.setDisplayColumns([
+                ...tableConfig.displayColumns,
+                tableConfig.createDefaultDisplayColumn(),
+              ])
+            }
+          />
+        )}
 
-            <div style={{ marginBottom: '16px' }}>
-              <div
-                style={{
-                  marginBottom: '8px',
-                  display: 'flex',
-                  justifyContent: 'space-between',
-                  alignItems: 'center',
-                }}
-              >
-                <span
-                  style={{
-                    fontWeight: 500,
-                    display: 'inline-flex',
-                    alignItems: 'center',
-                    gap: 6,
-                  }}
-                >
-                  <span>{t('dashboard.displayColumns')}</span>
-                  {invalidConfiguredFieldKeys.length > 0 && (
-                    <Tooltip
-                      title={(
-                        t('dashboard.invalidConfiguredFieldsTip') ||
-                        '部分已配置字段不在当前可用字段集合中，可能不可用：{{fields}}'
-                      ).replace(
-                        '{{fields}}',
-                        invalidConfiguredFieldKeys.join('、'),
-                      )}
-                    >
-                      <ExclamationCircleOutlined
-                        style={{ color: '#faad14', fontSize: 14 }}
-                      />
-                    </Tooltip>
-                  )}
-                </span>
-                <div style={{ display: 'flex', gap: 8 }}>
-                  <Tooltip
-                    title={
-                      t('dashboard.reProbeColumnsTip') ||
-                      '将基于当前数据源和参数重新探测并恢复默认列，同时保留已有自定义列'
-                    }
-                  >
-                    <Button
-                      size="small"
-                      onClick={handleReProbeColumns}
-                      loading={isProbingColumns}
-                      type={paramsChangedAfterProbe ? 'primary' : 'default'}
-                    >
-                      {t('dashboard.reProbeColumns') || '重新探测列'}
-                    </Button>
-                  </Tooltip>
-                  <Button
-                    type="dashed"
-                    size="small"
-                    icon={<PlusCircleOutlined />}
-                    onClick={() =>
-                      setDisplayColumns([
-                        ...displayColumns,
-                        createDefaultDisplayColumn(),
-                      ])
-                    }
-                  >
-                    {t('common.add')}
-                  </Button>
-                </div>
-              </div>
-              {displayColumns.length > 0 ? (
-                <CustomTable
-                  rowKey="id"
-                  columns={displayColumnTableColumns}
-                  dataSource={displayColumns}
-                  pagination={false}
-                  scroll={{ y: 320 }}
-                  rowDraggable
-                  onRowDragEnd={(targetTableData) =>
-                    handleDisplayColumnDragEnd(
-                      (targetTableData || []) as DisplayColumnRow[],
-                    )
-                  }
-                />
-              ) : (
-                <Empty
-                  image={Empty.PRESENTED_IMAGE_SIMPLE}
-                  description={
-                    t('dashboard.noDisplayColumns') ||
-                    t('dashboard.displayColumns')
-                  }
-                />
-              )}
-              {displayColumnsError && (
-                <div
-                  style={{
-                    color: 'var(--ant-color-error)',
-                    fontSize: 12,
-                    marginTop: 8,
-                  }}
-                >
-                  {displayColumnsError}
-                </div>
-              )}
-            </div>
-
-            <div>
-              <div
-                style={{
-                  marginBottom: '8px',
-                  display: 'flex',
-                  justifyContent: 'space-between',
-                  alignItems: 'center',
-                }}
-              >
-                <span style={{ fontWeight: 500 }}>
-                  {t('dashboard.filterFields')}
-                </span>
-                <Button
-                  type="dashed"
-                  size="small"
-                  icon={<PlusCircleOutlined />}
-                  onClick={() =>
-                    setFilterFields([
-                      ...filterFields,
-                      createDefaultFilterField(),
-                    ])
-                  }
-                  disabled={filterFieldOptions.length === 0}
-                >
-                  {t('common.add')}
-                </Button>
-              </div>
-              {filterFieldOptions.length === 0 ? (
-                <Empty
-                  image={Empty.PRESENTED_IMAGE_SIMPLE}
-                  description={t('dashboard.noSchemaFields')}
-                />
-              ) : filterFields.length > 0 ? (
-                <CustomTable
-                  rowKey="id"
-                  columns={filterFieldColumns}
-                  dataSource={filterFields}
-                  pagination={false}
-                  scroll={{ y: 320 }}
-                />
-              ) : (
-                <Empty
-                  image={Empty.PRESENTED_IMAGE_SIMPLE}
-                  description={t('dashboard.noFilterFields')}
-                />
-              )}
-            </div>
-          </div>
+        {chartType === 'single' && (
+          <SingleValueSettingsSection
+            t={t}
+            selectedDataSource={selectedDataSource}
+            singleValueTreeData={singleValueConfig.singleValueTreeData}
+            selectedFields={singleValueConfig.selectedFields}
+            loadingSingleValueData={singleValueConfig.loadingSingleValueData}
+            thresholdColors={singleValueConfig.thresholdColors}
+            onFetchSingleValueDataFields={
+              singleValueConfig.fetchSingleValueDataFields
+            }
+            onSingleValueFieldChange={
+              singleValueConfig.handleSingleValueFieldChange
+            }
+            onThresholdChange={singleValueConfig.handleThresholdChange}
+            onThresholdBlur={singleValueConfig.handleThresholdBlur}
+            onAddThreshold={singleValueConfig.addThreshold}
+            onRemoveThreshold={singleValueConfig.removeThreshold}
+          />
         )}
       </Form>
     </Drawer>

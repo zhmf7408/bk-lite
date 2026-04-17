@@ -16,12 +16,14 @@ import ComPie from '../widgets/comPie';
 import ComLine from '../widgets/comLine';
 import ComBar from '../widgets/comBar';
 import ComTable from '../widgets/comTable';
+import ComSingle from '../widgets/comSingle';
 
 const componentMap: Record<string, React.ComponentType<any>> = {
   line: ComLine,
   pie: ComPie,
   bar: ComBar,
   table: ComTable,
+  single: ComSingle,
 };
 
 interface WidgetWrapperProps extends BaseWidgetProps {
