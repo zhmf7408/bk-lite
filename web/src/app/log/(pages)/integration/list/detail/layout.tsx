@@ -1,9 +1,11 @@
 'use client';
 
-import React from 'react';
+import React, { useMemo } from 'react';
 import { Tooltip } from 'antd';
 import WithSideMenuLayout from '@/components/sub-layout';
 import { useRouter, useSearchParams } from 'next/navigation';
+import { useTranslation } from '@/utils/i18n';
+import { MenuItem } from '@/types/index';
 
 const IntegrationDetailLayout = ({
   children
@@ -12,9 +14,12 @@ const IntegrationDetailLayout = ({
 }) => {
   const searchParams = useSearchParams();
   const router = useRouter();
+  const { t } = useTranslation();
   const pluginDisplayName = searchParams.get('display_name');
   const desc = searchParams.get('description');
   const icon = searchParams.get('icon');
+  const pluginName = searchParams.get('name');
+  const isK8s = useMemo(() => pluginName === 'kubernetes', [pluginName]);
 
   const handleBackButtonClick = () => {
     // const params = new URLSearchParams({ id });
@@ -42,12 +47,26 @@ const IntegrationDetailLayout = ({
     </div>
   );
 
+  const customMenuItems: MenuItem[] | undefined = useMemo(() => {
+    if (!isK8s) return undefined;
+    return [
+      {
+        title: t('log.integration.configuration'),
+        icon: 'settings-fill',
+        url: '/log/integration/list/detail/configure',
+        name: 'integration_configure',
+        operation: []
+      }
+    ];
+  }, [isK8s, t]);
+
   return (
     <WithSideMenuLayout
       topSection={<TopSection />}
       showBackButton={true}
       onBackButtonClick={handleBackButtonClick}
       layoutType={'sideMenu'}
+      customMenuItems={customMenuItems}
     >
       {children}
     </WithSideMenuLayout>

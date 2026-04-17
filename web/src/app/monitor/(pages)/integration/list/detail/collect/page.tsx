@@ -76,7 +76,7 @@ const CollectPage = () => {
 
   return (
     <Spin spinning={loading}>
-      <div className="px-[10px]">
+      <div className="px-[10px] h-[calc(100vh-270px)] overflow-y-auto">
         <div className="mb-4">
           <div className="mb-2 text-[20px] font-semibold text-[var(--color-text-1)]">
             采集
@@ -95,7 +95,7 @@ const CollectPage = () => {
           </div>
         )}
 
-        <div className="rounded-md border border-[var(--color-border)] bg-[var(--color-bg-1)] overflow-hidden">
+        <div className="mb-4 rounded-md border border-[var(--color-border)] bg-[var(--color-bg-1)] overflow-hidden">
           <div className="flex items-center justify-between px-4 py-3 border-b border-[var(--color-border)] bg-[var(--color-fill-1)]">
             <div className="text-sm font-medium text-[var(--color-text-1)]">
               采集配置指标片段
@@ -116,7 +116,7 @@ const CollectPage = () => {
           />
         </div>
 
-        <div className="mt-4 flex justify-end">
+        <div className="my-4 flex justify-end">
           <Button
             type="primary"
             loading={saving}
