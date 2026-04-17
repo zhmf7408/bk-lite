@@ -399,6 +399,7 @@
       "mechanismDes": "Used to process and respond to requests received through the publishing port, including the complete process of request parsing, processing, and returning results.",
       "instanceName": "Instance Name",
       "interval": "Interval",
+      "collect": "Collect",
       "configure": "Configure",
       "lcAllDes": "The primary language environment used by the system",
       "instanceIdKeys": "Unique ID",

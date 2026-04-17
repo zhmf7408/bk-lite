@@ -399,6 +399,7 @@
       "mechanismDes": "用于处理和响应通过发布端口接收的请求，包括请求的解析、处理和返回结果的完整流程。",
       "instanceName": "实例名称",
       "interval": "间隔",
+      "collect": "采集",
       "configure": "配置",
       "lcAllDes": "系统首要使用的语言环境",
       "instanceIdKeys": "唯一ID",

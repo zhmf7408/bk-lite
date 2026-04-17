@@ -4,6 +4,7 @@ import React from 'react';
 import { Tooltip } from 'antd';
 import WithSideMenuLayout from '@/components/sub-layout';
 import { useRouter, useSearchParams } from 'next/navigation';
+import { useTranslation } from '@/utils/i18n';
 import type { MenuItem } from '@/types';
 
 const IntegrationDetailLayout = ({
@@ -11,6 +12,7 @@ const IntegrationDetailLayout = ({
 }: {
   children: React.ReactNode;
 }) => {
+  const { t } = useTranslation();
   const searchParams = useSearchParams();
   const router = useRouter();
   const pluginDisplayName = searchParams.get('plugin_display_name');
@@ -49,29 +51,29 @@ const IntegrationDetailLayout = ({
 
   const detailMenuItems: MenuItem[] = [
     {
-      name: 'configure',
-      title: '配置',
+      name: 'integration_configure',
+      title: t('monitor.integrations.configure'),
       url: '/monitor/integration/list/detail/configure',
-      icon: '',
+      icon: 'settings-fill',
       operation: []
     },
     {
-      name: 'metric',
-      title: '指标',
+      name: 'integration_metric',
+      title: t('monitor.metric'),
       url: '/monitor/integration/list/detail/metric',
-      icon: '',
+      icon: 'guanli',
       operation: []
     },
     ...(templateType === 'snmp'
       ? [
-          {
-            name: 'collect',
-            title: '采集',
-            url: '/monitor/integration/list/detail/collect',
-            icon: '',
-            operation: []
-          }
-        ]
+        {
+          name: 'integration_collect',
+          title: t('monitor.integrations.collect'),
+          url: '/monitor/integration/list/detail/collect',
+          icon: 'caijiqi',
+          operation: []
+        }
+      ]
       : [])
   ];
 
