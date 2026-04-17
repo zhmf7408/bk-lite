@@ -210,6 +210,7 @@ const ObjectPage = () => {
   const onRowDragEnd = async (newList: MonitorObjectItem[]) => {
     if (!selectedType) return;
     try {
+      setObjectLoading(true);
       // 构建排序数据：当前类型下的对象名称列表（按新顺序）
       const orderData = [
         {
@@ -219,11 +220,11 @@ const ObjectPage = () => {
       ];
       await updateObjectOrder(orderData);
       message.success(t('common.updateSuccess'));
-      // 更新本地状态
-      setObjectList(newList);
+      // 排序成功后刷新列表
+      fetchObjects(selectedType.id);
     } catch {
       // 排序失败，重新获取列表
-      fetchObjects();
+      setObjectLoading(false);
     }
   };
 

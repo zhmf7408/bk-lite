@@ -6,7 +6,7 @@ import React, {
   forwardRef,
   useImperativeHandle,
   useEffect,
-  ReactNode,
+  ReactNode
 } from 'react';
 import { Input, Button, Form, message, Select, Tooltip } from 'antd';
 import Icon from '@/components/icon';
@@ -20,7 +20,7 @@ import {
   ObjectItem,
   MetricItem,
   IndexViewItem,
-  FilterItem,
+  FilterItem
 } from '@/app/monitor/types';
 import { RuleInfo, GroupingRules } from '@/app/monitor/types/integration';
 import { PlusOutlined, CloseOutlined } from '@ant-design/icons';
@@ -61,8 +61,8 @@ const RuleModal = forwardRef<ModalRef, ModalProps>(
       {
         name: null,
         method: null,
-        value: '',
-      },
+        value: ''
+      }
     ]);
 
     useImperativeHandle(ref, () => ({
@@ -83,7 +83,7 @@ const RuleModal = forwardRef<ModalRef, ModalProps>(
                 className="text-[14px] text-[var(--color-text-3)] absolute cursor-pointer"
                 style={{
                   top: '-4px',
-                  right: '-14px',
+                  right: '-14px'
                 }}
               />
             </span>
@@ -98,7 +98,7 @@ const RuleModal = forwardRef<ModalRef, ModalProps>(
         const objectId =
           type === 'edit' ? formData.monitor_object : monitorObject;
         getMetrics({ monitor_object_id: objectId });
-      },
+      }
     }));
 
     useEffect(() => {
@@ -114,7 +114,7 @@ const RuleModal = forwardRef<ModalRef, ModalProps>(
         if (metricId) {
           handleMetricChange(metricId);
           formRef.current?.setFieldsValue({
-            metric: metricId,
+            metric: metricId
           });
         }
       }
@@ -131,7 +131,7 @@ const RuleModal = forwardRef<ModalRef, ModalProps>(
             setMetrics(res[1] || []);
             const groupData = res[0].map((item: GroupInfo) => ({
               ...item,
-              child: [],
+              child: []
             }));
             metricData.forEach((metric: MetricItem) => {
               const target = groupData.find(
@@ -181,7 +181,7 @@ const RuleModal = forwardRef<ModalRef, ModalProps>(
         const rule: GroupingRules = {
           type: 'metric',
           metric_id: metric as number,
-          filter: conditions,
+          filter: conditions
         };
         const objectId =
           type === 'edit' ? groupForm.monitor_object : monitorObject;
@@ -189,7 +189,7 @@ const RuleModal = forwardRef<ModalRef, ModalProps>(
           name: values.name,
           monitor_object: objectId as number,
           rule,
-          organizations: values.organizations || [],
+          organizations: values.organizations || []
         });
       });
     };
@@ -200,8 +200,8 @@ const RuleModal = forwardRef<ModalRef, ModalProps>(
         {
           name: null,
           method: null,
-          value: '',
-        },
+          value: ''
+        }
       ]);
       setLabels([]);
       setOriginMetricData([]);
@@ -216,7 +216,7 @@ const RuleModal = forwardRef<ModalRef, ModalProps>(
       const instanceIdKeys =
         objects.find((item) => item.id === objectId)?.instance_id_keys || [];
       const keys = [
-        ...new Set([...labelKeys, ...(instanceIdKeys as string[])]),
+        ...new Set([...labelKeys, ...(instanceIdKeys as string[])])
       ];
       setLabels(keys);
     };
@@ -247,7 +247,7 @@ const RuleModal = forwardRef<ModalRef, ModalProps>(
       _conditions.push({
         name: null,
         method: null,
-        value: '',
+        value: ''
       });
       setConditions(_conditions);
     };
@@ -317,6 +317,11 @@ const RuleModal = forwardRef<ModalRef, ModalProps>(
                 allowClear
                 placeholder={t('monitor.metric')}
                 showSearch
+                filterOption={(input, option) =>
+                  String(option?.label || '')
+                    .toLowerCase()
+                    .includes(input.toLowerCase())
+                }
                 value={metric}
                 loading={metricsLoading}
                 options={originMetricData.map((item) => ({
@@ -324,8 +329,8 @@ const RuleModal = forwardRef<ModalRef, ModalProps>(
                   title: item.name,
                   options: (item.child || []).map((tex) => ({
                     label: tex.display_name,
-                    value: tex.id,
-                  })),
+                    value: tex.id
+                  }))
                 }))}
                 onChange={handleMetricChange}
               />
@@ -343,7 +348,7 @@ const RuleModal = forwardRef<ModalRef, ModalProps>(
                         <Select
                           className="[&_.ant-select-selector]:rounded-l-md [&_.ant-select-selector]:rounded-r-none"
                           style={{
-                            width: '150px',
+                            width: '150px'
                           }}
                           placeholder={t('monitor.label')}
                           showSearch
@@ -359,7 +364,7 @@ const RuleModal = forwardRef<ModalRef, ModalProps>(
                         <Select
                           className="[&_.ant-select-selector]:rounded-none"
                           style={{
-                            width: '90px',
+                            width: '90px'
                           }}
                           placeholder={t('monitor.term')}
                           value={conditionItem.method}
@@ -374,7 +379,7 @@ const RuleModal = forwardRef<ModalRef, ModalProps>(
                         <Input
                           className="rounded-none"
                           style={{
-                            width: '100px',
+                            width: '100px'
                           }}
                           placeholder={t('monitor.value')}
                           value={conditionItem.value}

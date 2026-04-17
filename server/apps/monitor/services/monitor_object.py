@@ -223,6 +223,9 @@ class MonitorObjectService:
             type_updates = []
             object_updates = []
 
+            # 仅当传入多个类型时才更新类型排序（单个类型表示只是对象内部重排）
+            update_type_order = len(order_data) > 1
+
             # 批量收集需要更新的数据
             for idx, item in enumerate(order_data):
                 type_id = item.get("type")
@@ -230,7 +233,7 @@ class MonitorObjectService:
 
                 # 创建或获取分类对象
                 obj_type, created = MonitorObjectType.objects.get_or_create(id=type_id, defaults={"order": idx})
-                if not created and obj_type.order != idx:
+                if update_type_order and not created and obj_type.order != idx:
                     obj_type.order = idx
                     type_updates.append(obj_type)
 
