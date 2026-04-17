@@ -1,9 +1,128 @@
 import nats_client
 from apps.cmdb.constants.constants import PERMISSION_MODEL, PERMISSION_INSTANCES, PERMISSION_TASK, CollectPluginTypes
+from apps.cmdb.display_field.constants import (
+    DISPLAY_SUFFIX,
+    FIELD_TYPE_ENUM,
+    FIELD_TYPE_ORGANIZATION,
+    FIELD_TYPE_TABLE,
+    FIELD_TYPE_TAG,
+    FIELD_TYPE_USER,
+    USER_DISPLAY_FORMAT,
+)
+from apps.cmdb.display_field.handler import DisplayFieldConverter, DisplayFieldHandler
+from apps.cmdb.display_field.cache import ExcludeFieldsCache
 from apps.cmdb.services.model import ModelManage
 from apps.cmdb.services.classification import ClassificationManage
 from apps.cmdb.models.collect_model import CollectModels
 from apps.cmdb.services.instance import InstanceManage
+from apps.system_mgmt.models import Group, User
+
+
+def _normalize_to_list(value):
+    if value in (None, ""):
+        return []
+    if isinstance(value, list):
+        return [item for item in value if item not in (None, "")]
+    return [value]
+
+
+def _build_authoritative_maps(instances, attrs):
+    org_ids = set()
+    user_ids = set()
+    enum_name_maps = {}
+
+    for attr in attrs:
+        if attr.get("is_display_field"):
+            continue
+
+        attr_id = attr.get("attr_id")
+        attr_type = attr.get("attr_type")
+
+        if attr_type == FIELD_TYPE_ENUM:
+            enum_name_maps[attr_id] = {str(option.get("id")): option.get("name") for option in attr.get("option", []) if option}
+            continue
+
+        if attr_type not in {FIELD_TYPE_ORGANIZATION, FIELD_TYPE_USER}:
+            continue
+
+        for instance in instances:
+            raw_value = instance.get(attr_id)
+            values = _normalize_to_list(raw_value)
+            if attr_type == FIELD_TYPE_ORGANIZATION:
+                org_ids.update(values)
+            else:
+                user_ids.update(values)
+
+    group_name_map = {group["id"]: group["name"] for group in Group.objects.filter(id__in=org_ids).values("id", "name")}
+    user_info_map = {user["id"]: user for user in User.objects.filter(id__in=user_ids).values("id", "username", "display_name")}
+
+    return group_name_map, user_info_map, enum_name_maps
+
+
+def _format_user_value(user_id, user_info_map):
+    user_info = user_info_map.get(user_id)
+    if not user_info:
+        return str(user_id)
+
+    username = user_info.get("username", "")
+    display_name = user_info.get("display_name", "")
+    if display_name and str(display_name).strip():
+        return USER_DISPLAY_FORMAT.format(display_name=display_name, username=username)
+    return username or str(user_id)
+
+
+def _format_instance_for_asset_query(instance, attrs, group_name_map, user_info_map, enum_name_maps):
+    formatted = {}
+    attr_map = {attr.get("attr_id"): attr for attr in attrs if attr.get("attr_id") and not attr.get("is_display_field")}
+
+    for key, value in instance.items():
+        if key.endswith(DISPLAY_SUFFIX):
+            continue
+
+        attr = attr_map.get(key)
+        if not attr:
+            formatted[key] = value
+            continue
+
+        attr_type = attr.get("attr_type")
+
+        if attr_type == FIELD_TYPE_ORGANIZATION:
+            values = _normalize_to_list(value)
+            names = [str(group_name_map.get(org_id, org_id)) for org_id in values]
+            formatted[key] = ", ".join(names) if names else ""
+        elif attr_type == FIELD_TYPE_USER:
+            values = _normalize_to_list(value)
+            names = [_format_user_value(user_id, user_info_map) for user_id in values]
+            formatted[key] = ", ".join([name for name in names if name]) if names else ""
+        elif attr_type == FIELD_TYPE_ENUM:
+            enum_name_map = enum_name_maps.get(key, {})
+            if isinstance(value, list):
+                formatted[key] = ", ".join([str(enum_name_map.get(str(item), item)) for item in value if item is not None])
+            elif value in (None, ""):
+                formatted[key] = ""
+            else:
+                formatted[key] = enum_name_map.get(str(value), value)
+        elif attr_type == FIELD_TYPE_TAG:
+            formatted[key] = DisplayFieldConverter.convert_tag(value)
+        elif attr_type == FIELD_TYPE_TABLE:
+            formatted[key] = DisplayFieldConverter.convert_table(value)
+        else:
+            formatted[key] = value
+
+    return DisplayFieldHandler.remove_display_fields(formatted)
+
+
+def _format_asset_instances_response(model_id, instances):
+    if not instances:
+        return []
+
+    attrs = ExcludeFieldsCache.get_model_attrs(model_id)
+    if not attrs:
+        return [DisplayFieldHandler.remove_display_fields(dict(instance)) for instance in instances]
+
+    group_name_map, user_info_map, enum_name_maps = _build_authoritative_maps(instances, attrs)
+
+    return [_format_instance_for_asset_query(dict(instance), attrs, group_name_map, user_info_map, enum_name_maps) for instance in instances]
 
 
 @nats_client.register
@@ -221,11 +340,13 @@ def query_asset_instances(
         permission_map={},
     )
 
+    formatted_instances = _format_asset_instances_response(model_id, instances)
+
     return {
         "result": True,
         "data": {
             "count": count,
-            "items": instances,
+            "items": formatted_instances,
         },
         "message": "",
     }
@@ -246,8 +367,8 @@ def sync_display_fields(organizations=None, users=None):
     from apps.cmdb.display_field.sync import sync_display_fields_for_system_mgmt
     
     result = sync_display_fields_for_system_mgmt(
-        organizations=organizations,
-        users=users
+        organizations=organizations or [],
+        users=users or [],
     )
     
     return result
