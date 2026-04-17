@@ -81,7 +81,12 @@ const CreateTemplateModal = forwardRef<ModalRef, CreateTemplateModalProps>(
           display_name: initialForm?.display_name,
           template_id: initialForm?.template_id,
           description: initialForm?.description,
-          template_type: initialForm?.template_type === 'pull' ? 'pull' : 'api'
+          template_type:
+            initialForm?.template_type === 'pull'
+              ? 'pull'
+              : initialForm?.template_type === 'snmp'
+                ? 'snmp'
+                : 'api'
         });
       }
     }));
@@ -180,9 +185,7 @@ const CreateTemplateModal = forwardRef<ModalRef, CreateTemplateModalProps>(
             <Radio.Group>
               <Radio value="api">API</Radio>
               <Radio value="pull">PULL</Radio>
-              <Radio value="snmp" disabled>
-                SNMP
-              </Radio>
+              <Radio value="snmp">SNMP</Radio>
             </Radio.Group>
           </Form.Item>
           {templateType === 'pull' && (

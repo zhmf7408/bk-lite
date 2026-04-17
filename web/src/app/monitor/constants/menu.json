@@ -76,6 +76,13 @@
               "icon": "guanli",
               "url": "/monitor/integration/list/detail/metric",
               "name": "integration_metric"
+            },
+            {
+              "title": "采集",
+              "icon": "guanli",
+              "url": "/monitor/integration/list/detail/collect",
+              "name": "integration_collect",
+              "withParentPermission": true
             }
           ]
         },
@@ -177,6 +184,13 @@
               "icon": "guanli",
               "url": "/monitor/integration/list/detail/metric",
               "name": "integration_metric"
+            },
+            {
+              "title": "Collect",
+              "icon": "guanli",
+              "url": "/monitor/integration/list/detail/collect",
+              "name": "integration_collect",
+              "withParentPermission": true
             }
           ]
         },

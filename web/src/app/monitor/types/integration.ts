@@ -166,6 +166,16 @@ export interface TemplateAccessGuideDoc {
   line_protocol_example_with_timestamp_ms: string;
 }
 
+export interface SnmpCollectTemplateDoc {
+  plugin_id: number;
+  template_id?: string;
+  display_name: string;
+  content: string;
+  type: string;
+  config_type: string;
+  file_type: string;
+}
+
 export interface ConfigItem {
   id: number;
   collect_type: string;
