@@ -37,6 +37,7 @@ ADD ./filebeat ./bin/filebeat
 ADD ./packetbeat ./bin/packetbeat
 ADD ./auditbeat ./bin/auditbeat
 ADD ./windows /opt/release/windows/fusion-collectors
+ADD ./linux/collector-sidecar-installer /opt/release/linux/fusion-collectors/collector-sidecar-installer
 
 # exporters
 ADD ./linux/exporters /opt/release/linux/exporters
