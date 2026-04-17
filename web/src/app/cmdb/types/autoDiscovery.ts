@@ -40,6 +40,7 @@ export interface TreeNode {
   name: string;
   type?: string;
   task_type?: string;
+  encrypted_fields?: string[];
   tag?: string[];
   desc?: string;
   children?: TreeNode[];
@@ -51,7 +52,9 @@ export interface ModelItem {
   model_id: string;
   key: string;
   name: string;
+  type?: string;
   task_type?: string;
+  encrypted_fields?: string[];
   tag?: string[];
   desc?: string;
   tabItems?: TreeNode[];

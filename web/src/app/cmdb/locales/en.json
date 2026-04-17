@@ -355,6 +355,10 @@
             "password": "Password",
             "sslVerify": "SSL verify"
         },
+        "IPMITask": {
+            "privilege": "Privilege",
+            "privilegeTooltip": "Controls the IPMI session permission level. Recommend administrator for compatibility; lower levels may not return full inventory."
+        },
         "SNMPTask": {
             "chooseSNMP": "SNMP",
             "version": "SNMP version",

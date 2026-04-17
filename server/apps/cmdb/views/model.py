@@ -69,21 +69,15 @@ class ModelViewSet(CmdbPermissionMixin, viewsets.ViewSet):
             permission_type=PERMISSION_MODEL,
         )
 
-        organizations = self.organizations(request, model_info)
-        # 再次确认用户所在的组织
-        if not organizations:
-            return WebUtils.response_error("抱歉！您没有此模型的权限", status_code=status.HTTP_403_FORBIDDEN)
-
-        has_permission = CmdbRulesFormatUtil.has_object_permission(
-            obj_type=PERMISSION_MODEL,
-            operator=VIEW,
-            model_id=model_id,
-            permission_instances_map=permissions_map,
-            instance=model_info,
+        permission_error = self.require_model_view_permission(
+            request,
+            model_info,
             default_group_id=self.default_group_id,
+            error_message="抱歉！您没有此模型的权限",
+            permissions_map=permissions_map,
         )
-        if not has_permission:
-            return WebUtils.response_error("抱歉！您没有此模型的权限", status_code=status.HTTP_403_FORBIDDEN)
+        if permission_error:
+            return permission_error
 
         self.model_add_permission(
             permission_instances_map=permissions_map,
@@ -335,21 +329,15 @@ class ModelViewSet(CmdbPermissionMixin, viewsets.ViewSet):
 
         permissions_map = CmdbRulesFormatUtil.format_user_groups_permissions(request=request, model_id=model_id, permission_type=PERMISSION_MODEL)
 
-        organizations = self.organizations(request, model_info)
-        # 再次确认用户所在的组织
-        if not organizations:
-            return WebUtils.response_error("抱歉！您没有此模型的权限", status_code=status.HTTP_403_FORBIDDEN)
-
-        has_permission = CmdbRulesFormatUtil.has_object_permission(
-            obj_type=PERMISSION_MODEL,
-            operator=VIEW,
-            model_id=model_id,
-            permission_instances_map=permissions_map,
-            instance=model_info,
+        permission_error = self.require_model_view_permission(
+            request,
+            model_info,
             default_group_id=self.default_group_id,
+            error_message="抱歉！您没有此模型的权限",
+            permissions_map=permissions_map,
         )
-        if not has_permission:
-            return WebUtils.response_error("抱歉！您没有此模型的权限", status_code=status.HTTP_403_FORBIDDEN)
+        if permission_error:
+            return permission_error
 
         result = ModelManage.model_association_search(model_id)
         return WebUtils.response_success(result)
@@ -367,21 +355,31 @@ class ModelViewSet(CmdbPermissionMixin, viewsets.ViewSet):
             permission_type=PERMISSION_MODEL,
         )
 
-        organizations = self.organizations(request, model_info)
-        if not organizations:
-            return WebUtils.response_error("抱歉！您没有此模型的权限", status_code=status.HTTP_403_FORBIDDEN)
+        if request.method == "GET":
+            permission_error = self.require_model_view_permission(
+                request,
+                model_info,
+                default_group_id=self.default_group_id,
+                error_message="抱歉！您没有此模型的权限",
+                permissions_map=permissions_map,
+            )
+            if permission_error:
+                return permission_error
+        else:
+            organizations = self.organizations(request, model_info)
+            if not organizations:
+                return WebUtils.response_error("抱歉！您没有此模型的权限", status_code=status.HTTP_403_FORBIDDEN)
 
-        operator = VIEW if request.method == "GET" else OPERATE
-        has_permission = CmdbRulesFormatUtil.has_object_permission(
-            obj_type=PERMISSION_MODEL,
-            operator=operator,
-            model_id=model_id,
-            permission_instances_map=permissions_map,
-            instance=model_info,
-            default_group_id=self.default_group_id,
-        )
-        if not has_permission:
-            return WebUtils.response_error("抱歉！您没有此模型的权限", status_code=status.HTTP_403_FORBIDDEN)
+            has_permission = CmdbRulesFormatUtil.has_object_permission(
+                obj_type=PERMISSION_MODEL,
+                operator=OPERATE,
+                model_id=model_id,
+                permission_instances_map=permissions_map,
+                instance=model_info,
+                default_group_id=self.default_group_id,
+            )
+            if not has_permission:
+                return WebUtils.response_error("抱歉！您没有此模型的权限", status_code=status.HTTP_403_FORBIDDEN)
 
         try:
             if request.method == "GET":
@@ -580,21 +578,15 @@ class ModelViewSet(CmdbPermissionMixin, viewsets.ViewSet):
 
         permissions_map = CmdbRulesFormatUtil.format_user_groups_permissions(request=request, model_id=model_id, permission_type=PERMISSION_MODEL)
 
-        organizations = self.organizations(request, model_info)
-        # 再次确认用户所在的组织
-        if not organizations:
-            return WebUtils.response_error("抱歉！您没有此模型的权限", status_code=status.HTTP_403_FORBIDDEN)
-
-        has_permission = CmdbRulesFormatUtil.has_object_permission(
-            obj_type=PERMISSION_MODEL,
-            operator=VIEW,
-            model_id=model_id,
-            permission_instances_map=permissions_map,
-            instance=model_info,
+        permission_error = self.require_model_view_permission(
+            request,
+            model_info,
             default_group_id=self.default_group_id,
+            error_message="抱歉！您没有此模型的权限",
+            permissions_map=permissions_map,
         )
-        if not has_permission:
-            return WebUtils.response_error("抱歉！您没有此模型的权限", status_code=status.HTTP_403_FORBIDDEN)
+        if permission_error:
+            return permission_error
 
         result = ModelManage.search_model_attr(model_id, request.user.locale)
         filtered_attrs = [attr for attr in result if not attr.get("is_display_field")]

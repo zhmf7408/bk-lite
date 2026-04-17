@@ -32,5 +32,13 @@ executors:
     # 默认脚本
     default_script: linux
 
+  protocol:
+    type: protocol
+    timeout: 30
+
+    collector:
+      module: plugins.inputs.physcial_server.physcial_server_info
+      class: PhyscialServerIPMIInfo
+
 # 默认执行器
 default_executor: job

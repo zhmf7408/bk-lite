@@ -26,7 +26,7 @@ class CollectModelSerializer(AuthSerializer):
         representation = super().to_representation(instance)
         # 对返回的凭据中的密码字段进行脱敏处理
         credential = instance.credential
-        encrypted_fields = get_collect_model_passwords(collect_model_id=instance.model_id)
+        encrypted_fields = get_collect_model_passwords(collect_model_id=instance.model_id, driver_type=instance.driver_type)
         for encrypted_field in encrypted_fields:
             if encrypted_field in credential:
                 credential[encrypted_field] = "******"
