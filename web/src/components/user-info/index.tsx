@@ -37,6 +37,7 @@ const UserInfo: React.FC = () => {
   const [dropdownVisible, setDropdownVisible] = useState<boolean>(false);
   const [groupPanelVisible, setGroupPanelVisible] = useState<boolean>(false);
   const [isLoading, setIsLoading] = useState<boolean>(false);
+  const [consoleVersion, setConsoleVersion] = useState<string>('--');
   const [includeChildren, setIncludeChildren] = useState<boolean>(false);
   const [searchValue, setSearchValue] = useState<string>('');
   const [userExpandedKeys, setUserExpandedKeys] = useState<string[]>([]);
@@ -49,6 +50,22 @@ const UserInfo: React.FC = () => {
     if (savedValue === '1') {
       setIncludeChildren(true);
     }
+  }, []);
+
+  useEffect(() => {
+    const locale = typeof window !== 'undefined' && localStorage.getItem('locale') === 'en' ? 'en' : 'zh';
+
+    fetch(`/api/versions?locale=${locale}&clientId=ops-console`)
+      .then((res) => res.json())
+      .then((data) => {
+        const latestVersion = data.versionFiles?.[0];
+        if (latestVersion) {
+          setConsoleVersion(latestVersion);
+        }
+      })
+      .catch(() => {
+        setConsoleVersion('--');
+      });
   }, []);
 
   // 初始化时默认展开所有节点
@@ -262,7 +279,7 @@ const UserInfo: React.FC = () => {
         label: (
           <div className="w-full flex justify-between items-center">
             <span>{t('common.version')}</span>
-            <span className="text-xs text-[var(--color-text-4)]">3.1.0</span>
+            <span className="text-xs text-(--color-text-4)">{consoleVersion}</span>
           </div>
         ),
       },
@@ -300,7 +317,7 @@ const UserInfo: React.FC = () => {
     ];
 
     return items;
-  }, [selectedGroup, groupTree, isLoading, isSuperUser, session, groupPanelContent, groupPanelVisible, t]);
+  }, [consoleVersion, selectedGroup, groupTree, isLoading, isSuperUser, session, groupPanelContent, groupPanelVisible, t]);
 
   const handleMenuClick = ({ key }: any) => {
     // 点击组选项时不关闭菜单（由 Popover 控制）
