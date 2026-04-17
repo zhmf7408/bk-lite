@@ -26,6 +26,8 @@ interface InstanceItem {
   name: string;
 }
 
+type RuntimeProfile = 'standard' | 'docker' | 'custom';
+
 const FORM_CONTROL_WIDTH = 300;
 
 const AccessConfig: React.FC<AccessConfigProps> = ({ onNext, commandData }) => {
@@ -57,6 +59,9 @@ const AccessConfig: React.FC<AccessConfigProps> = ({ onNext, commandData }) => {
         accessType: 'existing',
         cloud_region_id: commandData.cloud_region_id,
         k8sCluster: commandData.instance_id,
+        runtime_profile: commandData.runtime_profile || 'standard',
+        host_log_path: commandData.host_log_path,
+        docker_container_log_path: commandData.docker_container_log_path,
       });
     }
   }, [commandData, form]);
@@ -94,6 +99,9 @@ const AccessConfig: React.FC<AccessConfigProps> = ({ onNext, commandData }) => {
       const values = await form.validateFields();
       const commandParams = {
         cloud_region_id: values.cloud_region_id,
+        runtime_profile: values.runtime_profile as RuntimeProfile,
+        host_log_path: values.host_log_path,
+        docker_container_log_path: values.docker_container_log_path,
       };
 
       if (values.accessType === 'new') {
@@ -112,6 +120,9 @@ const AccessConfig: React.FC<AccessConfigProps> = ({ onNext, commandData }) => {
           command: commandResult,
           instance_id: createResult?.instance_id,
           cloud_region_id: values.cloud_region_id,
+          runtime_profile: values.runtime_profile,
+          host_log_path: values.host_log_path,
+          docker_container_log_path: values.docker_container_log_path,
         });
         return;
       }
@@ -124,6 +135,9 @@ const AccessConfig: React.FC<AccessConfigProps> = ({ onNext, commandData }) => {
         command: commandResult,
         instance_id: values.k8sCluster,
         cloud_region_id: values.cloud_region_id,
+        runtime_profile: values.runtime_profile,
+        host_log_path: values.host_log_path,
+        docker_container_log_path: values.docker_container_log_path,
       });
     } finally {
       setSubmitLoading(false);
@@ -156,6 +170,10 @@ const AccessConfig: React.FC<AccessConfigProps> = ({ onNext, commandData }) => {
               <span className="mr-2">•</span>
               <span>{t('log.integration.k8s.permissionRequirement')}</span>
             </li>
+            <li className="flex items-start">
+              <span className="mr-2">•</span>
+              <span>{t('log.integration.k8s.presetHint')}</span>
+            </li>
           </ul>
         </div>
       </div>
@@ -166,6 +184,7 @@ const AccessConfig: React.FC<AccessConfigProps> = ({ onNext, commandData }) => {
         className="w-full"
         initialValues={{
           accessType: 'new',
+          runtime_profile: commandData?.runtime_profile || 'standard',
         }}
       >
         <div className="flex items-center mb-6">
@@ -289,6 +308,93 @@ const AccessConfig: React.FC<AccessConfigProps> = ({ onNext, commandData }) => {
               {t('log.integration.k8s.cloudRegionDesc')}
             </div>
           </div>
+        </Form.Item>
+
+        <Form.Item label={t('log.integration.k8s.runtimeProfile')} required>
+          <div className="flex items-start gap-4">
+            <Form.Item
+              name="runtime_profile"
+              noStyle
+              rules={[{ required: true, message: t('common.required') }]}
+            >
+              <Radio.Group style={{ width: FORM_CONTROL_WIDTH }}>
+                <Radio value="standard">{t('log.integration.k8s.runtimeProfileStandard')}</Radio>
+                <Radio value="docker">{t('log.integration.k8s.runtimeProfileDocker')}</Radio>
+                <Radio value="custom">{t('log.integration.k8s.runtimeProfileCustom')}</Radio>
+              </Radio.Group>
+            </Form.Item>
+            <div className="text-[var(--color-text-3)] flex-1">
+              {t('log.integration.k8s.runtimeProfileDesc')}
+            </div>
+          </div>
+        </Form.Item>
+
+        <Form.Item
+          noStyle
+          shouldUpdate={(prevValues, currentValues) =>
+            prevValues.runtime_profile !== currentValues.runtime_profile
+          }
+        >
+          {({ getFieldValue }) =>
+            getFieldValue('runtime_profile') === 'custom' ? (
+              <>
+                <Form.Item label={t('log.integration.k8s.hostLogPath')} required>
+                  <div className="flex items-start gap-4">
+                    <Form.Item
+                      name="host_log_path"
+                      noStyle
+                      rules={[
+                        { required: true, message: t('common.required') },
+                        {
+                          validator: (_, value) => {
+                            if (!value || String(value).startsWith('/')) {
+                              return Promise.resolve();
+                            }
+                            return Promise.reject(new Error(t('log.integration.k8s.absolutePathRequired')));
+                          },
+                        },
+                      ]}
+                    >
+                      <Input
+                        placeholder={t('log.integration.k8s.hostLogPathPlaceholder')}
+                        style={{ width: FORM_CONTROL_WIDTH }}
+                      />
+                    </Form.Item>
+                    <div className="text-[var(--color-text-3)] flex-1">
+                      {t('log.integration.k8s.hostLogPathDesc')}
+                    </div>
+                  </div>
+                </Form.Item>
+
+                <Form.Item label={t('log.integration.k8s.dockerContainerLogPath')}>
+                  <div className="flex items-start gap-4">
+                    <Form.Item
+                      name="docker_container_log_path"
+                      noStyle
+                      rules={[
+                        {
+                          validator: (_, value) => {
+                            if (!value || String(value).startsWith('/')) {
+                              return Promise.resolve();
+                            }
+                            return Promise.reject(new Error(t('log.integration.k8s.absolutePathRequired')));
+                          },
+                        },
+                      ]}
+                    >
+                      <Input
+                        placeholder={t('log.integration.k8s.dockerContainerLogPathPlaceholder')}
+                        style={{ width: FORM_CONTROL_WIDTH }}
+                      />
+                    </Form.Item>
+                    <div className="text-[var(--color-text-3)] flex-1">
+                      {t('log.integration.k8s.dockerContainerLogPathDesc')}
+                    </div>
+                  </div>
+                </Form.Item>
+              </>
+            ) : null
+          }
         </Form.Item>
 
         <div className="pt-[20px]">

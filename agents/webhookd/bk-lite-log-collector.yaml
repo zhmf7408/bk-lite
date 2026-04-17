@@ -25,12 +25,7 @@ spec:
             - name: vector-config-volume
               mountPath: /etc/vector/vector.yaml
               subPath: vector.yaml
-            - name: var-log
-              mountPath: /var/log
-              readOnly: true
-            - name: var-lib-docker-containers
-              mountPath: /var/lib/docker/containers
-              readOnly: true
+__LOG_VOLUME_MOUNTS__
             - name: proc
               mountPath: /host/proc
               readOnly: true
@@ -64,12 +59,7 @@ spec:
         - name: vector-config-volume
           configMap:
             name: vector-daemonset-config
-        - name: var-log
-          hostPath:
-            path: /var/log
-        - name: var-lib-docker-containers
-          hostPath:
-            path: /var/lib/docker/containers
+__LOG_VOLUMES__
         - name: proc
           hostPath:
             path: /proc

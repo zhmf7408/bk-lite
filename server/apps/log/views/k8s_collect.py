@@ -22,6 +22,9 @@ class K8sCollectViewSet(viewsets.ViewSet):
         command = K8sLogCollectService.generate_install_command(
             request.data.get("instance_id"),
             request.data.get("cloud_region_id"),
+            request.data.get("runtime_profile"),
+            request.data.get("host_log_path"),
+            request.data.get("docker_container_log_path"),
         )
         return WebUtils.response_success(command)
 

@@ -115,6 +115,9 @@ const useIntegrationApi = () => {
   const getK8sCommand = async (params: {
     instance_id?: string;
     cloud_region_id?: React.Key;
+    runtime_profile?: 'standard' | 'docker' | 'custom';
+    host_log_path?: string;
+    docker_container_log_path?: string;
   } = {}) => {
     return await post('/log/k8s_collect/generate_install_command/', params);
   };

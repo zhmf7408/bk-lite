@@ -27,7 +27,10 @@ Content-Type: application/json
   "nats_url": "tls://192.168.1.100:4222",
   "nats_username": "admin",
   "nats_password": "secret123",
-  "nats_ca": "-----BEGIN CERTIFICATE-----\n...\n-----END CERTIFICATE-----"
+  "nats_ca": "-----BEGIN CERTIFICATE-----\n...\n-----END CERTIFICATE-----",
+  "runtime_profile": "standard",
+  "host_log_path": "/var/log/pods",
+  "docker_container_log_path": "/var/lib/docker/containers"
 }
 ```
 
@@ -41,6 +44,9 @@ Content-Type: application/json
 | nats_username | string | 是 | NATS 用户名 |
 | nats_password | string | 是 | NATS 密码 |
 | nats_ca | string | 是 | NATS CA 证书内容（PEM 格式） |
+| runtime_profile | string | 否 | 日志采集器运行环境预设，枚举值：`standard`（默认，仅挂载 `/var/log`）、`docker`（额外挂载 `/var/lib/docker/containers`）、`custom`（使用自定义日志目录）。仅 `type=log` 时生效 |
+| host_log_path | string | 条件必填 | 自定义节点日志目录绝对路径。仅当 `type=log` 且 `runtime_profile=custom` 时必填，建议填写 Pod 日志目录，如 `/var/log/pods` |
+| docker_container_log_path | string | 否 | Docker 容器日志目录绝对路径。仅 `type=log` 时可选，常见值为 `/var/lib/docker/containers` |
 
 **成功响应**:
 ```json
@@ -92,7 +98,27 @@ curl -X POST \
     "nats_url": "nats://192.168.1.100:4222",
     "nats_username": "admin",
     "nats_password": "secret123",
-    "nats_ca": "-----BEGIN CERTIFICATE-----\nMIIDXTCCAkWgAwIBAgIJAJC1...\n-----END CERTIFICATE-----"
+    "nats_ca": "-----BEGIN CERTIFICATE-----\nMIIDXTCCAkWgAwIBAgIJAJC1...\n-----END CERTIFICATE-----",
+    "runtime_profile": "standard"
+  }' \
+  http://localhost:8080/infra/render
+```
+
+### 渲染自定义日志目录的日志采集器配置
+
+```bash
+curl -X POST \
+  -H "Content-Type: application/json" \
+  -d '{
+    "cluster_name": "prod-cluster",
+    "type": "log",
+    "nats_url": "nats://192.168.1.100:4222",
+    "nats_username": "admin",
+    "nats_password": "secret123",
+    "nats_ca": "-----BEGIN CERTIFICATE-----\nMIIDXTCCAkWgAwIBAgIJAJC1...\n-----END CERTIFICATE-----",
+    "runtime_profile": "custom",
+    "host_log_path": "/var/log/pods",
+    "docker_container_log_path": "/var/lib/docker/containers"
   }' \
   http://localhost:8080/infra/render
 ```
@@ -138,6 +164,12 @@ curl -s -X POST \
 1. **Collector 配置**：根据 `type` 选择 metric、log 或 resource 采集器模板
 2. **Secret 配置**：包含 NATS 连接信息（已 Base64 编码）
 
+其中日志采集器模板会根据 `runtime_profile` 动态渲染节点日志目录挂载：
+
+- `standard`: 挂载 `/var/log`
+- `docker`: 挂载 `/var/log` 和 `/var/lib/docker/containers`
+- `custom`: 挂载 `host_log_path`，并按需附加 `docker_container_log_path`
+
 可直接用于 `kubectl apply -f` 部署。
 
 ---
@@ -155,6 +187,7 @@ curl -s -X POST \
 2. **type 取值**: 必须是 `metric`、`log` 或 `resource`
 3. **nats_ca 格式**: 需要完整的 PEM 格式证书
 4. **Content-Type**: 请求必须设置 `Content-Type: application/json`
+5. **runtime_profile=custom**: 必须同时提供 `host_log_path`，且路径必须为绝对路径
 
 ---
 
