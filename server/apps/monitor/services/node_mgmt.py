@@ -19,6 +19,22 @@ from apps.rpc.node_mgmt import NodeMgmt
 
 
 class InstanceConfigService:
+    DEFAULT_GROUPING_METRIC_BY_OBJECT = {
+        "Pod": "pod_status_phase",
+        "Node": "node_status_condition",
+    }
+
+    @classmethod
+    def _get_default_group_metric(cls, child_obj):
+        preferred_metric_name = cls.DEFAULT_GROUPING_METRIC_BY_OBJECT.get(child_obj.name)
+        if preferred_metric_name:
+            metric_obj = Metric.objects.filter(monitor_object_id=child_obj.id, name=preferred_metric_name).first()
+            if metric_obj:
+                return metric_obj
+            logger.warning(f"子对象 {child_obj.id} 默认分组指标 {preferred_metric_name} 不存在，回退到首个指标")
+
+        return Metric.objects.filter(monitor_object_id=child_obj.id).first()
+
     @staticmethod
     def _sync_existing_instance_attrs(existing_instances, deleted_ids):
         """同步复用/恢复实例的可变属性（除主键外）"""
@@ -132,7 +148,7 @@ class InstanceConfigService:
         _monitor_instance_id = parse_instance_id(monitor_instance_id)[0]
 
         for child_obj in child_objs:
-            metric_obj = Metric.objects.filter(monitor_object_id=child_obj.id).first()
+            metric_obj = InstanceConfigService._get_default_group_metric(child_obj)
             if not metric_obj:
                 logger.warning(f"子对象 {child_obj.id} 没有关联指标，跳过规则创建")
                 continue
@@ -188,7 +204,7 @@ class InstanceConfigService:
         # 构建子对象到指标的映射
         child_metric_map = {}
         for child_obj in child_objs:
-            metric_obj = child_obj.metric_set.first()
+            metric_obj = InstanceConfigService._get_default_group_metric(child_obj)
             if metric_obj:
                 child_metric_map[child_obj.id] = (child_obj, metric_obj)
             else:
