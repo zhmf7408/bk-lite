@@ -3,6 +3,8 @@
 
 /* 或者简写 */
 @import "tailwindcss";
+@source "../app/(enterprise)/**/*.{ts,tsx,mdx}";
+@source "../app/**/(enterprise)/**/*.{ts,tsx,mdx}";
 
 * {
   scrollbar-width: thin;

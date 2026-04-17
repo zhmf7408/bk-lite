@@ -16,6 +16,8 @@ migrate:
 server-init:
 	uv run python manage.py batch_init
 
+system-init:
+	uv run python manage.py parse_tools_yml
 
 setup-dev-user:
 	DJANGO_SUPERUSER_USERNAME=admin DJANGO_SUPERUSER_EMAIL=admin@example.com DJANGO_SUPERUSER_PASSWORD=password uv run python manage.py createsuperuser --noinput
@@ -29,7 +31,7 @@ collect-static:
 	uv run python manage.py collectstatic --noinput
 
 dev:
-	uv run uvicorn asgi:application --host 0.0.0.0 --port 8011 --reload --workers 1
+	uv run uvicorn asgi:application --host 0.0.0.0 --port 8001 --reload --workers 1
 
 clean-migrate:
 	cd apps &&\

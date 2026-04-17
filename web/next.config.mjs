@@ -1,5 +1,11 @@
+import fs from 'fs';
+import path from 'path';
 import withBundleAnalyzer from '@next/bundle-analyzer';
+import { prepareEnterpriseRoutes } from './scripts/prepare-enterprise.mjs';
 import { combineLocales, combineMenus, copyPublicDirectories } from './src/utils/dynamicsMerged.mjs';
+
+const enterpriseWebLink = path.resolve(process.cwd(), 'enterprise');
+const enterpriseWebRoot = fs.existsSync(enterpriseWebLink) ? fs.realpathSync(enterpriseWebLink) : '';
 
 // 在模块加载时就执行准备工作
 const isProduction = process.env.NODE_ENV === 'production';
@@ -7,6 +13,8 @@ const isProduction = process.env.NODE_ENV === 'production';
 // 准备构建资源
 async function prepareBuildAssets() {
   console.log('🔄 Preparing build assets...');
+
+  await prepareEnterpriseRoutes();
   
   // 合并 locales 和 menus
   await combineLocales();
@@ -37,6 +45,9 @@ const nextConfig = withCombineLocalesAndMenus(
       enabled: process.env.ANALYZE === 'true',
     })({
       reactStrictMode: true,
+      env: {
+        ENTERPRISE_WEB_ROOT: enterpriseWebRoot,
+      },
       sassOptions: {
         implementation: 'sass-embedded',
       },
@@ -45,9 +56,10 @@ const nextConfig = withCombineLocalesAndMenus(
       typescript: {
         ignoreBuildErrors: true,
       },
-      // experimental: {
-      //   proxyTimeout: 300_000, // Set timeout to 300 seconds
-      // },
+      experimental: {
+        externalDir: true,
+        // proxyTimeout: 300_000, // Set timeout to 300 seconds
+      },
       // async rewrites() {
       //   return [
       //     {

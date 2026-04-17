@@ -34,3 +34,8 @@ agents/fusion-collector/agent/collector-sidecar
 code-reviews/
 
 **/enterprise/
+!/enterprise/
+!/enterprise/**
+/web/enterprise
+/web/src/app/(enterprise)/
+/web/src/app/**/(enterprise)/
