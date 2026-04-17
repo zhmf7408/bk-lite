@@ -7,11 +7,11 @@ export const useCollectTypeInfo = () => {
       collectTypeConfigs.getCollectTypeConfig({
         mode: 'auto',
         type,
-        collector,
-      }).icon || 'opspilot'
+        collector
+      }).icon || 'cc-default_默认'
     );
   };
   return {
-    getIcon,
+    getIcon
   };
 };

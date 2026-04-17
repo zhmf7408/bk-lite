@@ -8,7 +8,7 @@ export const useRedisFilebeatConfig = () => {
   const pluginConfig = {
     collector: 'Filebeat',
     collect_type: 'redis',
-    icon: 'redis'
+    icon: 'mm-redis_Redis'
   };
 
   return {

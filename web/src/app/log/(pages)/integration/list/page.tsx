@@ -5,7 +5,7 @@ import useApiClient from '@/utils/request';
 import useIntegrationApi from '@/app/log/api/integration';
 import { PlusOutlined } from '@ant-design/icons';
 import { useTranslation } from '@/utils/i18n';
-import Icon from '@/components/icon';
+
 import { useCollectTypeInfo } from '@/app/log/hooks/integration/common/getCollectTypeConfig';
 import { useRouter } from 'next/navigation';
 import { CollectTypeItem } from '@/app/log/types/integration';
@@ -187,9 +187,14 @@ const Integration = () => {
                 <div key={app.id} className="p-2">
                   <div className="bg-[var(--color-bg-1)] shadow-sm hover:shadow-md transition-shadow duration-300 ease-in-out rounded-lg p-4 relative cursor-pointer group border">
                     <div className="flex items-center space-x-4 my-2">
-                      <Icon
-                        type={app.icon || getIcon(app.name, app.collector)}
-                        className="text-[48px] min-w-[48px]"
+                      <img
+                        src={`/assets/icons/${app.icon || getIcon(app.name, app.collector)}.svg`}
+                        alt={app.display_name || app.name}
+                        className="w-12 h-12 min-w-[48px]"
+                        onError={(e) => {
+                          (e.target as HTMLImageElement).src =
+                            '/assets/icons/cc-default_默认.svg';
+                        }}
                       />
                       <div
                         style={{

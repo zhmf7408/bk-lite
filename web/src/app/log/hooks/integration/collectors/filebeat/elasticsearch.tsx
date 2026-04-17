@@ -8,7 +8,7 @@ export const useElasticsearchFilebeatConfig = () => {
   const pluginConfig = {
     collector: 'Filebeat',
     collect_type: 'elasticsearch',
-    icon: 'elasticsearch'
+    icon: 'mm-elasticsearch_Elasticsearch'
   };
 
   return {

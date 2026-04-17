@@ -10,7 +10,7 @@ export const useAuditbeatConfig = () => {
   const pluginConfig = {
     collector: 'Auditbeat',
     collect_type: 'file_integrity',
-    icon: 'shenjirizhi3'
+    icon: 'll-fileIntegrity_文件完整性监控'
   };
 
   return {

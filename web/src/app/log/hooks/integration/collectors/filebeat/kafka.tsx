@@ -8,7 +8,7 @@ export const useKafkaFilebeatConfig = () => {
   const pluginConfig = {
     collector: 'Filebeat',
     collect_type: 'kafka',
-    icon: 'kafka'
+    icon: 'mm-kafka_Kafka'
   };
 
   return {

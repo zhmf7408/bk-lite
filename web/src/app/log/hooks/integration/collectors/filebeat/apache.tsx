@@ -8,7 +8,7 @@ export const useFilebeatConfig = () => {
   const pluginConfig = {
     collector: 'Filebeat',
     collect_type: 'apache',
-    icon: 'apache'
+    icon: 'mm-apache_Apache'
   };
 
   return {

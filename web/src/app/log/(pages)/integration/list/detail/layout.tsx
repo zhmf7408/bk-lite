@@ -4,7 +4,6 @@ import React from 'react';
 import { Tooltip } from 'antd';
 import WithSideMenuLayout from '@/components/sub-layout';
 import { useRouter, useSearchParams } from 'next/navigation';
-import Icon from '@/components/icon';
 
 const IntegrationDetailLayout = ({
   children
@@ -25,7 +24,15 @@ const IntegrationDetailLayout = ({
 
   const TopSection = () => (
     <div className="p-4 rounded-md w-full h-[80px] flex items-center bg-[var(--color-bg-1)]">
-      <Icon type={icon as string} className="text-6xl mr-[10px] min-w-[60px]" />
+      <img
+        src={`/assets/icons/${icon}.svg`}
+        alt={pluginDisplayName || ''}
+        className="w-[60px] h-[60px] mr-[10px] min-w-[60px]"
+        onError={(e) => {
+          (e.target as HTMLImageElement).src =
+            '/assets/icons/cc-default_默认.svg';
+        }}
+      />
       <div className="w-full">
         <h2 className="text-lg font-semibold mb-2">{pluginDisplayName}</h2>
         <Tooltip title={desc}>
