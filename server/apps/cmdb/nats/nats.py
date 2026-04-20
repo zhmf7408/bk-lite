@@ -356,11 +356,11 @@ def query_asset_instances(
 def sync_display_fields(organizations=None, users=None):
     """
     同步组织/用户的 _display 字段
-    
+
     Args:
         organizations: 组织变更数据列表 [{"id": 1, "name": "新组织名"}]，可选
         users: 用户变更数据列表 [{"id": 1, "username": "admin", "display_name": "新显示名"}]，可选
-    
+
     Returns:
         任务提交结果 {"task_id": "uuid", "status": "submitted"}
     """
@@ -370,5 +370,15 @@ def sync_display_fields(organizations=None, users=None):
         organizations=organizations or [],
         users=users or [],
     )
-    
+
     return result
+
+@nats_client.register
+def model_inst_count(*args, **kwargs):
+    """
+    获取模型实例数量
+    """
+    result = InstanceManage.model_inst_count(
+        permissions_map={}, creator=""
+    )
+    return {"result": True, "message": "", "data": result}
