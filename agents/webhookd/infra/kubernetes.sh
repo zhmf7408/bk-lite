@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # webhookd infra render script
-# 接收 JSON: {"cluster_name": "xxx", "type": "metric|log|resource", "nats_url": "nats://x.x.x.x:4222", "nats_username": "user", "nats_password": "pass", "nats_ca": "...", "runtime_profile": "standard|docker|custom", "host_log_path": "/var/log", "docker_container_log_path": "/var/lib/docker/containers"}
+# 接收 JSON: {"cluster_name": "xxx", "type": "metric|log|resource", "nats_url": "nats://x.x.x.x:4222", "nats_username": "user", "nats_password": "pass", "nats_ca": "...", "runtime_profile": "standard|docker|custom", "host_log_path": "/var/log/pods", "docker_container_log_path": "/var/lib/docker/containers"}
 # 渲染出 K8s 配置 YAML
 set -euo pipefail
 
