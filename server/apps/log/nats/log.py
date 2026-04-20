@@ -39,6 +39,14 @@ def log_hits(query, time_range, field, fields_limit=5, step="5m", *args, **kwarg
     return {"result": True, "data": data, "message": ""}
 
 
+@nats_client.register
+def get_vmlogs_disk_usage(*args, **kwargs):
+    """获取 VictoriaLogs 已占用磁盘容量。"""
+    vm_api = VictoriaMetricsAPI()
+    data = vm_api.get_disk_usage()
+    return {"result": True, "data": data, "message": ""}
+
+
 def _normalize_positive_int(value, field_name: str, default=None):
     if value in (None, ""):
         return default
@@ -133,11 +141,7 @@ def _get_log_policy_ids(collect_type_id: str, user_info: dict):
         return [], None
 
     policy_ids = []
-    policies = (
-        Policy.objects.select_related("collect_type")
-        .prefetch_related("policyorganization_set")
-        .filter(collect_type_id=collect_type_id)
-    )
+    policies = Policy.objects.select_related("collect_type").prefetch_related("policyorganization_set").filter(collect_type_id=collect_type_id)
     for policy_obj in policies:
         teams = {org.organization for org in policy_obj.policyorganization_set.all()}
         if check_instance_permission(
@@ -168,9 +172,7 @@ def query_log_alert_segments(query_data: dict, *args, **kwargs):
         if start_dt > end_dt:
             raise ValueError("开始时间不能大于结束时间")
         page = _normalize_positive_int(query_data.get("page", 1), "page", default=1)
-        page_size = _normalize_positive_int(
-            query_data.get("page_size", 100), "page_size", default=100
-        )
+        page_size = _normalize_positive_int(query_data.get("page_size", 100), "page_size", default=100)
         if page_size > 500:
             raise ValueError("page_size 不能大于 500")
         source_ids = _normalize_filter_values(query_data.get("source_id"), "source_id")
@@ -190,9 +192,7 @@ def query_log_alert_segments(query_data: dict, *args, **kwargs):
             "message": "",
         }
 
-    queryset = Alert.objects.filter(
-        collect_type_id=collect_type_id, policy_id__in=policy_ids
-    )
+    queryset = Alert.objects.filter(collect_type_id=collect_type_id, policy_id__in=policy_ids)
     queryset = queryset.filter(start_event_time__lte=end_dt, created_at__gte=start_dt)
 
     if source_ids:
@@ -203,10 +203,7 @@ def query_log_alert_segments(query_data: dict, *args, **kwargs):
     if level_values:
         queryset = queryset.filter(level__in=level_values)
 
-    items = [
-        _build_log_alert_segment(alert)
-        for alert in queryset.order_by("-start_event_time", "-created_at")
-    ]
+    items = [_build_log_alert_segment(alert) for alert in queryset.order_by("-start_event_time", "-created_at")]
     return {
         "result": True,
         "data": _paginate_items(items, page, page_size),
