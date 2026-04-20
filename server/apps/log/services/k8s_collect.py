@@ -61,7 +61,7 @@ class K8sLogCollectService:
         normalized_host_log_path = None
         normalized_docker_container_log_path = None
         if normalized_profile == "custom":
-            normalized_host_log_path = cls.validate_host_path(host_log_path, "宿主机日志根目录")
+            normalized_host_log_path = cls.validate_host_path(host_log_path, "节点 Pod 日志根目录")
             if docker_container_log_path:
                 normalized_docker_container_log_path = cls.validate_host_path(
                     docker_container_log_path,

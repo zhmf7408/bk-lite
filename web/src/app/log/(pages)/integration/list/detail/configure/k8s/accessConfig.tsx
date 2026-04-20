@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { Form, Input, Select, Button, Radio } from 'antd';
 import { InfoCircleOutlined } from '@ant-design/icons';
 import { useSearchParams } from 'next/navigation';
@@ -45,6 +45,11 @@ const AccessConfig: React.FC<AccessConfigProps> = ({ onNext, commandData }) => {
   const [cloudRegionList, setCloudRegionList] = useState<CloudRegionItem[]>([]);
   const [k8sClusterLoading, setK8sClusterLoading] = useState(false);
   const [k8sClusterList, setK8sClusterList] = useState<InstanceItem[]>([]);
+  const hasDockerContainerPath = useMemo(
+    () => Boolean(String(commandData?.docker_container_log_path || '').trim()),
+    [commandData?.docker_container_log_path]
+  );
+  const [showDockerAdvanced, setShowDockerAdvanced] = useState(hasDockerContainerPath);
 
   useEffect(() => {
     if (!isLoading) {
@@ -65,6 +70,10 @@ const AccessConfig: React.FC<AccessConfigProps> = ({ onNext, commandData }) => {
       });
     }
   }, [commandData, form]);
+
+  useEffect(() => {
+    setShowDockerAdvanced(hasDockerContainerPath);
+  }, [hasDockerContainerPath]);
 
   const getCloudRegions = async () => {
     setCloudRegionLoading(true);
@@ -366,32 +375,44 @@ const AccessConfig: React.FC<AccessConfigProps> = ({ onNext, commandData }) => {
                   </div>
                 </Form.Item>
 
-                <Form.Item label={t('log.integration.k8s.dockerContainerLogPath')}>
-                  <div className="flex items-start gap-4">
-                    <Form.Item
-                      name="docker_container_log_path"
-                      noStyle
-                      rules={[
-                        {
-                          validator: (_, value) => {
-                            if (!value || String(value).startsWith('/')) {
-                              return Promise.resolve();
-                            }
-                            return Promise.reject(new Error(t('log.integration.k8s.absolutePathRequired')));
+                <Button
+                  type="link"
+                  className="px-0 mb-3"
+                  onClick={() => setShowDockerAdvanced((prev) => !prev)}
+                >
+                  {showDockerAdvanced
+                    ? t('log.integration.k8s.hideDockerAdvanced')
+                    : t('log.integration.k8s.showDockerAdvanced')}
+                </Button>
+
+                {showDockerAdvanced ? (
+                  <Form.Item label={t('log.integration.k8s.dockerContainerLogPath')}>
+                    <div className="flex items-start gap-4">
+                      <Form.Item
+                        name="docker_container_log_path"
+                        noStyle
+                        rules={[
+                          {
+                            validator: (_, value) => {
+                              if (!value || String(value).startsWith('/')) {
+                                return Promise.resolve();
+                              }
+                              return Promise.reject(new Error(t('log.integration.k8s.absolutePathRequired')));
+                            },
                           },
-                        },
-                      ]}
-                    >
-                      <Input
-                        placeholder={t('log.integration.k8s.dockerContainerLogPathPlaceholder')}
-                        style={{ width: FORM_CONTROL_WIDTH }}
-                      />
-                    </Form.Item>
-                    <div className="text-[var(--color-text-3)] flex-1">
-                      {t('log.integration.k8s.dockerContainerLogPathDesc')}
+                        ]}
+                      >
+                        <Input
+                          placeholder={t('log.integration.k8s.dockerContainerLogPathPlaceholder')}
+                          style={{ width: FORM_CONTROL_WIDTH }}
+                        />
+                      </Form.Item>
+                      <div className="text-[var(--color-text-3)] flex-1">
+                        {t('log.integration.k8s.dockerContainerLogPathDesc')}
+                      </div>
                     </div>
-                  </div>
-                </Form.Item>
+                  </Form.Item>
+                ) : null}
               </>
             ) : null
           }
