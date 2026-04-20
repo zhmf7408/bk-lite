@@ -1,9 +1,14 @@
+from datetime import timedelta
+
 from celery import shared_task
+from django.utils import timezone as django_timezone
 
 from apps.core.logger import system_mgmt_logger as logger
 from apps.core.utils.permission_cache import clear_users_permission_cache
 from apps.rpc.base import RpcClient
-from apps.system_mgmt.models import ErrorLog, Group, LoginModule, User
+from apps.system_mgmt.models import Channel, ErrorLog, Group, LoginModule, SystemSettings, User
+from apps.system_mgmt.models.channel import ChannelChoices
+from apps.system_mgmt.utils.channel_utils import send_email_to_user
 
 
 @shared_task(bind=True, max_retries=3, default_retry_delay=60)
@@ -248,3 +253,61 @@ def _sync_users(user_list, group_id_mapping, domain, default_role):
         logger.info(f"Updated {len(update_users)} existing users")
 
     return list(user_data_map.keys())
+
+
+@shared_task
+def check_password_expiry_and_notify():
+    """
+    定时检查密码即将过期的用户，通过邮件通道发送提醒。
+    由 Celery Beat 每天 09:00 调度执行。
+    """
+
+    logger.info("== 开始检查密码过期提醒 ==")
+
+    # 读取密码策略配置
+    validity_setting = SystemSettings.objects.filter(key="pwd_set_validity_period").first()
+    validity_days = int(validity_setting.value) if validity_setting else 180
+
+    reminder_setting = SystemSettings.objects.filter(key="pwd_set_expiry_reminder_days").first()
+    reminder_days = int(reminder_setting.value) if reminder_setting else 7
+
+    # 获取邮件通道
+    channel_obj = Channel.objects.filter(channel_type=ChannelChoices.EMAIL).first()
+    if not channel_obj:
+        logger.warning("未配置邮件通道，跳过密码过期提醒")
+        return {"result": False, "message": "No email channel configured"}
+
+    channel_config = channel_obj.config.copy()
+    channel_obj.decrypt_field("smtp_pwd", channel_config)
+
+    now = django_timezone.now()
+    notified = 0
+    skipped = 0
+
+    # 查询所有启用且有密码修改记录的用户
+    users = User.objects.filter(disabled=False, password_last_modified__isnull=False).exclude(email="")
+
+    for user in users:
+        expire_date = user.password_last_modified + timedelta(days=validity_days)
+        days_left = (expire_date - now).days
+
+        if days_left > reminder_days:
+            continue
+
+        if days_left > 0:
+            subject = "密码即将过期提醒"
+            body = f"<p>尊敬的 {user.display_name or user.username}：</p><p>您的密码将在 <b>{days_left}</b> 天后过期，请尽快修改密码。</p>"
+        else:
+            subject = "密码已过期提醒"
+            body = f"<p>尊敬的 {user.display_name or user.username}：</p><p>您的密码已过期，请立即修改密码。</p>"
+
+        result = send_email_to_user(channel_config, body, [user.email], subject)
+        if result.get("result"):
+            notified += 1
+            logger.info(f"密码过期提醒已发送: {user.username}@{user.domain}, 剩余{days_left}天")
+        else:
+            skipped += 1
+            logger.error(f"密码过期提醒发送失败: {user.username}@{user.domain}, {result.get('message')}")
+
+    logger.info(f"== 密码过期提醒完成 == 通知={notified}, 失败={skipped}")
+    return {"result": True, "notified": notified, "failed": skipped}
