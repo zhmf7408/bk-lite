@@ -8,10 +8,15 @@ import {
   Switch,
   Empty,
   Tag,
+  Select,
+  Button,
+  Tooltip,
 } from 'antd';
 import {
   HolderOutlined,
+  SettingOutlined,
 } from '@ant-design/icons';
+import FilterOptionsModal from './filterOptionsModal';
 import dayjs from 'dayjs';
 import TimeSelector from '@/components/time-selector';
 import {
@@ -37,6 +42,7 @@ import type {
   FilterValue,
   TimeRangeValue,
   LayoutItem,
+  FilterOption,
 } from '@/app/ops-analysis/types/dashBoard';
 import type { ParamItem, DatasourceItem } from '@/app/ops-analysis/types/dataSource';
 
@@ -160,6 +166,13 @@ const UnifiedFilterConfigModal: React.FC<UnifiedFilterConfigModalProps> = ({
 }) => {
   const { t } = useTranslation();
   const [definitions, setDefinitions] = useState<UnifiedFilterDefinition[]>([]);
+  const [optionsModalOpen, setOptionsModalOpen] = useState(false);
+  const [editingFilterId, setEditingFilterId] = useState<string | null>(null);
+
+  const filterTypeOptions = [
+    { label: t('dashboard.string'), value: 'input' },
+    { label: t('dashboard.inputModeSelect'), value: 'select' },
+  ];
 
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
@@ -231,6 +244,39 @@ const UnifiedFilterConfigModal: React.FC<UnifiedFilterConfigModalProps> = ({
     onCancel();
   };
 
+  const handleOpenOptionsModal = (filterId: string) => {
+    setEditingFilterId(filterId);
+    setOptionsModalOpen(true);
+  };
+
+  const handleOptionsConfirm = (options: FilterOption[]) => {
+    if (editingFilterId) {
+      const optionValues = options.map((item) => item.value);
+      setDefinitions(
+        definitions.map((d) =>
+          d.id === editingFilterId
+            ? {
+              ...d,
+              options,
+              defaultValue:
+                 typeof d.defaultValue === 'string' && !optionValues.includes(d.defaultValue)
+                   ? null
+                   : d.defaultValue,
+            }
+            : d
+        )
+      );
+    }
+    setEditingFilterId(null);
+    setOptionsModalOpen(false);
+  };
+
+  const getEditingFilterOptions = (): FilterOption[] => {
+    if (!editingFilterId) return [];
+    const filter = definitions.find((d) => d.id === editingFilterId);
+    return filter?.options || [];
+  };
+
   const columns = [
     {
       title: '',
@@ -249,7 +295,7 @@ const UnifiedFilterConfigModal: React.FC<UnifiedFilterConfigModalProps> = ({
     {
       title: t('dashboard.filterName'),
       dataIndex: 'name',
-      width: 160,
+      width: 180,
       render: (value: string, record: UnifiedFilterDefinition) => (
         <Input
           value={value}
@@ -259,9 +305,37 @@ const UnifiedFilterConfigModal: React.FC<UnifiedFilterConfigModalProps> = ({
       ),
     },
     {
+      title: t('dashboard.filterType'),
+      dataIndex: 'type',
+      width: 160,
+      render: (_: unknown, record: UnifiedFilterDefinition) => {
+        if (record.type === 'timeRange') {
+          return (
+            <Tag color="blue" style={{ marginRight: 0 }}>
+              {t('dashboard.timeRange')}
+            </Tag>
+          );
+        }
+
+        const currentMode = record.inputMode || 'input';
+
+        return (
+          <div className="flex items-center gap-2">
+            <Select
+              size="small"
+              value={currentMode}
+              options={filterTypeOptions}
+              style={{ width: 110 }}
+              onChange={(val) => handleFieldChange(record.id, 'inputMode', val)}
+            />
+          </div>
+        );
+      },
+    },
+    {
       title: t('dashboard.defaultValue'),
       dataIndex: 'defaultValue',
-      width: 220,
+      width: 260,
       render: (value: FilterValue, record: UnifiedFilterDefinition) => {
         if (record.type === 'timeRange') {
           const getDefaultValue = (): { selectValue: number; rangePickerVaule: [dayjs.Dayjs, dayjs.Dayjs] | null } => {
@@ -304,6 +378,32 @@ const UnifiedFilterConfigModal: React.FC<UnifiedFilterConfigModalProps> = ({
             />
           );
         }
+
+        if (record.inputMode === 'select') {
+          return (
+            <div className="flex items-center gap-2">
+              <Select
+                value={typeof value === 'string' ? value : undefined}
+                onChange={(nextValue) => handleFieldChange(record.id, 'defaultValue', nextValue ?? null)}
+                placeholder={record.options?.length ? t('common.selectTip') : t('dashboard.configOptionsFirst')}
+                allowClear
+                disabled={!record.options?.length}
+                options={record.options}
+                className="flex-1"
+              />
+              <Tooltip title={t('dashboard.configOptions')}>
+                <Button
+                  type="text"
+                  size="small"
+                  icon={<SettingOutlined />}
+                  className="shrink-0 text-[var(--color-text-2)] hover:text-[var(--color-primary)]"
+                  onClick={() => handleOpenOptionsModal(record.id)}
+                />
+              </Tooltip>
+            </div>
+          );
+        }
+
         return (
           <Input
             value={(value as string) || ''}
@@ -319,16 +419,6 @@ const UnifiedFilterConfigModal: React.FC<UnifiedFilterConfigModalProps> = ({
           />
         );
       },
-    },
-    {
-      title: t('dashboard.filterType'),
-      dataIndex: 'type',
-      width: 90,
-      render: (type: string) => (
-        <Tag color={type === 'timeRange' ? 'blue' : 'green'} style={{ marginRight: 0 }}>
-          {type === 'timeRange' ? t('dashboard.timeRange') : t('dashboard.string')}
-        </Tag>
-      ),
     },
     {
       title: t('dashboard.enabled'),
@@ -354,7 +444,7 @@ const UnifiedFilterConfigModal: React.FC<UnifiedFilterConfigModalProps> = ({
       onOk={handleConfirm}
       okText={t('common.confirm')}
       cancelText={t('common.cancel')}
-      width={820}
+      width={920}
       centered
       destroyOnHidden
     >
@@ -389,6 +479,15 @@ const UnifiedFilterConfigModal: React.FC<UnifiedFilterConfigModalProps> = ({
           />
         </SortableContext>
       </DndContext>
+      <FilterOptionsModal
+        open={optionsModalOpen}
+        options={getEditingFilterOptions()}
+        onCancel={() => {
+          setOptionsModalOpen(false);
+          setEditingFilterId(null);
+        }}
+        onConfirm={handleOptionsConfirm}
+      />
     </Modal>
   );
 };

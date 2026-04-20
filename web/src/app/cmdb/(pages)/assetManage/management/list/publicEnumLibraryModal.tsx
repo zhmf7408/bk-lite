@@ -367,7 +367,7 @@ const PublicEnumLibraryModal = forwardRef<PublicEnumLibraryModalRef, PublicEnumL
 
       return (
         <div className="flex-1 pl-4 flex flex-col">
-          <div className="mb-4 flex items-start justify-between">
+          <div className="mb-2 flex items-start justify-between">
             <div>
               <h3 className="text-lg font-medium mb-1">
                 {selectedLibrary.name}
@@ -378,33 +378,34 @@ const PublicEnumLibraryModal = forwardRef<PublicEnumLibraryModalRef, PublicEnumL
               </div>
             </div>
           </div>
-          {selectedLibrary.editable && (isEditingOptions || optionList.length > 0) && (
-            <div className="flex justify-end gap-2 mb-3">
-              {isEditingOptions ? (
-                <>
-                  <Button size="small" onClick={handleCancelEditOptions}>
-                    {t('common.cancel')}
-                  </Button>
+          {selectedLibrary.editable &&
+            (isEditingOptions || optionList.length > 0) && (
+              <div className="flex justify-end gap-2 mb-2">
+                {isEditingOptions ? (
+                  <>
+                    <Button size="small" onClick={handleCancelEditOptions}>
+                      {t('common.cancel')}
+                    </Button>
+                    <Button
+                      type="primary"
+                      size="small"
+                      loading={optionsSaving}
+                      onClick={handleSaveOptions}
+                    >
+                      {t('common.save')}
+                    </Button>
+                  </>
+                ) : (
                   <Button
-                    type="primary"
                     size="small"
-                    loading={optionsSaving}
-                    onClick={handleSaveOptions}
+                    type="link"
+                    onClick={handleStartEditOptions}
+                    className="p-0"
                   >
-                    {t('common.save')}
+                    {t('common.edit')}
                   </Button>
-                </>
-              ) : (
-                <Button
-                  size="small"
-                  type="link"
-                  onClick={handleStartEditOptions}
-                  className="p-0"
-                >
-                  {t('common.edit')}
-                </Button>
-              )}
-            </div>
+                )}
+              </div>
           )}
 
           <div className="flex-1 overflow-y-auto">
@@ -438,7 +439,7 @@ const PublicEnumLibraryModal = forwardRef<PublicEnumLibraryModalRef, PublicEnumL
                   disabled={!isEditingOptions}
                 >
                   <ul>
-                    <li className="flex items-center mb-2 text-sm text-[var(--color-text-secondary)]">
+                    <li className="sticky top-0 z-10 flex items-center mb-2 text-sm text-[var(--color-text-secondary)] bg-white pt-1 pb-2">
                       {isEditingOptions && (
                         <span className="mr-2 w-[14px]"></span>
                       )}

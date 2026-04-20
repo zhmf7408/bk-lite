@@ -64,9 +64,15 @@ export const formatTimeRange = (timeParams: any): string[] => {
     startTime = timeParams[0];
     endTime = timeParams[1];
   } else if (timeParams && timeParams.start && timeParams.end) {
-    // 对象类型：{ start, end }
-    startTime = timeParams.start;
-    endTime = timeParams.end;
+    // 对象类型：{ start, end, selectValue? }
+    if (timeParams.selectValue && timeParams.selectValue > 0) {
+      // 有快捷选项时，基于当前时间重新计算相对时间
+      endTime = dayjs().valueOf();
+      startTime = dayjs().subtract(timeParams.selectValue, 'minute').valueOf();
+    } else {
+      startTime = timeParams.start;
+      endTime = timeParams.end;
+    }
   } else {
     // 默认时间范围：最近7天
     endTime = dayjs().valueOf();

@@ -154,6 +154,12 @@ export interface TimeRangeValue {
 /** 筛选值类型 */
 export type FilterValue = string | TimeRangeValue | null;
 
+/** 筛选选项（用于下拉选择） */
+export interface FilterOption {
+  label: string;
+  value: string;
+}
+
 /** 统一筛选项定义 */
 export interface UnifiedFilterDefinition {
   id: string;
@@ -163,6 +169,8 @@ export interface UnifiedFilterDefinition {
   defaultValue?: FilterValue; // 默认值
   order: number; // 显示顺序
   enabled: boolean; // 是否启用
+  inputMode?: 'input' | 'select'; // 输入方式：文本输入或下拉选择（仅 string 类型有效）
+  options?: FilterOption[]; // 下拉选项（仅 inputMode 为 select 时有效）
 }
 
 /** Dashboard.filters 运行时结构（hook 内部使用） */

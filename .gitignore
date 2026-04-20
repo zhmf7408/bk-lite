@@ -37,5 +37,4 @@ code-reviews/
 !/enterprise/
 !/enterprise/**
 /web/enterprise
-/web/src/app/(enterprise)/
 /web/src/app/**/(enterprise)/

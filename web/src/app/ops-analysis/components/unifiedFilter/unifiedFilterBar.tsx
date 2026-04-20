@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import { Input, Space, Button } from 'antd';
+import { Input, Space, Button, Select } from 'antd';
 import { SearchOutlined, ReloadOutlined } from '@ant-design/icons';
 import dayjs from 'dayjs';
 import TimeSelector from '@/components/time-selector';
@@ -116,6 +116,18 @@ const UnifiedFilterBar: React.FC<UnifiedFilterBarProps> = ({
 
       case 'string':
       default:
+        if (definition.inputMode === 'select' && definition.options?.length) {
+          return (
+            <Select
+              value={(value as string) || undefined}
+              onChange={(val) => handleLocalValueChange(definition.id, val ?? null)}
+              placeholder={definition.name}
+              allowClear
+              style={{ minWidth: 160 }}
+              options={definition.options}
+            />
+          );
+        }
         return (
           <Input
             value={(value as string) || ''}
