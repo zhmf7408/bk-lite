@@ -98,7 +98,9 @@ const generateRouteShims = async (routes) => {
 /* ── junctions: link EE app dirs into {module}/(enterprise)/ ── */
 
 const generateEnterpriseJunctions = async () => {
-  if (!(await fs.pathExists(enterpriseAppRoot))) return;
+  if (!(await fs.pathExists(enterpriseAppRoot))) return [];
+
+  const linkedModules = [];
 
   // Non-route directories that should be linked (api, types, utils, etc.)
   // Route directories (containing page.tsx) are handled by generateRouteShims
@@ -125,6 +127,7 @@ const generateEnterpriseJunctions = async () => {
     const appSourcePath = path.join(enterpriseAppRoot, appEntry.name);
     // Target is now inside the CE module: src/app/{module}/(enterprise)/
     const enterpriseDir = path.join(appRoot, appEntry.name, '(enterprise)');
+    let hasLinked = false;
 
     // Link sub-directories individually, skipping those that contain route files
     await fs.ensureDir(enterpriseDir);
@@ -138,9 +141,42 @@ const generateEnterpriseJunctions = async () => {
         continue;
       }
       createJunction(subTarget, subSource);
+      hasLinked = true;
       console.log(`  🔗 Junction: ${appEntry.name}/(enterprise)/${sub.name}/ → enterprise/src/app/${appEntry.name}/${sub.name}/`);
     }
+    if (hasLinked) linkedModules.push(appEntry.name);
   }
+  return linkedModules;
+};
+
+/* ── tsconfig: dynamically update paths for enterprise modules ── */
+
+const TSCONFIG_PATH = path.join(webRoot, 'tsconfig.json');
+const ENTERPRISE_PATH_MARKER = '/(enterprise)/';
+
+const updateTsconfigPaths = async (moduleNames) => {
+  const tsconfig = await fs.readJSON(TSCONFIG_PATH);
+  const paths = tsconfig.compilerOptions?.paths || {};
+
+  // Remove all existing enterprise path entries
+  for (const key of Object.keys(paths)) {
+    if (key.includes(ENTERPRISE_PATH_MARKER)) {
+      delete paths[key];
+    }
+  }
+
+  // Add entries for each discovered enterprise module
+  for (const moduleName of moduleNames) {
+    const key = `@/app/${moduleName}/(enterprise)/*`;
+    paths[key] = [
+      `./src/app/${moduleName}/(enterprise)/*`,
+      './src/lib/enterpriseStub.ts',
+    ];
+    console.log(`  📝 tsconfig path: ${key}`);
+  }
+
+  tsconfig.compilerOptions.paths = paths;
+  await fs.writeJSON(TSCONFIG_PATH, tsconfig, { spaces: 2 });
 };
 
 /* ── main ── */
@@ -148,6 +184,7 @@ const generateEnterpriseJunctions = async () => {
 export const prepareEnterpriseRoutes = async () => {
   if (!(await fs.pathExists(enterpriseWebRoot))) {
     await cleanupGenerated();
+    await updateTsconfigPaths([]);
     console.log('ℹ️ No web/enterprise link found, skipping enterprise preparation.');
     return;
   }
@@ -155,7 +192,7 @@ export const prepareEnterpriseRoutes = async () => {
   await cleanupGenerated();
 
   // 1) Junctions for api/types/etc under {module}/(enterprise)/
-  await generateEnterpriseJunctions();
+  const linkedModules = await generateEnterpriseJunctions();
 
   // 2) Route shims: copy page source into CE route tree
   if (await fs.pathExists(routesManifestPath)) {
@@ -164,6 +201,9 @@ export const prepareEnterpriseRoutes = async () => {
       await generateRouteShims(routes);
     }
   }
+
+  // 3) Update tsconfig.json paths for enterprise modules
+  await updateTsconfigPaths(linkedModules);
 
   console.log('✅ Enterprise modules prepared successfully.');
 };

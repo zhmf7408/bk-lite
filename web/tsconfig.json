@@ -31,12 +31,8 @@
       "@/*": [
         "./src/*"
       ],
-      "@/app/monitor/enterprise/*": [
-        "./src/app/monitor/enterprise/*",
-        "./src/lib/enterpriseStub.ts"
-      ],
-      "@/app/system-manager/enterprise/*": [
-        "./src/app/system-manager/enterprise/*",
+      "@/app/system-manager/(enterprise)/*": [
+        "./src/app/system-manager/(enterprise)/*",
         "./src/lib/enterpriseStub.ts"
       ]
     }
