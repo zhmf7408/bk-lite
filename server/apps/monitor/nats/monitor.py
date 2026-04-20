@@ -2,7 +2,7 @@ import time
 from datetime import datetime
 
 import nats_client
-from django.db.models import Q
+from django.db.models import Count, Q
 from apps.core.utils.time_util import format_timestamp
 
 from apps.monitor.models import MonitorObject, Metric, MonitorInstance, MonitorAlert
@@ -64,9 +64,7 @@ def _normalize_time_value(value, field_name: str):
         try:
             return datetime.strptime(value, "%Y-%m-%d %H:%M:%S")
         except ValueError as exc:
-            raise ValueError(
-                f"{field_name} 时间格式错误，应为 YYYY-MM-DD HH:MM:SS 或时间戳"
-            ) from exc
+            raise ValueError(f"{field_name} 时间格式错误，应为 YYYY-MM-DD HH:MM:SS 或时间戳") from exc
     raise ValueError(f"{field_name} 时间格式错误")
 
 
@@ -106,9 +104,7 @@ def _normalize_dimensions(metric, dimensions):
     if invalid_keys:
         raise ValueError(f"dimensions 包含未定义维度: {', '.join(invalid_keys)}")
 
-    return {
-        str(key): str(value) for key, value in dimensions.items() if value is not None
-    }
+    return {str(key): str(value) for key, value in dimensions.items() if value is not None}
 
 
 def _paginate_items(items: list, page, page_size):
@@ -158,19 +154,13 @@ def _escape_label_value(value) -> str:
     return str(value).replace("\\", "\\\\").replace('"', '\\"')
 
 
-def _build_metric_label_query(
-    metric_query: str, instance_ids=None, dimensions=None
-) -> str:
-    instance_ids = [
-        str(instance_id) for instance_id in (instance_ids or []) if instance_id
-    ]
+def _build_metric_label_query(metric_query: str, instance_ids=None, dimensions=None) -> str:
+    instance_ids = [str(instance_id) for instance_id in (instance_ids or []) if instance_id]
     dimensions = dimensions or {}
 
     label_conditions = []
     if instance_ids:
-        instance_filter = "|".join(
-            _escape_label_value(instance_id) for instance_id in instance_ids
-        )
+        instance_filter = "|".join(_escape_label_value(instance_id) for instance_id in instance_ids)
         label_conditions.append(f'instance_id=~"{instance_filter}"')
 
     for key, value in dimensions.items():
@@ -190,9 +180,7 @@ def _build_metric_label_query(
         left, right = metric_query.split("{", 1)
         existing_labels, suffix = right.split("}", 1)
         existing_labels = existing_labels.strip()
-        merged_labels = (
-            f"{existing_labels}, {labels_str}" if existing_labels else labels_str
-        )
+        merged_labels = f"{existing_labels}, {labels_str}" if existing_labels else labels_str
         return f"{left}{{{merged_labels}}}{suffix}"
 
     return f"{metric_query}{{{labels_str}}}"
@@ -231,19 +219,13 @@ def _get_instance_permission_map(permission) -> dict:
     instance_items = permission.get("instance", [])
     if not isinstance(instance_items, list):
         return {}
-    return {
-        item.get("id"): item.get("permission", [])
-        for item in instance_items
-        if isinstance(item, dict) and item.get("id")
-    }
+    return {item.get("id"): item.get("permission", []) for item in instance_items if isinstance(item, dict) and item.get("id")}
 
 
 @nats_client.register
 def monitor_objects(*args, **kwargs):
     """查询监控对象列表"""
-    logger.info(
-        "=== monitor_objects called , args={}, kwargs={}===".format(args, kwargs)
-    )
+    logger.info("=== monitor_objects called , args={}, kwargs={}===".format(args, kwargs))
     queryset = MonitorObject.objects.all().order_by("id")
     serializer = MonitorObjectSerializer(queryset, many=True)
     result = {"result": True, "data": serializer.data, "message": ""}
@@ -251,22 +233,29 @@ def monitor_objects(*args, **kwargs):
 
 
 @nats_client.register
+def monitor_object_instance_count(*args, **kwargs):
+    """统计全部监控对象实例数量（不过滤权限）"""
+    logger.info(
+        "=== monitor_object_instance_count called , args=%s, kwargs=%s===",
+        args,
+        kwargs,
+    )
+    queryset = MonitorInstance.objects.filter(is_deleted=False).values("monitor_object__name").annotate(instance_count=Count("id"))
+    data = {item["monitor_object__name"]: item["instance_count"] for item in queryset}
+    return {"result": True, "data": data, "message": ""}
+
+
+@nats_client.register
 def monitor_metrics(monitor_obj_id: str, *args, **kwargs):
     """查询指标信息"""
-    logger.info(
-        "=== monitor_metrics called , monitor_obj_id={}, args={}, kwargs={}===".format(
-            monitor_obj_id, args, kwargs
-        )
-    )
+    logger.info("=== monitor_metrics called , monitor_obj_id={}, args={}, kwargs={}===".format(monitor_obj_id, args, kwargs))
     try:
         monitor_obj = MonitorObject.objects.get(id=monitor_obj_id)
     except MonitorObject.DoesNotExist:
         return {"result": False, "data": [], "message": "监控对象不存在"}
 
     # 查询监控对象关联的指标
-    metrics = Metric.objects.filter(monitor_object=monitor_obj).order_by(
-        "metric_group__sort_order", "sort_order"
-    )
+    metrics = Metric.objects.filter(monitor_object=monitor_obj).order_by("metric_group__sort_order", "sort_order")
 
     serializer = MetricSerializer(metrics, many=True)
     return {"result": True, "data": serializer.data, "message": ""}
@@ -296,9 +285,7 @@ def monitor_object_instances(monitor_obj_id: str, *args, **kwargs):
     qs = _get_authorized_instance_queryset(permission)
 
     # 过滤指定监控对象的活跃实例
-    instances = qs.filter(
-        monitor_object=monitor_obj, is_deleted=False, is_active=True
-    ).select_related("monitor_object")
+    instances = qs.filter(monitor_object=monitor_obj, is_deleted=False, is_active=True).select_related("monitor_object")
 
     # 获取实例权限映射
     inst_permission_map = _get_instance_permission_map(permission)
@@ -313,12 +300,8 @@ def monitor_object_instances(monitor_obj_id: str, *args, **kwargs):
             "monitor_object_name": instance.monitor_object.name,
             "interval": instance.interval,
             "is_active": instance.is_active,
-            "created_time": instance.created_time.isoformat()
-            if hasattr(instance, "created_time") and instance.created_time
-            else None,
-            "updated_time": instance.updated_time.isoformat()
-            if hasattr(instance, "updated_time") and instance.updated_time
-            else None,
+            "created_time": instance.created_time.isoformat() if hasattr(instance, "created_time") and instance.created_time else None,
+            "updated_time": instance.updated_time.isoformat() if hasattr(instance, "updated_time") and instance.updated_time else None,
         }
 
         # 添加权限信息
@@ -394,18 +377,14 @@ def query_monitor_data_by_metric(query_data: dict, *args, **kwargs):
     if instance_ids:
         # 获取有权限的实例ID
         authorized_instances = list(
-            authorized_qs.filter(
-                id__in=instance_ids, monitor_object=monitor_obj, is_deleted=False
-            ).values_list("id", flat=True)
+            authorized_qs.filter(id__in=instance_ids, monitor_object=monitor_obj, is_deleted=False).values_list("id", flat=True)
         )
 
         if not authorized_instances:
             return {"result": False, "data": [], "message": "没有权限访问指定的实例"}
         instance_ids = authorized_instances
 
-    query = _build_metric_label_query(
-        query, instance_ids=instance_ids, dimensions=dimensions
-    )
+    query = _build_metric_label_query(query, instance_ids=instance_ids, dimensions=dimensions)
 
     try:
         # 执行范围查询
@@ -414,11 +393,7 @@ def query_monitor_data_by_metric(query_data: dict, *args, **kwargs):
         # 数据格式化和权限过滤
         if "data" in result and "result" in result["data"]:
             # 获取所有有权限的实例ID
-            authorized_instance_ids = set(
-                authorized_qs.filter(
-                    monitor_object=monitor_obj, is_deleted=False
-                ).values_list("id", flat=True)
-            )
+            authorized_instance_ids = set(authorized_qs.filter(monitor_object=monitor_obj, is_deleted=False).values_list("id", flat=True))
 
             filtered_result = []
             for metric_data in result["data"]["result"]:
@@ -488,11 +463,7 @@ def monitor_instance_metrics(query_data: dict, *args, **kwargs):
     if not instance:
         return {"result": False, "data": [], "message": "没有权限访问指定的实例"}
 
-    metrics = (
-        Metric.objects.filter(monitor_object=monitor_obj)
-        .select_related("metric_group")
-        .order_by("metric_group__sort_order", "sort_order")
-    )
+    metrics = Metric.objects.filter(monitor_object=monitor_obj).select_related("metric_group").order_by("metric_group__sort_order", "sort_order")
 
     result_metrics = []
     for metric in metrics:
@@ -528,10 +499,7 @@ def monitor_instance_metrics(query_data: dict, *args, **kwargs):
                     end_seconds,
                     str(step_seconds),
                 )
-                if not (
-                    resp.get("status") == "success"
-                    and resp.get("data", {}).get("result")
-                ):
+                if not (resp.get("status") == "success" and resp.get("data", {}).get("result")):
                     continue
             except Exception as exc:
                 logger.warning(
@@ -572,9 +540,7 @@ def query_monitor_alert_segments(query_data: dict, *args, **kwargs):
         if start_dt > end_dt:
             raise ValueError("开始时间不能大于结束时间")
         page = _normalize_positive_int(query_data.get("page", 1), "page", default=1)
-        page_size = _normalize_positive_int(
-            query_data.get("page_size", 100), "page_size", default=100
-        )
+        page_size = _normalize_positive_int(query_data.get("page_size", 100), "page_size", default=100)
         if page_size > 500:
             raise ValueError("page_size 不能大于 500")
         instance_ids = query_data.get("instance_ids", [])
@@ -588,9 +554,7 @@ def query_monitor_alert_segments(query_data: dict, *args, **kwargs):
             instance_ids.append(str(instance_id))
         status_values = _normalize_filter_values(query_data.get("status"), "status")
         level_values = _normalize_filter_values(query_data.get("level"), "level")
-        alert_type_values = _normalize_filter_values(
-            query_data.get("alert_type"), "alert_type"
-        )
+        alert_type_values = _normalize_filter_values(query_data.get("alert_type"), "alert_type")
     except ValueError as exc:
         return {"result": False, "data": [], "message": str(exc)}
 
@@ -612,24 +576,14 @@ def query_monitor_alert_segments(query_data: dict, *args, **kwargs):
         }
 
     if instance_ids:
-        filtered_instance_ids = [
-            instance for instance in instance_ids if instance in authorized_instance_ids
-        ]
+        filtered_instance_ids = [instance for instance in instance_ids if instance in authorized_instance_ids]
         if not filtered_instance_ids:
             return {"result": False, "data": [], "message": "没有权限访问指定的实例"}
         authorized_instance_ids = set(filtered_instance_ids)
 
-    queryset = MonitorAlert.objects.filter(
-        monitor_instance_id__in=authorized_instance_ids
-    )
-    queryset = queryset.filter(
-        Q(start_event_time__lte=end_dt)
-        | Q(start_event_time__isnull=True, created_at__lte=end_dt)
-    )
-    queryset = queryset.filter(
-        Q(end_event_time__gte=start_dt)
-        | Q(end_event_time__isnull=True, updated_at__gte=start_dt)
-    )
+    queryset = MonitorAlert.objects.filter(monitor_instance_id__in=authorized_instance_ids)
+    queryset = queryset.filter(Q(start_event_time__lte=end_dt) | Q(start_event_time__isnull=True, created_at__lte=end_dt))
+    queryset = queryset.filter(Q(end_event_time__gte=start_dt) | Q(end_event_time__isnull=True, updated_at__gte=start_dt))
 
     if status_values:
         queryset = queryset.filter(status__in=status_values)
@@ -638,10 +592,7 @@ def query_monitor_alert_segments(query_data: dict, *args, **kwargs):
     if alert_type_values:
         queryset = queryset.filter(alert_type__in=alert_type_values)
 
-    items = [
-        _build_monitor_alert_segment(alert)
-        for alert in queryset.order_by("-start_event_time", "-created_at")
-    ]
+    items = [_build_monitor_alert_segment(alert) for alert in queryset.order_by("-start_event_time", "-created_at")]
     return {
         "result": True,
         "data": _paginate_items(items, page, page_size),
