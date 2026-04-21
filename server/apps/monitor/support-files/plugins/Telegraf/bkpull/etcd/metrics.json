@@ -1,6 +1,6 @@
 {
   "plugin": "Etcd",
-  "plugin_desc": "通过 Pull 方式采集 etcd 关键监控指标，覆盖 Leader 状态、提案处理、存储使用和磁盘延迟等核心场景。",
+  "plugin_desc": "通过 Pull 方式采集 etcd 关键监控指标，覆盖 Leader 状态、请求处理、网络通信、存储使用和 Watcher 负载等核心场景。",
   "status_query": "any({instance_type='etcd', collect_type='bkpull'}) by (instance_id)",
   "name": "Etcd",
   "icon": "mm-middleware_中间件",
@@ -10,8 +10,10 @@
   "instance_id_keys": ["instance_id"],
   "supplementary_indicators": [
     "etcd_server_has_leader_gauge",
+    "etcd_server_is_leader_gauge",
+    "etcd_backend_quota_usage_percent",
     "etcd_mvcc_db_total_size_in_use_in_bytes_gauge",
-    "etcd_server_proposals_failed_total_counter_rate"
+    "etcd_server_proposals_pending_gauge"
   ],
   "metrics": [
     {
@@ -27,6 +29,17 @@
     },
     {
       "metric_group": "集群健康",
+      "name": "etcd_server_is_leader_gauge",
+      "display_name": "当前节点是否为主",
+      "instance_id_keys": ["instance_id"],
+      "data_type": "Enum",
+      "unit": "[{\"name\":\"Follower\",\"id\":0,\"color\":\"#8c8c8c\"},{\"name\":\"Leader\",\"id\":1,\"color\":\"#1ac44a\"}]",
+      "dimensions": [],
+      "description": "Whether the current member is the leader.",
+      "query": "etcd_server_is_leader_gauge{__$labels__}"
+    },
+    {
+      "metric_group": "集群健康",
       "name": "etcd_server_leader_changes_seen_total_counter_rate",
       "display_name": "主节点切换速率",
       "instance_id_keys": ["instance_id"],
@@ -35,6 +48,17 @@
       "dimensions": [],
       "description": "Rate of observed leader changes in the last 5 minutes. Frequent changes often indicate network jitter or cluster instability.",
       "query": "rate(etcd_server_leader_changes_seen_total_counter{__$labels__}[5m])"
+    },
+    {
+      "metric_group": "请求性能",
+      "name": "etcd_server_proposals_pending_gauge",
+      "display_name": "待提交提案数",
+      "instance_id_keys": ["instance_id"],
+      "data_type": "Number",
+      "unit": "count",
+      "dimensions": [],
+      "description": "Current number of proposals waiting to be committed.",
+      "query": "etcd_server_proposals_pending_gauge{__$labels__}"
     },
     {
       "metric_group": "请求性能",
@@ -48,6 +72,39 @@
       "query": "rate(etcd_server_proposals_failed_total_counter{__$labels__}[5m])"
     },
     {
+      "metric_group": "请求性能",
+      "name": "etcd_server_slow_apply_total_counter_rate",
+      "display_name": "慢应用请求速率",
+      "instance_id_keys": ["instance_id"],
+      "data_type": "Number",
+      "unit": "cps",
+      "dimensions": [],
+      "description": "Rate of slow apply requests in the last 5 minutes.",
+      "query": "rate(etcd_server_slow_apply_total_counter{__$labels__}[5m])"
+    },
+    {
+      "metric_group": "请求性能",
+      "name": "etcd_server_read_indexes_failed_total_counter_rate",
+      "display_name": "读索引失败速率",
+      "instance_id_keys": ["instance_id"],
+      "data_type": "Number",
+      "unit": "cps",
+      "dimensions": [],
+      "description": "Rate of failed read index requests in the last 5 minutes.",
+      "query": "rate(etcd_server_read_indexes_failed_total_counter{__$labels__}[5m])"
+    },
+    {
+      "metric_group": "请求性能",
+      "name": "etcd_server_slow_read_indexes_total_counter_rate",
+      "display_name": "慢读索引速率",
+      "instance_id_keys": ["instance_id"],
+      "data_type": "Number",
+      "unit": "cps",
+      "dimensions": [],
+      "description": "Rate of slow read index requests in the last 5 minutes.",
+      "query": "rate(etcd_server_slow_read_indexes_total_counter{__$labels__}[5m])"
+    },
+    {
       "metric_group": "存储",
       "name": "etcd_mvcc_db_total_size_in_use_in_bytes_gauge",
       "display_name": "数据库已使用大小",
@@ -59,6 +116,61 @@
       "query": "etcd_mvcc_db_total_size_in_use_in_bytes_gauge{__$labels__}"
     },
     {
+      "metric_group": "存储",
+      "name": "etcd_mvcc_db_total_size_in_bytes_gauge",
+      "display_name": "数据库分配大小",
+      "instance_id_keys": ["instance_id"],
+      "data_type": "Number",
+      "unit": "bytes",
+      "dimensions": [],
+      "description": "Total physically allocated backend database size.",
+      "query": "etcd_mvcc_db_total_size_in_bytes_gauge{__$labels__}"
+    },
+    {
+      "metric_group": "存储",
+      "name": "etcd_server_quota_backend_bytes_gauge",
+      "display_name": "Backend 配额",
+      "instance_id_keys": ["instance_id"],
+      "data_type": "Number",
+      "unit": "bytes",
+      "dimensions": [],
+      "description": "Configured backend storage quota in bytes.",
+      "query": "etcd_server_quota_backend_bytes_gauge{__$labels__}"
+    },
+    {
+      "metric_group": "存储",
+      "name": "etcd_backend_quota_usage_percent",
+      "display_name": "Backend 配额使用率",
+      "instance_id_keys": ["instance_id"],
+      "data_type": "Number",
+      "unit": "%",
+      "dimensions": [],
+      "description": "Ratio of logical backend usage to backend quota.",
+      "query": "clamp_min(etcd_mvcc_db_total_size_in_use_in_bytes_gauge{__$labels__} / etcd_server_quota_backend_bytes_gauge{__$labels__} * 100, 0)"
+    },
+    {
+      "metric_group": "存储",
+      "name": "etcd_mvcc_db_open_read_transactions_gauge",
+      "display_name": "打开读事务数",
+      "instance_id_keys": ["instance_id"],
+      "data_type": "Number",
+      "unit": "count",
+      "dimensions": [],
+      "description": "Current number of open read transactions.",
+      "query": "etcd_mvcc_db_open_read_transactions_gauge{__$labels__}"
+    },
+    {
+      "metric_group": "存储",
+      "name": "etcd_debugging_mvcc_keys_total_gauge",
+      "display_name": "键总数",
+      "instance_id_keys": ["instance_id"],
+      "data_type": "Number",
+      "unit": "count",
+      "dimensions": [],
+      "description": "Current total number of keys in the store.",
+      "query": "etcd_debugging_mvcc_keys_total_gauge{__$labels__}"
+    },
+    {
       "metric_group": "请求性能",
       "name": "etcd_server_client_requests_total_counter_rate",
       "display_name": "客户端请求速率",
@@ -68,6 +180,28 @@
       "dimensions": [],
       "description": "Rate of all client requests handled by etcd in the last 5 minutes. It reflects the overall request pressure on the node.",
       "query": "sum(rate(etcd_server_client_requests_total_counter{__$labels__}[5m])) by (instance_id)"
+    },
+    {
+      "metric_group": "集群健康",
+      "name": "etcd_network_active_peers_gauge",
+      "display_name": "活跃 Peer 数",
+      "instance_id_keys": ["instance_id"],
+      "data_type": "Number",
+      "unit": "count",
+      "dimensions": [],
+      "description": "Current number of active peer connections.",
+      "query": "sum(etcd_network_active_peers_gauge{__$labels__}) by (instance_id)"
+    },
+    {
+      "metric_group": "集群健康",
+      "name": "etcd_server_heartbeat_send_failures_total_counter_rate",
+      "display_name": "心跳发送失败速率",
+      "instance_id_keys": ["instance_id"],
+      "data_type": "Number",
+      "unit": "cps",
+      "dimensions": [],
+      "description": "Rate of leader heartbeat send failures in the last 5 minutes.",
+      "query": "rate(etcd_server_heartbeat_send_failures_total_counter{__$labels__}[5m])"
     },
     {
       "metric_group": "网络",
@@ -90,6 +224,61 @@
       "dimensions": [],
       "description": "Rate of bytes sent to client gRPC requests in the last 5 minutes, reflecting outbound response traffic.",
       "query": "sum(rate(etcd_network_client_grpc_sent_bytes_total_counter{__$labels__}[5m])) by (instance_id)"
+    },
+    {
+      "metric_group": "网络",
+      "name": "etcd_network_peer_received_bytes_total_counter_rate",
+      "display_name": "Peer 接收流量速率",
+      "instance_id_keys": ["instance_id"],
+      "data_type": "Number",
+      "unit": "Bps",
+      "dimensions": [],
+      "description": "Rate of bytes received from peers in the last 5 minutes.",
+      "query": "sum(rate(etcd_network_peer_received_bytes_total_counter{__$labels__}[5m])) by (instance_id)"
+    },
+    {
+      "metric_group": "网络",
+      "name": "etcd_network_peer_sent_bytes_total_counter_rate",
+      "display_name": "Peer 发送流量速率",
+      "instance_id_keys": ["instance_id"],
+      "data_type": "Number",
+      "unit": "Bps",
+      "dimensions": [],
+      "description": "Rate of bytes sent to peers in the last 5 minutes.",
+      "query": "sum(rate(etcd_network_peer_sent_bytes_total_counter{__$labels__}[5m])) by (instance_id)"
+    },
+    {
+      "metric_group": "网络",
+      "name": "etcd_network_peer_sent_failures_total_counter_rate",
+      "display_name": "Peer 发送失败速率",
+      "instance_id_keys": ["instance_id"],
+      "data_type": "Number",
+      "unit": "cps",
+      "dimensions": [],
+      "description": "Rate of peer send failures in the last 5 minutes.",
+      "query": "sum(rate(etcd_network_peer_sent_failures_total_counter{__$labels__}[5m])) by (instance_id)"
+    },
+    {
+      "metric_group": "运行状态",
+      "name": "etcd_debugging_mvcc_watcher_total_gauge",
+      "display_name": "Watcher 数量",
+      "instance_id_keys": ["instance_id"],
+      "data_type": "Number",
+      "unit": "count",
+      "dimensions": [],
+      "description": "Current number of watchers.",
+      "query": "etcd_debugging_mvcc_watcher_total_gauge{__$labels__}"
+    },
+    {
+      "metric_group": "运行状态",
+      "name": "etcd_debugging_mvcc_watch_stream_total_gauge",
+      "display_name": "Watch 流数量",
+      "instance_id_keys": ["instance_id"],
+      "data_type": "Number",
+      "unit": "count",
+      "dimensions": [],
+      "description": "Current number of watch streams.",
+      "query": "etcd_debugging_mvcc_watch_stream_total_gauge{__$labels__}"
     }
   ]
 }
