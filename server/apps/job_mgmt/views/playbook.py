@@ -1,5 +1,8 @@
 """Playbook视图"""
 
+import io
+import zipfile
+
 from django.http import FileResponse
 from rest_framework import status
 from rest_framework.decorators import action
@@ -151,3 +154,43 @@ class PlaybookViewSet(AuthViewSet):
         file_handle = instance.file.open("rb")
         response = FileResponse(file_handle, as_attachment=True, filename=instance.file_name)
         return response
+
+    @action(detail=False, methods=["get"])
+    @HasPermission("playbook_library-View")
+    def download_template(self, request):
+        """下载 Playbook 模板压缩包。"""
+        buffer = io.BytesIO()
+
+        with zipfile.ZipFile(buffer, "w", zipfile.ZIP_DEFLATED) as zip_file:
+            zip_file.writestr(
+                "playbook-template/playbook.yml",
+                "---\n- name: Example Playbook\n  hosts: localhost\n  connection: local\n  gather_facts: false\n\n  roles:\n    - example\n",
+            )
+            zip_file.writestr(
+                "playbook-template/README.md",
+                "# Playbook 模板示例\n\n"
+                "这是一个可直接运行的 Playbook 模板。\n\n"
+                "## 目录说明\n\n"
+                "- `playbook.yml`：Playbook 入口文件\n"
+                "- `README.md`：Playbook 说明文档\n"
+                "- `roles/example/tasks/main.yml`：任务示例\n"
+                "- `roles/example/vars/main.yml`：变量示例\n\n"
+                "## 执行说明\n\n"
+                "该模板使用本地连接方式执行，默认会输出一条调试信息。\n\n"
+                "## 自定义建议\n\n"
+                "1. 按业务需要修改 `roles/example/tasks/main.yml`\n"
+                "2. 在 `vars/main.yml` 中补充变量\n"
+                "3. 如果需要多角色，可以在 `roles/` 下继续增加目录\n",
+            )
+            zip_file.writestr(
+                "playbook-template/roles/example/tasks/main.yml",
+                '---\n- name: Print hello message\n  debug:\n    msg: "{{ message }}"\n',
+            )
+            zip_file.writestr(
+                "playbook-template/roles/example/vars/main.yml",
+                '---\nmessage: "Hello from playbook template"\n',
+            )
+            zip_file.writestr("playbook-template/roles/example/templates/.gitkeep", "")
+
+        buffer.seek(0)
+        return FileResponse(buffer, as_attachment=True, filename="playbook-template.zip", content_type="application/zip")

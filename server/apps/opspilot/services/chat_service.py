@@ -8,7 +8,14 @@ from apps.core.mixinx import EncryptMixin
 from apps.core.utils.loader import LanguageLoader
 from apps.opspilot.enum import SkillTypeChoices
 from apps.opspilot.models import LLMModel, SkillTools
-from apps.opspilot.services.builtin_tools import BUILTIN_REDIS_TOOL_NAME, build_builtin_redis_runtime_tool
+from apps.opspilot.services.builtin_tools import (
+    BUILTIN_MYSQL_TOOL_NAME,
+    BUILTIN_ORACLE_TOOL_NAME,
+    BUILTIN_REDIS_TOOL_NAME,
+    build_builtin_mysql_runtime_tool,
+    build_builtin_oracle_runtime_tool,
+    build_builtin_redis_runtime_tool,
+)
 from apps.opspilot.services.history_service import history_service
 from apps.opspilot.services.rag_service import rag_service
 from apps.opspilot.utils.agent_factory import create_agent_instance
@@ -81,7 +88,9 @@ class ChatService:
 
         try:
             if _is_eventlet_environment():
-                raise RuntimeError("当前 Celery worker 使用 eventlet 池，不支持在任务中执行 asyncio.run(graph.execute(...))，请改用 --pool threads 或 solo")
+                raise RuntimeError(
+                    "当前 Celery worker 使用 eventlet 池，不支持在任务中执行 asyncio.run(graph.execute(...))，请改用 --pool threads 或 solo"
+                )
 
             # 调用 agent 的 execute 方法（非流式同步执行）
             response = asyncio.run(graph.execute(request))
@@ -181,12 +190,18 @@ class ChatService:
         if kwargs["skill_type"] != SkillTypeChoices.KNOWLEDGE_TOOL:
             selected_tools = kwargs.get("tools", [])
             selected_builtin_redis_kwargs = None
+            selected_builtin_mysql_kwargs = None
+            selected_builtin_oracle_kwargs = None
             for tool in selected_tools:
                 for i in tool.get("kwargs", []):
                     if i.get("type") == "password":
                         EncryptMixin.decrypt_field("value", i)
                 if tool.get("name") == BUILTIN_REDIS_TOOL_NAME:
                     selected_builtin_redis_kwargs = {u["key"]: u["value"] for u in tool.get("kwargs", []) if u.get("key")}
+                if tool.get("name") == BUILTIN_MYSQL_TOOL_NAME:
+                    selected_builtin_mysql_kwargs = {u["key"]: u["value"] for u in tool.get("kwargs", []) if u.get("key")}
+                if tool.get("name") == BUILTIN_ORACLE_TOOL_NAME:
+                    selected_builtin_oracle_kwargs = {u["key"]: u["value"] for u in tool.get("kwargs", []) if u.get("key")}
             tool_map = {i["id"]: {u["key"]: u["value"] for u in i["kwargs"] if u.get("key")} for i in selected_tools if "id" in i}
 
             # 查询工具对象，需要判断是否为内置工具
@@ -200,17 +215,27 @@ class ChatService:
                 # 移除 kwargs 字段
                 tool_params.pop("kwargs", None)
 
-                # 如果是内置工具，添加 langchain 前缀的 URL
-                if skill_tool.is_build_in:
+                # 如果是内置工具（通过 is_build_in 标记或名称匹配），添加 langchain 前缀的 URL
+                is_builtin = skill_tool.is_build_in or skill_tool.name in (BUILTIN_REDIS_TOOL_NAME, BUILTIN_MYSQL_TOOL_NAME, BUILTIN_ORACLE_TOOL_NAME)
+                if is_builtin:
                     tool_params["url"] = f"langchain:{skill_tool.name}"
+                    tool_kwargs_for_builtin = tool_map.get(skill_tool.id, {})
                     if skill_tool.name == BUILTIN_REDIS_TOOL_NAME:
-                        tool_params["extra_tools_prompt"] = build_builtin_redis_runtime_tool(tool_map.get(skill_tool.id, {}))[
-                            "extra_tools_prompt"
-                        ]
+                        tool_params["extra_tools_prompt"] = build_builtin_redis_runtime_tool(tool_kwargs_for_builtin)["extra_tools_prompt"]
+                    elif skill_tool.name == BUILTIN_MYSQL_TOOL_NAME:
+                        tool_params["extra_tools_prompt"] = build_builtin_mysql_runtime_tool(tool_kwargs_for_builtin)["extra_tools_prompt"]
+                    elif skill_tool.name == BUILTIN_ORACLE_TOOL_NAME:
+                        tool_params["extra_tools_prompt"] = build_builtin_oracle_runtime_tool(tool_kwargs_for_builtin)["extra_tools_prompt"]
                 tools.append(tool_params)
 
             if selected_builtin_redis_kwargs and BUILTIN_REDIS_TOOL_NAME not in loaded_tool_names:
                 tools.append(build_builtin_redis_runtime_tool(selected_builtin_redis_kwargs))
+
+            if selected_builtin_mysql_kwargs and BUILTIN_MYSQL_TOOL_NAME not in loaded_tool_names:
+                tools.append(build_builtin_mysql_runtime_tool(selected_builtin_mysql_kwargs))
+
+            if selected_builtin_oracle_kwargs and BUILTIN_ORACLE_TOOL_NAME not in loaded_tool_names:
+                tools.append(build_builtin_oracle_runtime_tool(selected_builtin_oracle_kwargs))
 
             for i in tool_map.values():
                 extra_config.update(i)

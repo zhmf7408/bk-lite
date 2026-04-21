@@ -325,7 +325,7 @@ const JobRecordPage = () => {
       lookup_expr: 'in',
       options: [
         { id: 'script', name: t('job.scriptExecution') },
-        { id: 'playbook', name: 'Playbook' },
+        { id: 'playbook', name: t('job.playbook') },
         { id: 'file', name: t('job.fileDistribution') },
       ],
     },
@@ -336,7 +336,7 @@ const JobRecordPage = () => {
       options: [
         { id: 'manual', name: t('job.manual') },
         { id: 'scheduled', name: t('job.scheduled') },
-        { id: 'api', name: 'API' },
+        { id: 'api', name: t('job.api') },
       ],
     },
     {
@@ -896,7 +896,7 @@ const JobRecordPage = () => {
                 </div>
                 <div>
                   <div className="mb-1" style={{ color: 'var(--color-text-3)' }}>{t('job.executeUser')}</div>
-                  <div style={{ color: 'var(--color-text-1)' }}>root</div>
+                  <div style={{ color: 'var(--color-text-1)' }}>{t('job.defaultExecuteUser')}</div>
                 </div>
                 <div>
                   <div className="mb-1" style={{ color: 'var(--color-text-3)' }}>{t('job.codeLines')}</div>

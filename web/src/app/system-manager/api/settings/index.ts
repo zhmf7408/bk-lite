@@ -35,7 +35,7 @@ export const useSettingsApi = () => {
    * Fetches teams/groups.
    */
   const fetchTeams = useCallback(async (): Promise<any[]> => {
-    return get('/opspilot/knowledge_mgmt/knowledge_base/get_teams/');
+    return get('/system_mgmt/group/get_teams/');
   }, [get]);
 
   /**

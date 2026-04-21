@@ -19,6 +19,11 @@ class GroupViewSet(LanguageViewSet, ViewSetUtils):
     serializer_class = GroupSerializer
 
     @action(detail=False, methods=["GET"])
+    def get_teams(self, request):
+        groups = request.user.group_list
+        return JsonResponse({"result": True, "data": groups})
+
+    @action(detail=False, methods=["GET"])
     @HasPermission("user_group-View")
     def search_group_list(self, request):
         # 构建嵌套组结构
