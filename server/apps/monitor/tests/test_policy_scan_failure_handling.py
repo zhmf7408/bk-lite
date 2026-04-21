@@ -268,3 +268,149 @@ def test_no_data_events_can_notify_without_legacy_policy_field(monkeypatch):
 
     assert event.notice_result == [{"result": True}]
     assert bulk_update_calls == [([event], ["notice_result"], 100)]
+
+
+def test_threshold_event_does_not_reuse_active_no_data_alert(monkeypatch):
+    _install_module(
+        monkeypatch,
+        "apps.monitor.constants.alert_policy",
+        AlertConstants=types.SimpleNamespace(),
+    )
+    _install_module(
+        monkeypatch,
+        "apps.monitor.constants.database",
+        DatabaseConstants=types.SimpleNamespace(
+            BULK_CREATE_BATCH_SIZE=100,
+            BULK_UPDATE_BATCH_SIZE=100,
+        ),
+    )
+    _install_module(
+        monkeypatch,
+        "apps.monitor.models",
+        MonitorAlert=object,
+        MonitorEvent=object,
+        MonitorEventRawData=object,
+    )
+    _install_module(
+        monkeypatch,
+        "apps.monitor.utils.dimension",
+        format_dimension_str=lambda dimensions: "",
+    )
+    _install_module(
+        monkeypatch,
+        "apps.monitor.utils.system_mgmt_api",
+        SystemMgmtUtils=object,
+    )
+    _install_module(monkeypatch, "apps.system_mgmt.models", Channel=object)
+    _install_module(monkeypatch, "apps.core.logger", celery_logger=_Logger())
+
+    module = _load_module(
+        "monitor_policy_event_alert_manager_key_test_module",
+        Path(__file__).resolve().parents[1]
+        / "tasks"
+        / "services"
+        / "policy_scan"
+        / "event_alert_manager.py",
+    )
+
+    metric_instance_id = "('host-1',)"
+    active_no_data_alert = types.SimpleNamespace(
+        id=101,
+        metric_instance_id=metric_instance_id,
+        monitor_instance_id="host-1",
+        alert_type="no_data",
+    )
+    created_alert = types.SimpleNamespace(
+        id=202,
+        metric_instance_id=metric_instance_id,
+        alert_type="alert",
+    )
+    created_from_events = []
+    persisted_events = []
+    existing_updates = []
+
+    manager = object.__new__(module.EventAlertManager)
+    manager.policy = types.SimpleNamespace(id=1006, name="mixed-policy")
+    manager.active_alerts = [active_no_data_alert]
+    manager._create_alerts_from_events = lambda events: created_from_events.extend(
+        events
+    ) or [created_alert]
+    manager.create_events = lambda events: persisted_events.extend(events) or events
+    manager._update_existing_alerts_from_events = lambda events: existing_updates.extend(
+        events
+    )
+
+    threshold_event = {
+        "metric_instance_id": metric_instance_id,
+        "monitor_instance_id": "host-1",
+        "dimensions": {"instance_id": "host-1"},
+        "value": 95.0,
+        "level": "critical",
+        "content": "cpu critical",
+    }
+
+    event_objs, new_alerts = manager.create_events_and_alerts([threshold_event])
+
+    assert created_from_events == [threshold_event]
+    assert persisted_events == [threshold_event]
+    assert existing_updates == []
+    assert threshold_event["alert_id"] == created_alert.id
+    assert threshold_event["_alert_obj"] is created_alert
+    assert event_objs == [threshold_event]
+    assert new_alerts == [created_alert]
+
+
+def test_send_notice_returns_channel_result_for_event_audit(monkeypatch):
+    send_results = [{"result": True, "message": "sent"}]
+
+    _install_module(
+        monkeypatch,
+        "apps.monitor.constants.alert_policy",
+        AlertConstants=types.SimpleNamespace(),
+    )
+    _install_module(
+        monkeypatch,
+        "apps.monitor.constants.database",
+        DatabaseConstants=types.SimpleNamespace(),
+    )
+    _install_module(
+        monkeypatch,
+        "apps.monitor.models",
+        MonitorAlert=object,
+        MonitorEvent=object,
+        MonitorEventRawData=object,
+    )
+    _install_module(
+        monkeypatch,
+        "apps.monitor.utils.dimension",
+        format_dimension_str=lambda dimensions: "",
+    )
+    _install_module(
+        monkeypatch,
+        "apps.monitor.utils.system_mgmt_api",
+        SystemMgmtUtils=types.SimpleNamespace(
+            send_msg_with_channel=lambda *args: send_results[0]
+        ),
+    )
+    _install_module(monkeypatch, "apps.system_mgmt.models", Channel=object)
+    _install_module(monkeypatch, "apps.core.logger", celery_logger=_Logger())
+
+    module = _load_module(
+        "monitor_policy_event_alert_manager_notice_test_module",
+        Path(__file__).resolve().parents[1]
+        / "tasks"
+        / "services"
+        / "policy_scan"
+        / "event_alert_manager.py",
+    )
+
+    manager = object.__new__(module.EventAlertManager)
+    manager.policy = types.SimpleNamespace(
+        id=1007,
+        name="notice-policy",
+        notice_type_id=9,
+        notice_users=["admin"],
+    )
+    event = types.SimpleNamespace(content="cpu critical")
+
+    assert manager.send_notice(event) == send_results

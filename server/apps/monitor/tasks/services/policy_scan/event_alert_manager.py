@@ -94,14 +94,19 @@ class EventAlertManager:
         existing_alert_events = []
 
         active_alerts_map = {
-            self._get_alert_metric_instance_id(alert): alert
+            self._build_alert_key(
+                self._get_alert_metric_instance_id(alert), alert.alert_type
+            ): alert
             for alert in self.active_alerts
         }
 
         for event in events:
             metric_instance_id = event.get("metric_instance_id", "")
-            if metric_instance_id in active_alerts_map:
-                alert = active_alerts_map[metric_instance_id]
+            alert_key = self._build_alert_key(
+                metric_instance_id, self._get_event_alert_type(event)
+            )
+            if alert_key in active_alerts_map:
+                alert = active_alerts_map[alert_key]
                 event["alert_id"] = alert.id
                 event["_alert_obj"] = alert
                 existing_alert_events.append(event)
@@ -118,9 +123,17 @@ class EventAlertManager:
                     f"got {len(new_alerts)} for policy {self.policy.id}"
                 )
 
-            alert_map = {alert.metric_instance_id: alert for alert in new_alerts}
+            alert_map = {
+                self._build_alert_key(alert.metric_instance_id, alert.alert_type): alert
+                for alert in new_alerts
+            }
             for event in new_alert_events:
-                alert = alert_map.get(event.get("metric_instance_id", ""))
+                alert = alert_map.get(
+                    self._build_alert_key(
+                        event.get("metric_instance_id", ""),
+                        self._get_event_alert_type(event),
+                    )
+                )
                 if alert:
                     event["alert_id"] = alert.id
                     event["_alert_obj"] = alert
@@ -159,6 +172,12 @@ class EventAlertManager:
         if alert.metric_instance_id:
             return alert.metric_instance_id
         return str((alert.monitor_instance_id,))
+
+    def _get_event_alert_type(self, event) -> str:
+        return "no_data" if event.get("level") == "no_data" else "alert"
+
+    def _build_alert_key(self, metric_instance_id: str, alert_type: str) -> tuple:
+        return metric_instance_id, alert_type
 
     def _create_alerts_from_events(self, events):
         if not events:
@@ -287,13 +306,13 @@ class EventAlertManager:
                 logger.info(
                     f"send notice success for policy {self.policy.name}: {send_result}"
                 )
+            return [send_result]
         except Exception as e:
             logger.error(
                 f"send notice exception for policy {self.policy.name}: {e}",
                 exc_info=True,
             )
-
-        return []
+            return [{"result": False, "message": str(e)}]
 
     def notify_events(self, event_objs):
         events_to_notify = []
