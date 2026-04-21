@@ -10,10 +10,8 @@ import { useTranslation } from '@/utils/i18n';
 const CollectPage = () => {
   const { t } = useTranslation();
   const searchParams = useSearchParams();
-  const {
-    getSnmpCollectTemplate,
-    updateSnmpCollectTemplate
-  } = useIntegrationApi();
+  const { getSnmpCollectTemplate, updateSnmpCollectTemplate } =
+    useIntegrationApi();
   const pluginId = searchParams.get('plugin_id') || '';
   const templateType = searchParams.get('template_type') || '';
 
@@ -49,8 +47,8 @@ const CollectPage = () => {
 
   const handleSave = () => {
     Modal.confirm({
-      title: '保存采集片段',
-      content: '保存后会立即同步到所有已下发该模板的采集实例，是否继续？',
+      title: t('monitor.integrations.collectSaveTitle'),
+      content: t('monitor.integrations.collectSaveConfirm'),
       centered: true,
       okText: t('common.confirm'),
       cancelText: t('common.cancel'),
@@ -60,7 +58,7 @@ const CollectPage = () => {
           const data = await updateSnmpCollectTemplate(pluginId, { content });
           setContent(data.content || '');
           setInitialContent(data.content || '');
-          message.success('采集片段已保存，并已尝试同步到已下发实例');
+          message.success(t('monitor.integrations.collectSaveSuccess'));
         } catch (error: any) {
           message.error(error?.message || t('common.operationFailed'));
         } finally {
@@ -71,7 +69,9 @@ const CollectPage = () => {
   };
 
   if (templateType !== 'snmp') {
-    return <Empty description="当前模板不支持采集片段编辑" />;
+    return (
+      <Empty description={t('monitor.integrations.collectNotSupported')} />
+    );
   }
 
   return (
@@ -79,26 +79,27 @@ const CollectPage = () => {
       <div className="px-[10px] h-[calc(100vh-270px)] overflow-y-auto">
         <div className="mb-4">
           <div className="mb-2 text-[20px] font-semibold text-[var(--color-text-1)]">
-            采集
+            {t('monitor.integrations.collect')}
           </div>
           <div className="text-[14px] text-[var(--color-text-2)]">
-            直接填写 Telegraf SNMP Input 中的指标采集片段。请仅编辑 field/table 相关配置，不要修改主配置与标签区块。
+            {t('monitor.integrations.collectDescription')}
           </div>
           <div className="mt-2 text-[12px] text-[var(--color-text-3)]">
-            下方内容仅为示例模板，未取消注释并补充有效 OID 前不会产生采集数据。保存前会校验 TOML 语法，并尝试同步到已下发该模板的 SNMP 实例。
+            {t('monitor.integrations.collectNote')}
           </div>
         </div>
 
         {!!loadError && (
           <div className="mb-4 rounded-md border border-[var(--color-warning)] bg-[var(--color-warning-bg)] px-4 py-3 text-[14px] text-[var(--color-warning-text)]">
-            采集模板加载失败：{loadError}
+            {t('monitor.integrations.collectLoadError')}
+            {loadError}
           </div>
         )}
 
         <div className="mb-4 rounded-md border border-[var(--color-border)] bg-[var(--color-bg-1)] overflow-hidden">
           <div className="flex items-center justify-between px-4 py-3 border-b border-[var(--color-border)] bg-[var(--color-fill-1)]">
             <div className="text-sm font-medium text-[var(--color-text-1)]">
-              采集配置指标片段
+              {t('monitor.integrations.collectMetricSnippet')}
             </div>
             <div className="text-sm text-[var(--color-text-3)]">
               TOML / Telegraf SNMP Input
@@ -120,7 +121,9 @@ const CollectPage = () => {
           <Button
             type="primary"
             loading={saving}
-            disabled={loading || !!loadError || content.trim() === initialContent.trim()}
+            disabled={
+              loading || !!loadError || content.trim() === initialContent.trim()
+            }
             onClick={handleSave}
           >
             {t('common.save')}
