@@ -12,6 +12,8 @@ import { useSkillApi } from '@/app/opspilot/api/skill';
 import OperateModal from '@/components/operate-modal';
 import EditablePasswordField from '@/components/dynamic-form/editPasswordField';
 import RedisToolEditor, { RedisInstanceFormValue } from './redisToolEditor';
+import MysqlToolEditor, { MysqlInstanceFormValue } from './mysqlToolEditor';
+import OracleToolEditor, { OracleInstanceFormValue } from './oracleToolEditor';
 
 const REDIS_TOOL_NAME = 'redis';
 const REDIS_INSTANCES_KEY = 'redis_instances';
@@ -133,6 +135,249 @@ const serializeRedisToolConfig = (instances: RedisInstanceFormValue[]): ToolVari
 
 const isRedisTool = (tool?: SelectTool | null) => (tool?.rawName || tool?.name) === REDIS_TOOL_NAME;
 
+const MYSQL_TOOL_NAME = 'mysql';
+const MYSQL_INSTANCES_KEY = 'mysql_instances';
+const MYSQL_DEFAULT_INSTANCE_ID_KEY = 'mysql_default_instance_id';
+const MYSQL_AUTO_NAME_PREFIX = 'MySQL - ';
+
+const createMysqlInstanceId = () => `mysql-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+
+const getDefaultMysqlInstance = (name: string): MysqlInstanceFormValue => ({
+  id: createMysqlInstanceId(),
+  name,
+  host: '',
+  port: 3306,
+  database: '',
+  user: '',
+  password: '',
+  charset: 'utf8mb4',
+  collation: 'utf8mb4_unicode_ci',
+  ssl: false,
+  ssl_ca: '',
+  ssl_cert: '',
+  ssl_key: '',
+  testStatus: 'untested',
+});
+
+const getNextMysqlInstanceName = (instances: MysqlInstanceFormValue[]) => {
+  const maxIndex = instances.reduce((max, instance) => {
+    const match = instance.name.match(/^MySQL - (\d+)$/);
+    if (!match) {
+      return max;
+    }
+    return Math.max(max, Number(match[1]));
+  }, 0);
+  return `${MYSQL_AUTO_NAME_PREFIX}${maxIndex + 1}`;
+};
+
+const parseMysqlInstancesValue = (value: unknown): Record<string, unknown>[] => {
+  if (Array.isArray(value)) {
+    return value as Record<string, unknown>[];
+  }
+  if (typeof value === 'string' && value.trim()) {
+    try {
+      const parsed = JSON.parse(value);
+      return Array.isArray(parsed) ? parsed : [];
+    } catch {
+      return [];
+    }
+  }
+  return [];
+};
+
+const parseMysqlBoolean = (value: unknown) => {
+  if (typeof value === 'boolean') {
+    return value;
+  }
+  if (typeof value === 'string') {
+    return ['1', 'true', 'yes', 'on'].includes(value.trim().toLowerCase());
+  }
+  return Boolean(value);
+};
+
+const parseMysqlInt = (value: unknown, defaultValue: number) => {
+  if (typeof value === 'number') {
+    return value;
+  }
+  if (typeof value === 'string') {
+    const parsed = parseInt(value, 10);
+    return isNaN(parsed) ? defaultValue : parsed;
+  }
+  return defaultValue;
+};
+
+const parseMysqlToolConfig = (kwargs: ToolVariable[] = []): MysqlInstanceFormValue[] => {
+  const kwargsMap = new Map(kwargs.filter((item) => item.key).map((item) => [item.key, item.value]));
+  const instancesValue = kwargsMap.get(MYSQL_INSTANCES_KEY);
+  const parsedInstances = parseMysqlInstancesValue(instancesValue);
+
+  if (parsedInstances.length > 0) {
+    return parsedInstances.map((item, index) => ({
+      id: String(item.id || `mysql-${index + 1}`),
+      name: String(item.name || `${MYSQL_AUTO_NAME_PREFIX}${index + 1}`),
+      host: String(item.host || ''),
+      port: parseMysqlInt(item.port, 3306),
+      database: String(item.database || ''),
+      user: String(item.user || ''),
+      password: String(item.password || ''),
+      charset: String(item.charset || 'utf8mb4'),
+      collation: String(item.collation || 'utf8mb4_unicode_ci'),
+      ssl: parseMysqlBoolean(item.ssl),
+      ssl_ca: String(item.ssl_ca || ''),
+      ssl_cert: String(item.ssl_cert || ''),
+      ssl_key: String(item.ssl_key || ''),
+      testStatus: 'untested',
+    }));
+  }
+
+  const hasLegacyConfig = ['host', 'port', 'database', 'user', 'password']
+    .some((key) => kwargsMap.has(key));
+
+  if (hasLegacyConfig) {
+    return [{
+      id: 'mysql-1',
+      name: 'MySQL - 1',
+      host: String(kwargsMap.get('host') || ''),
+      port: parseMysqlInt(kwargsMap.get('port'), 3306),
+      database: String(kwargsMap.get('database') || ''),
+      user: String(kwargsMap.get('user') || ''),
+      password: String(kwargsMap.get('password') || ''),
+      charset: String(kwargsMap.get('charset') || 'utf8mb4'),
+      collation: String(kwargsMap.get('collation') || 'utf8mb4_unicode_ci'),
+      ssl: parseMysqlBoolean(kwargsMap.get('ssl')),
+      ssl_ca: String(kwargsMap.get('ssl_ca') || ''),
+      ssl_cert: String(kwargsMap.get('ssl_cert') || ''),
+      ssl_key: String(kwargsMap.get('ssl_key') || ''),
+      testStatus: 'untested',
+    }];
+  }
+
+  return [getDefaultMysqlInstance('MySQL - 1')];
+};
+
+const serializeMysqlToolConfig = (instances: MysqlInstanceFormValue[]): ToolVariable[] => {
+  const normalizedInstances = instances.map((instance) => {
+    const normalizedInstance = { ...instance };
+    delete normalizedInstance.testStatus;
+    return normalizedInstance;
+  });
+  return [
+    { key: MYSQL_INSTANCES_KEY, value: JSON.stringify(normalizedInstances) },
+    { key: MYSQL_DEFAULT_INSTANCE_ID_KEY, value: normalizedInstances[0]?.id || '' },
+  ];
+};
+
+const isMysqlTool = (tool?: SelectTool | null) => (tool?.rawName || tool?.name) === MYSQL_TOOL_NAME;
+
+const ORACLE_TOOL_NAME = 'oracle';
+const ORACLE_INSTANCES_KEY = 'oracle_instances';
+const ORACLE_DEFAULT_INSTANCE_ID_KEY = 'oracle_default_instance_id';
+const ORACLE_AUTO_NAME_PREFIX = 'Oracle - ';
+
+const createOracleInstanceId = () => `oracle-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+
+const getDefaultOracleInstance = (name: string): OracleInstanceFormValue => ({
+  id: createOracleInstanceId(),
+  name,
+  host: '',
+  port: 1521,
+  service_name: '',
+  user: '',
+  password: '',
+  nls_lang: '',
+  testStatus: 'untested',
+});
+
+const getNextOracleInstanceName = (instances: OracleInstanceFormValue[]) => {
+  const maxIndex = instances.reduce((max, instance) => {
+    const match = instance.name.match(/^Oracle - (\d+)$/);
+    if (!match) {
+      return max;
+    }
+    return Math.max(max, Number(match[1]));
+  }, 0);
+  return `${ORACLE_AUTO_NAME_PREFIX}${maxIndex + 1}`;
+};
+
+const parseOracleInstancesValue = (value: unknown): Record<string, unknown>[] => {
+  if (Array.isArray(value)) {
+    return value as Record<string, unknown>[];
+  }
+  if (typeof value === 'string' && value.trim()) {
+    try {
+      const parsed = JSON.parse(value);
+      return Array.isArray(parsed) ? parsed : [];
+    } catch {
+      return [];
+    }
+  }
+  return [];
+};
+
+const parseOracleInt = (value: unknown, defaultValue: number) => {
+  if (typeof value === 'number') {
+    return value;
+  }
+  if (typeof value === 'string') {
+    const parsed = parseInt(value, 10);
+    return isNaN(parsed) ? defaultValue : parsed;
+  }
+  return defaultValue;
+};
+
+const parseOracleToolConfig = (kwargs: ToolVariable[] = []): OracleInstanceFormValue[] => {
+  const kwargsMap = new Map(kwargs.filter((item) => item.key).map((item) => [item.key, item.value]));
+  const instancesValue = kwargsMap.get(ORACLE_INSTANCES_KEY);
+  const parsedInstances = parseOracleInstancesValue(instancesValue);
+
+  if (parsedInstances.length > 0) {
+    return parsedInstances.map((item, index) => ({
+      id: String(item.id || `oracle-${index + 1}`),
+      name: String(item.name || `${ORACLE_AUTO_NAME_PREFIX}${index + 1}`),
+      host: String(item.host || ''),
+      port: parseOracleInt(item.port, 1521),
+      service_name: String(item.service_name || ''),
+      user: String(item.user || ''),
+      password: String(item.password || ''),
+      nls_lang: String(item.nls_lang || ''),
+      testStatus: 'untested',
+    }));
+  }
+
+  const hasLegacyConfig = ['host', 'port', 'service_name', 'user', 'password']
+    .some((key) => kwargsMap.has(key));
+
+  if (hasLegacyConfig) {
+    return [{
+      id: 'oracle-1',
+      name: 'Oracle - 1',
+      host: String(kwargsMap.get('host') || ''),
+      port: parseOracleInt(kwargsMap.get('port'), 1521),
+      service_name: String(kwargsMap.get('service_name') || ''),
+      user: String(kwargsMap.get('user') || ''),
+      password: String(kwargsMap.get('password') || ''),
+      nls_lang: String(kwargsMap.get('nls_lang') || ''),
+      testStatus: 'untested',
+    }];
+  }
+
+  return [getDefaultOracleInstance('Oracle - 1')];
+};
+
+const serializeOracleToolConfig = (instances: OracleInstanceFormValue[]): ToolVariable[] => {
+  const normalizedInstances = instances.map((instance) => {
+    const normalizedInstance = { ...instance };
+    delete normalizedInstance.testStatus;
+    return normalizedInstance;
+  });
+  return [
+    { key: ORACLE_INSTANCES_KEY, value: JSON.stringify(normalizedInstances) },
+    { key: ORACLE_DEFAULT_INSTANCE_ID_KEY, value: normalizedInstances[0]?.id || '' },
+  ];
+};
+
+const isOracleTool = (tool?: SelectTool | null) => (tool?.rawName || tool?.name) === ORACLE_TOOL_NAME;
+
 interface ToolSelectorProps {
   defaultTools: SelectTool[];
   onChange: (selected: SelectTool[]) => void;
@@ -140,7 +385,7 @@ interface ToolSelectorProps {
 
 const ToolSelector: React.FC<ToolSelectorProps> = ({ defaultTools, onChange }) => {
   const { t } = useTranslation();
-  const { fetchSkillTools, testRedisConnection } = useSkillApi();
+  const { fetchSkillTools, testRedisConnection, testMysqlConnection, testOracleConnection } = useSkillApi();
   const [loading, setLoading] = useState<boolean>(false);
   const [modalVisible, setModalVisible] = useState(false);
   const [tools, setTools] = useState<SelectTool[]>([]);
@@ -150,6 +395,12 @@ const ToolSelector: React.FC<ToolSelectorProps> = ({ defaultTools, onChange }) =
   const [redisInstances, setRedisInstances] = useState<RedisInstanceFormValue[]>([]);
   const [selectedRedisInstanceId, setSelectedRedisInstanceId] = useState<string | null>(null);
   const [testingRedisConnection, setTestingRedisConnection] = useState(false);
+  const [mysqlInstances, setMysqlInstances] = useState<MysqlInstanceFormValue[]>([]);
+  const [selectedMysqlInstanceId, setSelectedMysqlInstanceId] = useState<string | null>(null);
+  const [testingMysqlConnection, setTestingMysqlConnection] = useState(false);
+  const [oracleInstances, setOracleInstances] = useState<OracleInstanceFormValue[]>([]);
+  const [selectedOracleInstanceId, setSelectedOracleInstanceId] = useState<string | null>(null);
+  const [testingOracleConnection, setTestingOracleConnection] = useState(false);
   const [form] = Form.useForm();
 
   useEffect(() => {
@@ -162,6 +413,8 @@ const ToolSelector: React.FC<ToolSelectorProps> = ({ defaultTools, onChange }) =
       const data = await fetchSkillTools();
       const defaultToolMap = new Map(defaultTools.map((tool) => [tool.id, tool]));
       const defaultRedisTool = defaultTools.find((tool) => isRedisTool(tool));
+      const defaultMysqlTool = defaultTools.find((tool) => isMysqlTool(tool));
+      const defaultOracleTool = defaultTools.find((tool) => isOracleTool(tool));
       const fetchedTools = data.map((tool: any) => {
         const defaultTool = defaultToolMap.get(tool.id);
         const kwargs = (tool.params.kwargs || [])
@@ -182,9 +435,9 @@ const ToolSelector: React.FC<ToolSelectorProps> = ({ defaultTools, onChange }) =
       setTools(fetchedTools);
 
       const initialSelectedTools = fetchedTools
-        .filter((tool) => defaultToolMap.has(tool.id) || (isRedisTool(tool) && !!defaultRedisTool))
+        .filter((tool) => defaultToolMap.has(tool.id) || (isRedisTool(tool) && !!defaultRedisTool) || (isMysqlTool(tool) && !!defaultMysqlTool) || (isOracleTool(tool) && !!defaultOracleTool))
         .map((tool) => {
-          const matchedDefaultTool = defaultToolMap.get(tool.id) || (isRedisTool(tool) ? defaultRedisTool : undefined);
+          const matchedDefaultTool = defaultToolMap.get(tool.id) || (isRedisTool(tool) ? defaultRedisTool : undefined) || (isMysqlTool(tool) ? defaultMysqlTool : undefined) || (isOracleTool(tool) ? defaultOracleTool : undefined);
           if (!matchedDefaultTool) {
             return tool;
           }
@@ -229,6 +482,14 @@ const ToolSelector: React.FC<ToolSelectorProps> = ({ defaultTools, onChange }) =
       const instances = parseRedisToolConfig(tool.kwargs);
       setRedisInstances(instances);
       setSelectedRedisInstanceId(instances[0]?.id || null);
+    } else if (isMysqlTool(tool)) {
+      const instances = parseMysqlToolConfig(tool.kwargs);
+      setMysqlInstances(instances);
+      setSelectedMysqlInstanceId(instances[0]?.id || null);
+    } else if (isOracleTool(tool)) {
+      const instances = parseOracleToolConfig(tool.kwargs);
+      setOracleInstances(instances);
+      setSelectedOracleInstanceId(instances[0]?.id || null);
     } else {
       form.setFieldsValue({
         kwargs: tool.kwargs?.map((item: any) => ({ key: item.key, value: item.value, type: item.type, isRequired: item.isRequired })) || [],
@@ -270,6 +531,70 @@ const ToolSelector: React.FC<ToolSelectorProps> = ({ defaultTools, onChange }) =
       return;
     }
 
+    if (isMysqlTool(editingTool)) {
+      const trimmedNames = mysqlInstances.map((instance) => instance.name.trim()).filter(Boolean);
+      if (mysqlInstances.length === 0) {
+        message.error(t('tool.mysql.noInstances'));
+        return;
+      }
+      if (trimmedNames.length !== mysqlInstances.length) {
+        message.error(t('tool.mysql.instanceNameRequired'));
+        return;
+      }
+      if (new Set(trimmedNames).size !== trimmedNames.length) {
+        message.error(t('tool.mysql.duplicateInstanceName'));
+        return;
+      }
+      if (mysqlInstances.some((instance) => !instance.host.trim())) {
+        message.error(t('tool.mysql.hostRequired'));
+        return;
+      }
+      if (editingTool) {
+        const updatedTool = {
+          ...editingTool,
+          kwargs: serializeMysqlToolConfig(mysqlInstances.map((instance) => ({ ...instance, name: instance.name.trim(), host: instance.host.trim() }))),
+        };
+        const updatedSelectedTools = selectedTools.map((tool) => (tool.id === editingTool.id ? updatedTool : tool));
+        setSelectedTools(updatedSelectedTools);
+        onChange(updatedSelectedTools);
+      }
+      setEditModalVisible(false);
+      setEditingTool(null);
+      return;
+    }
+
+    if (isOracleTool(editingTool)) {
+      const trimmedNames = oracleInstances.map((instance) => instance.name.trim()).filter(Boolean);
+      if (oracleInstances.length === 0) {
+        message.error(t('tool.oracle.noInstances'));
+        return;
+      }
+      if (trimmedNames.length !== oracleInstances.length) {
+        message.error(t('tool.oracle.instanceNameRequired'));
+        return;
+      }
+      if (new Set(trimmedNames).size !== trimmedNames.length) {
+        message.error(t('tool.oracle.duplicateInstanceName'));
+        return;
+      }
+      if (oracleInstances.some((instance) => !instance.host.trim())) {
+        message.error(t('tool.oracle.hostRequired'));
+        return;
+      }
+      if (editingTool) {
+        const updatedTool = {
+          ...editingTool,
+          kwargs: serializeOracleToolConfig(oracleInstances.map((instance) => ({ ...instance, name: instance.name.trim(), host: instance.host.trim() }))),
+        };
+        const updatedSelectedTools = selectedTools.map((tool) => (tool.id === editingTool.id ? updatedTool : tool));
+        setSelectedTools(updatedSelectedTools);
+        onChange(updatedSelectedTools);
+      }
+      setEditModalVisible(false);
+      setEditingTool(null);
+      return;
+    }
+
     form.validateFields().then((values) => {
       if (editingTool) {
         const updatedTool = {
@@ -290,6 +615,10 @@ const ToolSelector: React.FC<ToolSelectorProps> = ({ defaultTools, onChange }) =
     setEditingTool(null);
     setRedisInstances([]);
     setSelectedRedisInstanceId(null);
+    setMysqlInstances([]);
+    setSelectedMysqlInstanceId(null);
+    setOracleInstances([]);
+    setSelectedOracleInstanceId(null);
   };
 
   const handleAddRedisInstance = () => {
@@ -341,6 +670,104 @@ const ToolSelector: React.FC<ToolSelectorProps> = ({ defaultTools, onChange }) =
     }
   };
 
+  const handleAddMysqlInstance = () => {
+    const nextInstance = getDefaultMysqlInstance(getNextMysqlInstanceName(mysqlInstances));
+    setMysqlInstances((prev) => [...prev, nextInstance]);
+    setSelectedMysqlInstanceId(nextInstance.id);
+  };
+
+  const handleDeleteMysqlInstance = (instanceId: string) => {
+    setMysqlInstances((prev) => {
+      const nextInstances = prev.filter((instance) => instance.id !== instanceId);
+      if (selectedMysqlInstanceId === instanceId) {
+        setSelectedMysqlInstanceId(nextInstances[0]?.id || null);
+      }
+      return nextInstances;
+    });
+  };
+
+  const handleMysqlInstanceChange = <K extends keyof MysqlInstanceFormValue>(
+    instanceId: string,
+    field: K,
+    value: MysqlInstanceFormValue[K],
+  ) => {
+    setMysqlInstances((prev) => prev.map((instance) => (
+      instance.id === instanceId ? { ...instance, [field]: value, testStatus: 'untested' } : instance
+    )));
+  };
+
+  const handleTestMysqlInstance = async () => {
+    const currentInstance = mysqlInstances.find((instance) => instance.id === selectedMysqlInstanceId);
+    if (!currentInstance) {
+      return;
+    }
+    setTestingMysqlConnection(true);
+    try {
+      const payload = { ...currentInstance };
+      delete payload.testStatus;
+      await testMysqlConnection(payload);
+      message.success(t('tool.mysql.status.success'));
+      setMysqlInstances((prev) => prev.map((instance) => (
+        instance.id === currentInstance.id ? { ...instance, testStatus: 'success' } : instance
+      )));
+    } catch {
+      setMysqlInstances((prev) => prev.map((instance) => (
+        instance.id === currentInstance.id ? { ...instance, testStatus: 'failed' } : instance
+      )));
+    } finally {
+      setTestingMysqlConnection(false);
+    }
+  };
+
+  const handleAddOracleInstance = () => {
+    const nextInstance = getDefaultOracleInstance(getNextOracleInstanceName(oracleInstances));
+    setOracleInstances((prev) => [...prev, nextInstance]);
+    setSelectedOracleInstanceId(nextInstance.id);
+  };
+
+  const handleDeleteOracleInstance = (instanceId: string) => {
+    setOracleInstances((prev) => {
+      const nextInstances = prev.filter((instance) => instance.id !== instanceId);
+      if (selectedOracleInstanceId === instanceId) {
+        setSelectedOracleInstanceId(nextInstances[0]?.id || null);
+      }
+      return nextInstances;
+    });
+  };
+
+  const handleOracleInstanceChange = <K extends keyof OracleInstanceFormValue>(
+    instanceId: string,
+    field: K,
+    value: OracleInstanceFormValue[K],
+  ) => {
+    setOracleInstances((prev) => prev.map((instance) => (
+      instance.id === instanceId ? { ...instance, [field]: value, testStatus: 'untested' } : instance
+    )));
+  };
+
+  const handleTestOracleInstance = async () => {
+    const currentInstance = oracleInstances.find((instance) => instance.id === selectedOracleInstanceId);
+    if (!currentInstance) {
+      return;
+    }
+    setTestingOracleConnection(true);
+    try {
+      const payload = { ...currentInstance };
+      delete payload.testStatus;
+      await testOracleConnection(payload);
+      message.success(t('tool.oracle.status.success'));
+      setOracleInstances((prev) => prev.map((instance) => (
+        instance.id === currentInstance.id ? { ...instance, testStatus: 'success' } : instance
+      )));
+    } catch {
+      setOracleInstances((prev) => prev.map((instance) => (
+        instance.id === currentInstance.id ? { ...instance, testStatus: 'failed' } : instance
+      )));
+    } finally {
+      setTestingOracleConnection(false);
+    }
+  };
+
   return (
     <div>
       <Button onClick={openModal}>+ {t('common.add')}</Button>
@@ -388,7 +815,7 @@ const ToolSelector: React.FC<ToolSelectorProps> = ({ defaultTools, onChange }) =
         onCancel={handleEditModalCancel}
         okText={t('common.save')}
         cancelText={t('common.cancel')}
-        width={isRedisTool(editingTool) ? 800 : undefined}
+        width={isRedisTool(editingTool) || isMysqlTool(editingTool) || isOracleTool(editingTool) ? 800 : undefined}
       >
         <Form form={form} layout="vertical">
           {isRedisTool(editingTool) ? (
@@ -401,6 +828,28 @@ const ToolSelector: React.FC<ToolSelectorProps> = ({ defaultTools, onChange }) =
               onDelete={handleDeleteRedisInstance}
               onChange={handleRedisInstanceChange}
               onTest={handleTestRedisInstance}
+            />
+          ) : isMysqlTool(editingTool) ? (
+            <MysqlToolEditor
+              instances={mysqlInstances}
+              selectedInstanceId={selectedMysqlInstanceId}
+              testing={testingMysqlConnection}
+              onSelect={setSelectedMysqlInstanceId}
+              onAdd={handleAddMysqlInstance}
+              onDelete={handleDeleteMysqlInstance}
+              onChange={handleMysqlInstanceChange}
+              onTest={handleTestMysqlInstance}
+            />
+          ) : isOracleTool(editingTool) ? (
+            <OracleToolEditor
+              instances={oracleInstances}
+              selectedInstanceId={selectedOracleInstanceId}
+              testing={testingOracleConnection}
+              onSelect={setSelectedOracleInstanceId}
+              onAdd={handleAddOracleInstance}
+              onDelete={handleDeleteOracleInstance}
+              onChange={handleOracleInstanceChange}
+              onTest={handleTestOracleInstance}
             />
           ) : (
             <Form.List name="kwargs">

@@ -12,10 +12,19 @@ from apps.core.logger import opspilot_logger as logger
 from apps.core.mixinx import EncryptMixin
 from apps.core.utils.loader import LanguageLoader
 from apps.core.utils.viewset_utils import AuthViewSet, LanguageViewSet
+from apps.opspilot.metis.llm.tools.mysql.connection import normalize_mysql_instance, test_mysql_instance
+from apps.opspilot.metis.llm.tools.oracle.connection import normalize_oracle_instance, test_oracle_instance
 from apps.opspilot.metis.llm.tools.redis.connection import normalize_redis_instance, test_redis_instance
 from apps.opspilot.models import KnowledgeBase, LLMModel, LLMSkill, SkillRequestLog, SkillTools, UserPin
 from apps.opspilot.serializers.llm_serializer import LLMModelSerializer, LLMSerializer, SkillRequestLogSerializer, SkillToolsSerializer
-from apps.opspilot.services.builtin_tools import BUILTIN_REDIS_TOOL_NAME, build_builtin_redis_tool
+from apps.opspilot.services.builtin_tools import (
+    BUILTIN_MYSQL_TOOL_NAME,
+    BUILTIN_ORACLE_TOOL_NAME,
+    BUILTIN_REDIS_TOOL_NAME,
+    build_builtin_mysql_tool,
+    build_builtin_oracle_tool,
+    build_builtin_redis_tool,
+)
 from apps.opspilot.utils.agui_chat import stream_agui_chat
 from apps.opspilot.utils.mcp_cache import get_cached_mcp_tools, set_cached_mcp_tools
 from apps.opspilot.utils.mcp_client import MCPClient
@@ -117,9 +126,7 @@ class LLMViewSet(AuthViewSet):
             return JsonResponse({"result": False, "message": message})
         params["team"] = params.get("team", []) or [int(request.COOKIES.get("current_team"))]
         params["enable_conversation_history"] = True
-        params[
-            "skill_prompt"
-        ] = """你是关于专业机器人，请按照以下要求进行回复
+        params["skill_prompt"] = """你是关于专业机器人，请按照以下要求进行回复
 1、请根据用户的问题，从知识库检索关联的知识进行总结回复
 2、请根据用户需求，从工具中选取适当的工具进行执行
 3、回复的语句请保证准确，不要杜撰
@@ -479,9 +486,14 @@ class SkillToolsViewSet(AuthViewSet):
     @HasPermission("tool_list-View")
     def list(self, request, *args, **kwargs):
         response = super().list(request, *args, **kwargs)
-        if isinstance(response.data, list) and not any(item.get("name") == BUILTIN_REDIS_TOOL_NAME for item in response.data):
+        if isinstance(response.data, list):
             loader = LanguageLoader(app="opspilot", default_lang=getattr(request.user, "locale", "en") or "en")
-            response.data.append(build_builtin_redis_tool(loader))
+            if not any(item.get("name") == BUILTIN_REDIS_TOOL_NAME for item in response.data):
+                response.data.append(build_builtin_redis_tool(loader))
+            if not any(item.get("name") == BUILTIN_MYSQL_TOOL_NAME for item in response.data):
+                response.data.append(build_builtin_mysql_tool(loader))
+            if not any(item.get("name") == BUILTIN_ORACLE_TOOL_NAME for item in response.data):
+                response.data.append(build_builtin_oracle_tool(loader))
         return response
 
     @HasPermission("tool_list-Add")
@@ -578,3 +590,29 @@ class SkillToolsViewSet(AuthViewSet):
         except TypeError as error:
             return JsonResponse({"result": False, "message": f"Redis connection test failed: {error}"}, status=status.HTTP_400_BAD_REQUEST)
         return JsonResponse({"result": False, "message": "Redis connection test failed"}, status=status.HTTP_400_BAD_REQUEST)
+
+    @action(methods=["POST"], detail=False)
+    @HasPermission("tool_list-View")
+    def test_mysql_connection(self, request):
+        try:
+            instance = normalize_mysql_instance(request.data)
+            if test_mysql_instance(instance):
+                return JsonResponse({"result": True, "data": {"success": True}})
+        except ValueError as error:
+            return JsonResponse({"result": False, "message": str(error)}, status=status.HTTP_400_BAD_REQUEST)
+        except Exception as error:
+            return JsonResponse({"result": False, "message": f"MySQL connection test failed: {error}"}, status=status.HTTP_400_BAD_REQUEST)
+        return JsonResponse({"result": False, "message": "MySQL connection test failed"}, status=status.HTTP_400_BAD_REQUEST)
+
+    @action(methods=["POST"], detail=False)
+    @HasPermission("tool_list-View")
+    def test_oracle_connection(self, request):
+        try:
+            instance = normalize_oracle_instance(request.data)
+            if test_oracle_instance(instance):
+                return JsonResponse({"result": True, "data": {"success": True}})
+        except ValueError as error:
+            return JsonResponse({"result": False, "message": str(error)}, status=status.HTTP_400_BAD_REQUEST)
+        except Exception as error:
+            return JsonResponse({"result": False, "message": f"Oracle connection test failed: {error}"}, status=status.HTTP_400_BAD_REQUEST)
+        return JsonResponse({"result": False, "message": "Oracle connection test failed"}, status=status.HTTP_400_BAD_REQUEST)

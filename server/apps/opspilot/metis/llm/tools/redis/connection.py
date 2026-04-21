@@ -90,9 +90,7 @@ def parse_redis_instances(raw_instances: Any) -> list[Dict[str, Any]]:
     for index, instance in enumerate(parsed_instances, start=1):
         if not isinstance(instance, dict):
             continue
-        normalized_instances.append(
-            normalize_redis_instance(instance, fallback_name=f"Redis - {index}", fallback_id=f"redis-{index}")
-        )
+        normalized_instances.append(normalize_redis_instance(instance, fallback_name=f"Redis - {index}", fallback_id=f"redis-{index}"))
     return normalized_instances
 
 
@@ -165,10 +163,10 @@ def get_redis_instances_prompt(configurable: Dict[str, Any]) -> str:
     default_instance = resolve_redis_instance(instances, default_instance_id)
     available_instances = ", ".join(instance["name"] for instance in instances if instance.get("name"))
     return (
-        "已配置多个 Redis 实例。"
-        f"默认实例: {default_instance['name']}。"
-        f"可用实例: {available_instances}。"
-        "如需切换实例，请在工具调用时显式传入 instance_name 或 instance_id。"
+        f"已配置 {len(instances)} 个 Redis 实例，可用实例: {available_instances}。"
+        f"默认实例为「{default_instance['name']}」。"
+        "当用户未指定实例时，直接使用默认实例执行工具调用，无需向用户询问。"
+        "仅当用户明确要求切换实例时，才在工具调用中传入 instance_name 或 instance_id 参数。"
     )
 
 
@@ -236,12 +234,8 @@ def get_redis_connection(
     return _create_redis_client(params, decode_responses=decode_responses)
 
 
-def get_binary_redis_connection(
-    config: Optional[RunnableConfig] = None, instance_name: Optional[str] = None, instance_id: Optional[str] = None
-):
-    return get_redis_connection(
-        config=config, decode_responses=False, instance_name=instance_name, instance_id=instance_id
-    )
+def get_binary_redis_connection(config: Optional[RunnableConfig] = None, instance_name: Optional[str] = None, instance_id: Optional[str] = None):
+    return get_redis_connection(config=config, decode_responses=False, instance_name=instance_name, instance_id=instance_id)
 
 
 def test_redis_instance(instance: Dict[str, Any]) -> bool:
@@ -265,7 +259,20 @@ from apps.opspilot.metis.llm.tools.common.credentials import (
     normalize_credentials,
 )
 
-REDIS_FLAT_FIELDS = ["url", "redis_url", "host", "username", "password", "ssl", "ssl_ca_path", "ssl_keyfile", "ssl_certfile", "ssl_cert_reqs", "ssl_ca_certs", "cluster_mode"]
+REDIS_FLAT_FIELDS = [
+    "url",
+    "redis_url",
+    "host",
+    "username",
+    "password",
+    "ssl",
+    "ssl_ca_path",
+    "ssl_keyfile",
+    "ssl_certfile",
+    "ssl_cert_reqs",
+    "ssl_ca_certs",
+    "cluster_mode",
+]
 
 
 class RedisCredentialAdapter:
