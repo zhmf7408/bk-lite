@@ -6,6 +6,7 @@ interface CustomModalProps
   extends Omit<ModalProps, 'title' | 'footer' | 'centered' | 'subTitle'> {
   title?: React.ReactNode;
   footer?: React.ReactNode;
+  headerExtra?: React.ReactNode;
   subTitle?: string;
   centered?: boolean;
   customHeaderClass?: string;
@@ -14,6 +15,7 @@ interface CustomModalProps
 const OperateModal: React.FC<CustomModalProps> = ({
   title,
   footer,
+  headerExtra,
   centered = true,
   subTitle = '',
   customHeaderClass = customModalStyle.customModalHeader,
@@ -31,20 +33,23 @@ const OperateModal: React.FC<CustomModalProps> = ({
         content: customModalStyle.customModalContent,
       }}
       title={
-        <div className="flex items-center">
-          {title}
-          {subTitle && (
-            <span
-              style={{
-                color: 'var(--color-text-3)',
-                fontSize: '12px',
-                fontWeight: 'normal',
-              }}
-            >
-              {' '}
-              - {subTitle}
-            </span>
-          )}
+        <div className="flex items-center justify-between gap-4">
+          <div className="flex items-center min-w-0">
+            {title}
+            {subTitle && (
+              <span
+                style={{
+                  color: 'var(--color-text-3)',
+                  fontSize: '12px',
+                  fontWeight: 'normal',
+                }}
+              >
+                {' '}
+                - {subTitle}
+              </span>
+            )}
+          </div>
+          {headerExtra ? <div className="shrink-0">{headerExtra}</div> : null}
         </div>
       }
       footer={footer}

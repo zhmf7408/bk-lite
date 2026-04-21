@@ -20,48 +20,24 @@ type ScriptLang = 'shell' | 'bat' | 'python' | 'powershell';
 interface LangConfig {
   label: string;
   mode: string;
-  defaultValue: string;
 }
 
 const LANG_CONFIG: Record<ScriptLang, LangConfig> = {
   shell: {
     label: 'Shell',
     mode: 'sh',
-    defaultValue: `#!/bin/bash
-
-# 任务正常结束
-job_success() {
-    echo "[INFO] Job completed successfully"
-    exit 0
-}
-
-# 任务异常结束
-job_fail() {
-    echo "[ERROR] Job failed"
-    exit 1
-}
-
-# ---------- 在此处编写脚本逻辑 ----------
-
-
-
-# ---------- 结束 ----------
-job_success`,
   },
   bat: {
     label: 'Bat',
     mode: 'batchfile',
-    defaultValue: `@echo off\nREM Enter your batch script here\n`,
   },
   python: {
     label: 'Python',
     mode: 'python',
-    defaultValue: `#!/usr/bin/env python3\n# Enter your Python script here\n`,
   },
   powershell: {
     label: 'Powershell',
     mode: 'powershell',
-    defaultValue: `# Enter your PowerShell script here\n`,
   },
 };
 
@@ -85,6 +61,12 @@ const ScriptEditor: React.FC<ScriptEditorProps> = ({
   readOnly = false,
 }) => {
   const { t } = useTranslation();
+  const defaultScripts: Record<ScriptLang, string> = {
+    shell: t('job.scriptTemplateShell'),
+    bat: t('job.scriptTemplateBat'),
+    python: t('job.scriptTemplatePython'),
+    powershell: t('job.scriptTemplatePowershell'),
+  };
   const [internalLang, setInternalLang] = useState<ScriptLang>('shell');
   const activeLang = controlledLang ?? internalLang;
 
@@ -92,7 +74,7 @@ const ScriptEditor: React.FC<ScriptEditorProps> = ({
     if (value) return value;
     const init: Record<string, string> = {};
     for (const lang of LANG_ORDER) {
-      init[lang] = LANG_CONFIG[lang].defaultValue;
+      init[lang] = defaultScripts[lang];
     }
     return init as Record<ScriptLang, string>;
   });
@@ -102,6 +84,21 @@ const ScriptEditor: React.FC<ScriptEditorProps> = ({
       setScripts(value);
     }
   }, [value]);
+
+  useEffect(() => {
+    if (value) return;
+    setScripts((prev) => {
+      let changed = false;
+      const next = { ...prev };
+      for (const lang of LANG_ORDER) {
+        if (!next[lang]) {
+          next[lang] = defaultScripts[lang];
+          changed = true;
+        }
+      }
+      return changed ? next : prev;
+    });
+  }, [defaultScripts, value]);
 
   const [isFullscreen, setIsFullscreen] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);

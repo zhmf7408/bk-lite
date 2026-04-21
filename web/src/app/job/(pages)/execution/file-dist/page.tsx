@@ -158,7 +158,7 @@ const FileDistPage = () => {
       return { canExecute: true, needConfirm: false, matchedRules: [] };
     } catch {
       // API failed - still allow execution but backend will validate
-      message.warning(t('common.networkError') || '无法检查高危路径规则，继续执行');
+      message.warning(t('common.networkError') || t('job.dangerousPathCheckFailed'));
       return { canExecute: true, needConfirm: false, matchedRules: [], apiError: true };
     }
   };

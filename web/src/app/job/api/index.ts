@@ -291,6 +291,12 @@ const useJobApi = () => {
     });
   };
 
+  const downloadPlaybookTemplate = async (): Promise<Blob> => {
+    return await get('/job_mgmt/api/playbook/download_template/', {
+      responseType: 'blob',
+    });
+  };
+
   const batchDeletePlaybook = async (ids: number[]): Promise<{ deleted_count: number }> => {
     return await post('/job_mgmt/api/playbook/batch_delete/', { ids });
   };
@@ -490,6 +496,7 @@ const useJobApi = () => {
     deletePlaybook,
     upgradePlaybook,
     downloadPlaybook,
+    downloadPlaybookTemplate,
     batchDeletePlaybook,
     uploadDistributionFile,
     createFileDistribution,
