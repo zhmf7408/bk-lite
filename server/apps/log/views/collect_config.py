@@ -330,8 +330,10 @@ class CollectInstanceViewSet(ViewSet):
                 PermissionConstants.INSTANCE_MODULE,
                 include_children=include_children,
             )
+            permission_data = instance_res.get("data", {}) if isinstance(instance_res, dict) else {}
+            current_teams = instance_res.get("team", []) if isinstance(instance_res, dict) else []
             # 超管权限检查
-            admin_cur_team = instance_res.get("all", {}).get("team")
+            admin_cur_team = permission_data.get("all", {}).get("team")
             if admin_cur_team:
                 qs = CollectInstance.objects.filter(collectinstanceorganization__organization__in=admin_cur_team)
                 inst_permission_map = {}
@@ -348,12 +350,8 @@ class CollectInstanceViewSet(ViewSet):
                         }
                     )
 
-                permissions, cur_team = (
-                    instance_res.get("data", {}),
-                    instance_res.get("team", []),
-                )
                 # 使用新的优雅权限过滤方法
-                inst_permission_map = filter_instances_with_permissions(result, permissions, cur_team)
+                inst_permission_map = filter_instances_with_permissions(result, permission_data, current_teams)
                 # 获取有权限的实例ID列表
                 authorized_instance_ids = list(inst_permission_map.keys())
                 if not authorized_instance_ids:

@@ -1,3 +1,4 @@
+import json
 from types import SimpleNamespace
 from unittest.mock import Mock
 
@@ -244,3 +245,27 @@ def test_set_organizations_rejects_target_org_outside_authorized_scope(monkeypat
 
     assert response.status_code == 403
     set_orgs.assert_not_called()
+
+
+def test_search_all_collect_types_respects_admin_scope_from_permission_data(monkeypatch):
+    instance = make_instance(organizations=[2])
+    from apps.log.views import collect_config
+
+    search_result = {"count": 1, "items": [{"id": instance.id}]}
+    collect_instance_filter = Mock(return_value=FakeQuerySet([instance]))
+    service_search = Mock(return_value=search_result)
+
+    monkeypatch.setattr(
+        collect_config,
+        "get_permissions_rules",
+        Mock(return_value={"data": {"all": {"team": [2]}}, "team": [1]}),
+    )
+    monkeypatch.setattr(collect_config.CollectInstance.objects, "filter", collect_instance_filter)
+    monkeypatch.setattr(collect_config.CollectTypeService, "search_instance_with_permission", service_search)
+
+    response = CollectInstanceViewSet().search(make_request({"page": 1, "page_size": 10}))
+
+    assert response.status_code == 200
+    collect_instance_filter.assert_called_once_with(collectinstanceorganization__organization__in=[2])
+    payload = json.loads(response.content)
+    assert payload["data"]["items"][0]["permission"] == ["View", "Operate"]
