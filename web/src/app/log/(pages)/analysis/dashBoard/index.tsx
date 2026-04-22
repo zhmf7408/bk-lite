@@ -5,7 +5,7 @@ import React, {
   useEffect,
   forwardRef,
   useRef,
-  useImperativeHandle,
+  useImperativeHandle
 } from 'react';
 import TimeSelector from '@/components/time-selector';
 import GridLayout, { WidthProvider } from 'react-grid-layout';
@@ -43,46 +43,45 @@ const Dashboard = forwardRef<DashboardRef, DashboardProps>(
     const [originalLayout, setOriginalLayout] = useState<LayoutItem[]>([]);
     const [refreshKey, setRefreshKey] = useState(0);
     const [otherConfig, setOtherConfig] = useState<any>({});
-    const [originalOtherConfig, setOriginalOtherConfig] = useState<any>({});
+    const [originalOtherConfig] = useState<any>({});
     const [pageLoading, setPageLoading] = useState<boolean>(false);
     const timeDefaultValue: TimeSelectorDefaultValue = {
       selectValue: 15,
-      rangePickerVaule: null,
+      rangePickerVaule: null
     };
     const [groups, setGroups] = useState<React.Key[]>([]);
     const [groupList, setGroupList] = useState<ListItem[]>([]);
 
-    // 监听 selectedDashboard 的变化，重置状态
+    // 初始化分组数据（仅首次加载）
     useEffect(() => {
-      setRefreshKey(0);
       if (!isLoading) {
         initData();
       }
+    }, [isLoading]);
+
+    // 监听 selectedDashboard 的变化，仅更新 layout，保留筛选条件
+    useEffect(() => {
       if (!selectedDashboard) {
         setLayout([]);
         setOriginalLayout([]);
-        setOtherConfig({});
-        setOriginalOtherConfig({});
         return;
       }
       const viewSets = selectedDashboard.view_sets || [];
       setLayout(viewSets);
       setOriginalLayout([...viewSets]);
-      const savedOtherConfig = selectedDashboard.other || {};
-      setOtherConfig(savedOtherConfig);
-      setOriginalOtherConfig({ ...savedOtherConfig });
-    }, [selectedDashboard?.id, isLoading]);
+      setRefreshKey((prev) => prev + 1);
+    }, [selectedDashboard?.id]);
 
     const onFrequenceChange = (val: number) => {
       setOtherConfig((prev: any) => ({
         ...prev,
-        frequence: val,
+        frequence: val
       }));
     };
 
     // 暴露方法给父组件
     useImperativeHandle(ref, () => ({
-      hasUnsavedChanges,
+      hasUnsavedChanges
     }));
 
     const getTimeRange = () => {
@@ -95,7 +94,7 @@ const Dashboard = forwardRef<DashboardRef, DashboardProps>(
         setPageLoading(true);
         const data = await getLogStreams({
           page_size: -1,
-          page: 1,
+          page: 1
         });
         const list = data || [];
         const ids = list.at()?.id ? [list.at().id] : [];
@@ -103,7 +102,7 @@ const Dashboard = forwardRef<DashboardRef, DashboardProps>(
         setGroups(ids);
         setOtherConfig((prev: any) => ({
           ...prev,
-          groupIds: ids,
+          groupIds: ids
         }));
       } finally {
         setPageLoading(false);
@@ -136,7 +135,7 @@ const Dashboard = forwardRef<DashboardRef, DashboardProps>(
       // 更新全局时间范围
       setOtherConfig((prev: any) => ({
         ...prev,
-        timeRange: range,
+        timeRange: range
       }));
     };
 
@@ -144,11 +143,17 @@ const Dashboard = forwardRef<DashboardRef, DashboardProps>(
       setGroups(val);
       setOtherConfig((prev: any) => ({
         ...prev,
-        groupIds: val,
+        groupIds: val
       }));
     };
 
     const handleRefresh = () => {
+      // 重新获取时间选择器的最新值，确保定时刷新时时间范围是最新的
+      const latestTimeRange = getTimeRange();
+      setOtherConfig((prev: any) => ({
+        ...prev,
+        timeRange: latestTimeRange
+      }));
       setRefreshKey((prev) => prev + 1);
     };
 
@@ -170,7 +175,7 @@ const Dashboard = forwardRef<DashboardRef, DashboardProps>(
         desc: selectedDashboard?.desc || '',
         filters: {},
         other: otherConfig,
-        view_sets: layout,
+        view_sets: layout
       };
       console.log(saveData);
     };
@@ -192,7 +197,7 @@ const Dashboard = forwardRef<DashboardRef, DashboardProps>(
           } catch {
             console.error(t('common.operateFailed'));
           }
-        },
+        }
       });
     };
 
@@ -205,7 +210,7 @@ const Dashboard = forwardRef<DashboardRef, DashboardProps>(
               .readonly-widget .react-resizable-handle {
                 display: none !important;
               }
-            `,
+            `
             }}
           />
         )}
@@ -223,7 +228,7 @@ const Dashboard = forwardRef<DashboardRef, DashboardProps>(
           <div className="flex items-center mx-4 my-2 justify-between">
             <Select
               style={{
-                width: '250px',
+                width: '250px'
               }}
               loading={pageLoading}
               showSearch
@@ -243,7 +248,7 @@ const Dashboard = forwardRef<DashboardRef, DashboardProps>(
               <div className="flex items-center mx-[8px]">
                 <TimeSelector
                   ref={timeSelectorRef}
-                  key={`time-selector-${selectedDashboard?.id || 'default'}`}
+                  key="time-selector"
                   defaultValue={timeDefaultValue}
                   onChange={handleTimeChange}
                   onRefresh={handleRefresh}
@@ -332,6 +337,7 @@ const Dashboard = forwardRef<DashboardRef, DashboardProps>(
                           globalTimeRange={getTimeRange()}
                           refreshKey={refreshKey}
                           editable={editable}
+                          getLatestTimeRange={getTimeRange}
                         />
                       </div>
                     </div>

@@ -8,15 +8,34 @@ import { ChartDataTransformer } from '@/app/log/utils/chartDataTransform';
 interface OsPieProps {
   rawData: any;
   loading?: boolean;
+  config?: any;
   onReady?: (ready: boolean) => void;
 }
 
-const OsPie: React.FC<OsPieProps> = ({ rawData, loading = false, onReady }) => {
+const OsPie: React.FC<OsPieProps> = ({
+  rawData,
+  loading = false,
+  config,
+  onReady
+}) => {
   const [isDataReady, setIsDataReady] = useState(false);
   const chartRef = useRef<any>(null);
   const chartColors = randomColorForLegend();
 
   const transformData = (rawData: any) => {
+    // 如果有 displayMaps 配置，先将原始数据映射为 {name, value} 格式
+    const displayMaps = config?.displayMaps;
+    if (displayMaps?.key && displayMaps?.value && Array.isArray(rawData)) {
+      const mapped = rawData
+        .filter((item: any) => item[displayMaps.key] !== undefined)
+        .map((item: any) => ({
+          name: String(item[displayMaps.key]),
+          value: parseFloat(item[displayMaps.value]) || 0
+        }));
+      if (mapped.length > 0) {
+        return mapped;
+      }
+    }
     return ChartDataTransformer.transformToPieData(rawData);
   };
 
@@ -42,7 +61,7 @@ const OsPie: React.FC<OsPieProps> = ({ rawData, loading = false, onReady }) => {
       confine: true,
       extraCssText: 'box-shadow: 0 0 3px rgba(150,150,150, 0.7);',
       textStyle: {
-        fontSize: 12,
+        fontSize: 12
       },
       formatter: function (params: any) {
         const percent = params.percent || 0;
@@ -61,10 +80,10 @@ const OsPie: React.FC<OsPieProps> = ({ rawData, loading = false, onReady }) => {
             </div>
           </div>
         `;
-      },
+      }
     },
     legend: {
-      show: false,
+      show: false
     },
     series: [
       {
@@ -88,34 +107,34 @@ const OsPie: React.FC<OsPieProps> = ({ rawData, loading = false, onReady }) => {
             title: {
               fontSize: 14,
               color: '#666',
-              lineHeight: 20,
+              lineHeight: 20
             },
             value: {
               fontSize: 24,
               fontWeight: 'bold',
               color: '#333',
-              lineHeight: 32,
-            },
-          },
+              lineHeight: 32
+            }
+          }
         },
         labelLine: {
           show: false,
           length: 10,
           length2: 15,
-          smooth: true,
+          smooth: true
         },
         itemStyle: {
           borderRadius: 2,
           borderColor: '#fff',
-          borderWidth: 1,
+          borderWidth: 1
         },
         emphasis: {
           focus: 'none',
-          scaleSize: 5,
+          scaleSize: 5
         },
-        data: chartData || [],
-      },
-    ],
+        data: chartData || []
+      }
+    ]
   };
 
   if (loading) {
