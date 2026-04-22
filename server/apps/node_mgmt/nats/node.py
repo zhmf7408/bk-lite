@@ -368,6 +368,12 @@ def node_list(query_data: dict):
 
 
 @nats_client.register
+def get_node_names_by_ids(node_ids: list):
+    """按节点ID批量获取节点名称。"""
+    return NodeService.get_node_names_by_ids(node_ids)
+
+
+@nats_client.register
 def collector_list(query_data: dict):
     return []
 

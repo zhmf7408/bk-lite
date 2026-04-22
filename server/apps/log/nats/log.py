@@ -7,8 +7,13 @@ from apps.core.utils.permission_utils import (
     check_instance_permission,
 )
 from apps.log.constants.permission import PermissionConstants
+from apps.log.constants.victoriametrics import VictoriaLogsConstants
 from apps.log.models.policy import Alert, Policy
 from apps.log.utils.query_log import VictoriaMetricsAPI
+
+
+def _normalize_bounded_int(value, field_name: str, default, max_value: int):
+    return VictoriaLogsConstants.normalize_bounded_int(value, field_name, default, max_value)
 
 
 @nats_client.register
@@ -17,6 +22,10 @@ def log_search(query, time_range, limit=10, *args, **kwargs):
     start_time, end_time = time_range
     start_time = format_time_iso(start_time)
     end_time = format_time_iso(end_time)
+    try:
+        limit = VictoriaLogsConstants.normalize_query_limit(limit, default=10)
+    except ValueError as exc:
+        return {"result": False, "data": [], "message": str(exc)}
     vm_api = VictoriaMetricsAPI()
     data = vm_api.query(query, start_time, end_time, limit)
     return {"result": True, "data": data, "message": ""}
@@ -28,6 +37,10 @@ def log_hits(query, time_range, field, fields_limit=5, step="5m", *args, **kwarg
     start_time, end_time = time_range
     start_time = format_time_iso(start_time)
     end_time = format_time_iso(end_time)
+    try:
+        fields_limit = VictoriaLogsConstants.normalize_hits_fields_limit(fields_limit, default=5)
+    except ValueError as exc:
+        return {"result": False, "data": [], "message": str(exc)}
     vm_api = VictoriaMetricsAPI()
     resp = vm_api.hits(query, start_time, end_time, field, fields_limit, step)
     data = []

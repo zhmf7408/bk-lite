@@ -539,7 +539,7 @@ const SearchView: React.FC = () => {
                 placeholder={t('common.inputMsg')}
                 value={limit}
                 min={1}
-                max={1000000}
+                max={1000}
                 precision={0}
                 controls={false}
                 onChange={(val) => setLimit(val || 1)}

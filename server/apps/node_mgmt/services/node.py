@@ -420,3 +420,11 @@ class NodeService:
             }
             for node in nodes
         ]
+
+    @staticmethod
+    def get_node_names_by_ids(node_ids):
+        normalized_node_ids = list({str(node_id) for node_id in node_ids if node_id not in (None, "")})
+        if not normalized_node_ids:
+            return []
+
+        return list(Node.objects.filter(id__in=normalized_node_ids).values("id", "name"))

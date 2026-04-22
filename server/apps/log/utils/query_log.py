@@ -88,6 +88,7 @@ class VictoriaMetricsAPI:
         return response.json()
 
     def field_values(self, start, end, field, limit=100, query=None):
+        limit = VictoriaLogsConstants.normalize_field_values_limit(limit, default=100, clamp=True)
         data = {
             "query": query or f"{field}:*",
             "field": field,
@@ -106,6 +107,7 @@ class VictoriaMetricsAPI:
         return response.json()
 
     def query(self, query, start, end, limit=10):
+        limit = VictoriaLogsConstants.normalize_query_limit(limit, default=10, clamp=True)
         data = {"query": query, "start": start, "end": end, "limit": limit}
         response = requests.post(
             self._build_url(self.host, "/select/logsql/query"),
@@ -157,6 +159,7 @@ class VictoriaMetricsAPI:
         return result
 
     def hits(self, query, start, end, field, fields_limit=5, step="5m"):
+        fields_limit = VictoriaLogsConstants.normalize_hits_fields_limit(fields_limit, default=5, clamp=True)
         data = {
             "query": query,
             "start": start,

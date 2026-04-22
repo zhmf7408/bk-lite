@@ -52,6 +52,13 @@ class NodeMgmt(object):
         return_data = self.client.run("node_list", query_data)
         return return_data
 
+    def get_node_names_by_ids(self, node_ids):
+        """
+        :param node_ids: 节点ID列表
+        :return: [{"id": "node_id", "name": "node_name"}]
+        """
+        return self.client.run("get_node_names_by_ids", node_ids)
+
     def batch_create_configs_and_child_configs(self, configs: list, child_configs: list):
         """
         批量创建配置和子配置
