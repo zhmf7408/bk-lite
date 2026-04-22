@@ -247,6 +247,41 @@ def test_set_organizations_rejects_target_org_outside_authorized_scope(monkeypat
     set_orgs.assert_not_called()
 
 
+def test_batch_create_rejects_target_org_outside_authorized_scope(monkeypatch):
+    from apps.log.views import collect_config
+
+    batch_create = Mock()
+    monkeypatch.setattr(
+        collect_config,
+        "get_permissions_rules",
+        Mock(return_value={"data": {"all": {"team": [2]}}, "team": [1]}),
+    )
+    monkeypatch.setattr(collect_config.CollectTypeService, "batch_create_collect_configs", batch_create)
+
+    response = CollectInstanceViewSet().batch_create(make_request({"collect_type_id": 7, "instances": [{"group_ids": [3]}]}))
+
+    assert response.status_code == 403
+    batch_create.assert_not_called()
+
+
+def test_batch_create_allows_authorized_target_org_scope(monkeypatch):
+    from apps.log.views import collect_config
+
+    batch_create = Mock()
+    monkeypatch.setattr(
+        collect_config,
+        "get_permissions_rules",
+        Mock(return_value={"data": {"all": {"team": [2]}}, "team": [1]}),
+    )
+    monkeypatch.setattr(collect_config.CollectTypeService, "batch_create_collect_configs", batch_create)
+
+    payload = {"collect_type_id": 7, "instances": [{"group_ids": [2]}]}
+    response = CollectInstanceViewSet().batch_create(make_request(payload))
+
+    assert response.status_code == 200
+    batch_create.assert_called_once_with(payload)
+
+
 def test_search_all_collect_types_respects_admin_scope_from_permission_data(monkeypatch):
     instance = make_instance(organizations=[2])
     from apps.log.views import collect_config
@@ -303,3 +338,129 @@ def test_search_single_collect_type_merges_duplicate_instance_permissions(monkey
     assert response.status_code == 200
     payload = json.loads(response.content)
     assert payload["data"]["items"][0]["permission"] == ["View", "Operate"]
+
+
+def test_instance_update_requires_operate_permission(monkeypatch):
+    instance = make_instance()
+    from apps.log.views import collect_config
+
+    update_instance = Mock()
+    monkeypatch.setattr(
+        collect_config.CollectInstance.objects,
+        "filter",
+        Mock(return_value=FakeQuerySet([instance])),
+    )
+    monkeypatch.setattr(
+        collect_config,
+        "get_permissions_rules",
+        Mock(return_value={"data": {}, "team": [1]}),
+    )
+    monkeypatch.setattr(collect_config.CollectTypeService, "update_instance", update_instance)
+
+    response = CollectInstanceViewSet().instance_update(make_request({"instance_id": instance.id, "name": "updated", "organizations": [2]}))
+
+    assert response.status_code == 403
+    update_instance.assert_not_called()
+
+
+def test_instance_update_rejects_target_org_outside_authorized_scope(monkeypatch):
+    instance = make_instance()
+    from apps.log.views import collect_config
+
+    update_instance = Mock()
+    monkeypatch.setattr(
+        collect_config.CollectInstance.objects,
+        "filter",
+        Mock(return_value=FakeQuerySet([instance])),
+    )
+    monkeypatch.setattr(
+        collect_config,
+        "get_permissions_rules",
+        Mock(
+            return_value={
+                "data": {
+                    str(instance.collect_type_id): {
+                        "instance": [{"id": instance.id, "permission": ["Operate"]}],
+                    },
+                    "all": {"team": [2]},
+                },
+                "team": [1],
+            }
+        ),
+    )
+    monkeypatch.setattr(collect_config.CollectTypeService, "update_instance", update_instance)
+
+    response = CollectInstanceViewSet().instance_update(make_request({"instance_id": instance.id, "name": "updated", "organizations": [3]}))
+
+    assert response.status_code == 403
+    update_instance.assert_not_called()
+
+
+def test_update_instance_collect_config_requires_operate_permission(monkeypatch):
+    instance = make_instance()
+    from apps.log.views import collect_config
+
+    update_config = Mock()
+    monkeypatch.setattr(
+        collect_config.CollectInstance.objects,
+        "filter",
+        Mock(return_value=FakeQuerySet([instance])),
+    )
+    monkeypatch.setattr(
+        collect_config,
+        "get_permissions_rules",
+        Mock(return_value={"data": {}, "team": [1]}),
+    )
+    monkeypatch.setattr(collect_config.CollectTypeService, "update_instance_config_v2", update_config)
+
+    response = CollectConfigViewSet().update_instance_collect_config(
+        make_request(
+            {
+                "instance_id": instance.id,
+                "collect_type_id": instance.collect_type_id,
+                "child": None,
+                "base": None,
+            }
+        )
+    )
+
+    assert response.status_code == 403
+    update_config.assert_not_called()
+
+
+def test_update_instance_collect_config_allows_authorized_instance(monkeypatch):
+    instance = make_instance()
+    from apps.log.views import collect_config
+
+    update_config = Mock()
+    monkeypatch.setattr(
+        collect_config.CollectInstance.objects,
+        "filter",
+        Mock(return_value=FakeQuerySet([instance])),
+    )
+    monkeypatch.setattr(
+        collect_config,
+        "get_permissions_rules",
+        Mock(
+            return_value={
+                "data": {
+                    str(instance.collect_type_id): {
+                        "instance": [{"id": instance.id, "permission": ["Operate"]}],
+                    }
+                },
+                "team": [1],
+            }
+        ),
+    )
+    monkeypatch.setattr(collect_config.CollectTypeService, "update_instance_config_v2", update_config)
+
+    payload = {
+        "instance_id": instance.id,
+        "collect_type_id": instance.collect_type_id,
+        "child": None,
+        "base": {"content": "key: value"},
+    }
+    response = CollectConfigViewSet().update_instance_collect_config(make_request(payload))
+
+    assert response.status_code == 200
+    update_config.assert_called_once_with(None, {"content": "key: value"}, instance.id, instance.collect_type_id)

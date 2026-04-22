@@ -1,4 +1,5 @@
 from rest_framework.viewsets import ModelViewSet
+from apps.core.utils.permission_utils import get_instance_permission_map
 from apps.core.utils.web_utils import WebUtils
 from apps.log.models.log_group import LogGroup, LogGroupOrganization
 from apps.log.services.access_scope import LogAccessScopeService
@@ -34,14 +35,28 @@ class LogGroupViewSet(ModelViewSet):
 
         return items
 
-    def create(self, request, *args, **kwargs):
+    def _authorize_write(self, request, instance=None):
         try:
             _, permission = LogAccessScopeService.get_accessible_group_queryset(request)
         except ValueError as exc:
             return WebUtils.response_error(error_message=str(exc), status_code=400)
 
-        if not permission.get("team"):
-            return WebUtils.response_error(error_message="当前用户无权限创建日志分组", status_code=403)
+        if instance is None:
+            if not permission.get("team"):
+                return WebUtils.response_error(error_message="当前用户无权限创建日志分组", status_code=403)
+            return None
+
+        instance_permission_map = get_instance_permission_map(permission)
+        explicit_permissions = instance_permission_map.get(str(instance.id))
+        if explicit_permissions is not None and "Operate" not in explicit_permissions:
+            return WebUtils.response_403("当前用户无权限操作该日志分组")
+
+        return None
+
+    def create(self, request, *args, **kwargs):
+        error_response = self._authorize_write(request)
+        if error_response:
+            return error_response
 
         serializer = self.get_serializer(data=request.data)
         serializer.is_valid(raise_exception=True)
@@ -84,6 +99,9 @@ class LogGroupViewSet(ModelViewSet):
     def update(self, request, *args, **kwargs):
         partial = kwargs.pop("partial", False)
         instance = self.get_object()
+        error_response = self._authorize_write(request, instance)
+        if error_response:
+            return error_response
         serializer = self.get_serializer(instance, data=request.data, partial=partial)
         serializer.is_valid(raise_exception=True)
 
@@ -96,6 +114,9 @@ class LogGroupViewSet(ModelViewSet):
 
     def destroy(self, request, *args, **kwargs):
         instance = self.get_object()
+        error_response = self._authorize_write(request, instance)
+        if error_response:
+            return error_response
         log_group_name = instance.name
 
         # 删除相关的组织关联

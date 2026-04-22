@@ -480,6 +480,91 @@ def test_alert_center_notification_result_is_persisted(monkeypatch):
     assert bulk_update_calls == [([event], ["notice_result"], 100)]
 
 
+def test_alert_center_notification_reuses_same_batch_result_for_each_event(monkeypatch):
+    bulk_update_calls = []
+    send_result = {"result": True, "message": "accepted"}
+
+    class MonitorEvent:
+        class objects:
+            @staticmethod
+            def bulk_update(event_objs, fields, batch_size=None):
+                bulk_update_calls.append((event_objs, fields, batch_size))
+
+    _install_module(
+        monkeypatch,
+        "apps.monitor.constants.alert_policy",
+        AlertConstants=types.SimpleNamespace(),
+    )
+    _install_module(
+        monkeypatch,
+        "apps.monitor.constants.database",
+        DatabaseConstants=types.SimpleNamespace(BULK_UPDATE_BATCH_SIZE=100),
+    )
+    _install_module(
+        monkeypatch,
+        "apps.monitor.models",
+        MonitorAlert=object,
+        MonitorEvent=MonitorEvent,
+        MonitorEventRawData=object,
+    )
+    _install_module(
+        monkeypatch,
+        "apps.monitor.utils.dimension",
+        format_dimension_str=lambda dimensions: "",
+    )
+    _install_module(
+        monkeypatch,
+        "apps.monitor.utils.system_mgmt_api",
+        SystemMgmtUtils=types.SimpleNamespace(send_msg_with_channel=lambda *args: send_result),
+    )
+    _install_module(monkeypatch, "apps.system_mgmt.models", Channel=object)
+    _install_module(monkeypatch, "apps.core.logger", celery_logger=_Logger())
+
+    module = _load_module(
+        "monitor_policy_event_alert_manager_batch_notice_test_module",
+        Path(__file__).resolve().parents[1] / "tasks" / "services" / "policy_scan" / "event_alert_manager.py",
+    )
+
+    manager = object.__new__(module.EventAlertManager)
+    manager.policy = types.SimpleNamespace(id=1009, name="alert-center-policy", notice_type_id=9)
+    manager.instances_map = {"host-1": "Host 1", "host-2": "Host 2"}
+    manager._is_alert_center = True
+
+    event_one = types.SimpleNamespace(
+        id="evt-1",
+        level="critical",
+        policy_id=1009,
+        content="cpu critical",
+        event_time=datetime(2026, 4, 21, 8, 0, tzinfo=timezone.utc),
+        value=95.0,
+        monitor_instance_id="host-1",
+        dimensions={"instance_id": "host-1"},
+        metric_instance_id="('host-1',)",
+        alert_id=77,
+        notice_result=None,
+    )
+    event_two = types.SimpleNamespace(
+        id="evt-2",
+        level="warning",
+        policy_id=1009,
+        content="memory warning",
+        event_time=datetime(2026, 4, 21, 8, 1, tzinfo=timezone.utc),
+        value=81.0,
+        monitor_instance_id="host-2",
+        dimensions={"instance_id": "host-2"},
+        metric_instance_id="('host-2',)",
+        alert_id=78,
+        notice_result=None,
+    )
+
+    manager.notify_events([event_one, event_two])
+
+    assert event_one.notice_result == [send_result]
+    assert event_two.notice_result == [send_result]
+    assert event_one.notice_result is event_two.notice_result
+    assert bulk_update_calls == [([event_one, event_two], ["notice_result"], 100)]
+
+
 def test_last_over_time_uses_policy_window_in_range_selector(monkeypatch):
     query_calls = []
 
@@ -522,6 +607,78 @@ def test_last_over_time_uses_policy_window_in_range_selector(monkeypatch):
     assert result["data"]["result"][0]["values"] == [[200, "7"]]
 
 
+def test_last_over_time_uses_policy_window_for_bare_metric_selector(monkeypatch):
+    query_calls = []
+
+    class VictoriaMetricsAPI:
+        def query(self, query, step="5m", time=None):
+            query_calls.append((query, step, time))
+            return {"data": {"result": [{"value": [200, "11"]}]}}
+
+    _install_module(
+        monkeypatch,
+        "apps.core.exceptions.base_app_exception",
+        BaseAppException=Exception,
+    )
+    _install_module(
+        monkeypatch,
+        "apps.monitor.utils.victoriametrics_api",
+        VictoriaMetricsAPI=VictoriaMetricsAPI,
+    )
+
+    module = _load_module(
+        "monitor_policy_methods_last_over_time_bare_metric_test_module",
+        Path(__file__).resolve().parents[1] / "tasks" / "utils" / "policy_methods.py",
+    )
+
+    result = module.last_over_time("node_cpu_seconds_total", start=100, end=200, step="1m", group_by="instance_id")
+
+    assert query_calls == [
+        (
+            "any(last_over_time(node_cpu_seconds_total[1m])) by (instance_id)",
+            None,
+            200,
+        )
+    ]
+    assert result["data"]["result"][0]["values"] == [[200, "11"]]
+
+
+def test_last_over_time_uses_policy_window_for_label_only_selector(monkeypatch):
+    query_calls = []
+
+    class VictoriaMetricsAPI:
+        def query(self, query, step="5m", time=None):
+            query_calls.append((query, step, time))
+            return {"data": {"result": [{"value": [200, "13"]}]}}
+
+    _install_module(
+        monkeypatch,
+        "apps.core.exceptions.base_app_exception",
+        BaseAppException=Exception,
+    )
+    _install_module(
+        monkeypatch,
+        "apps.monitor.utils.victoriametrics_api",
+        VictoriaMetricsAPI=VictoriaMetricsAPI,
+    )
+
+    module = _load_module(
+        "monitor_policy_methods_last_over_time_label_selector_test_module",
+        Path(__file__).resolve().parents[1] / "tasks" / "utils" / "policy_methods.py",
+    )
+
+    result = module.last_over_time("{instance_type='ping'}", start=100, end=200, step="1m", group_by="instance_id")
+
+    assert query_calls == [
+        (
+            "any(last_over_time({instance_type='ping'}[1m])) by (instance_id)",
+            None,
+            200,
+        )
+    ]
+    assert result["data"]["result"][0]["values"] == [[200, "13"]]
+
+
 def test_last_over_time_keeps_step_query_for_complex_pmq(monkeypatch):
     query_calls = []
 
@@ -562,3 +719,39 @@ def test_last_over_time_keeps_step_query_for_complex_pmq(monkeypatch):
         )
     ]
     assert result["data"]["result"][0]["values"] == [[200, "9"]]
+
+
+def test_last_over_time_keeps_step_query_for_offset_selector(monkeypatch):
+    query_calls = []
+
+    class VictoriaMetricsAPI:
+        def query(self, query, step="5m", time=None):
+            query_calls.append((query, step, time))
+            return {"data": {"result": [{"value": [200, "17"]}]}}
+
+    _install_module(
+        monkeypatch,
+        "apps.core.exceptions.base_app_exception",
+        BaseAppException=Exception,
+    )
+    _install_module(
+        monkeypatch,
+        "apps.monitor.utils.victoriametrics_api",
+        VictoriaMetricsAPI=VictoriaMetricsAPI,
+    )
+
+    module = _load_module(
+        "monitor_policy_methods_last_over_time_offset_selector_test_module",
+        Path(__file__).resolve().parents[1] / "tasks" / "utils" / "policy_methods.py",
+    )
+
+    result = module.last_over_time("node_cpu_seconds_total offset 5m", start=100, end=200, step="1m", group_by="instance_id")
+
+    assert query_calls == [
+        (
+            "any(last_over_time(node_cpu_seconds_total offset 5m)) by (instance_id)",
+            "1m",
+            200,
+        )
+    ]
+    assert result["data"]["result"][0]["values"] == [[200, "17"]]

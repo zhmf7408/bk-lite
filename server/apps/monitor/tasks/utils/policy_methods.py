@@ -63,6 +63,9 @@ def _supports_explicit_range_selector(metric_query: str) -> bool:
 
 
 def last_over_time(metric_query, start, end, step, group_by):
+    # 仅对简单 selector（裸指标、label-only、metric{labels}）显式补 range selector。
+    # 对复杂表达式保持原样，继续沿用 step + instant query 的兼容路径，避免在无法可靠
+    # 重写 PromQL/MetricsQL 时引入新的语义漂移。
     if _supports_explicit_range_selector(metric_query):
         query = f"any(last_over_time({metric_query}[{step}])) by ({group_by})"
         metrics = VictoriaMetricsAPI().query(query, None, end)

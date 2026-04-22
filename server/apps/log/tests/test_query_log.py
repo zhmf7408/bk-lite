@@ -68,10 +68,12 @@ def test_query_logs_malformed_line_context(mocker):
     assert "\\n" in extra["error_window_repr"]
 
 
-def _mock_group_permission(mocker, teams=None, instance_ids=None):
+def _mock_group_permission(mocker, teams=None, instance_ids=None, instance_permissions=None):
+    if instance_permissions is None:
+        instance_permissions = [{"id": group_id, "permission": ["View", "Operate"]} for group_id in (instance_ids or [])]
     mocked_permission = {
         "team": teams or [],
-        "instance": [{"id": group_id, "permission": ["View", "Operate"]} for group_id in (instance_ids or [])],
+        "instance": instance_permissions,
     }
     mocker.patch(
         "apps.log.services.access_scope.get_permission_rules",
@@ -149,6 +151,42 @@ def test_log_group_update_is_scoped_by_permission(api_client, authenticated_user
 
 
 @pytest.mark.django_db
+def test_log_group_update_rejects_view_only_instance_permission(api_client, authenticated_user, mocker):
+    LogGroup.objects.create(id="g-1", name="Allowed", rule={"mode": "AND", "conditions": [{"field": "app", "op": "==", "value": "demo"}]})
+    LogGroupOrganization.objects.create(log_group_id="g-1", organization=2)
+    _mock_group_permission(
+        mocker,
+        teams=[],
+        instance_permissions=[{"id": "g-1", "permission": ["View"]}],
+    )
+
+    api_client.cookies["current_team"] = "1"
+    response = api_client.patch(
+        "/api/v1/log/log_group/g-1/",
+        data={"name": "changed"},
+        format="json",
+    )
+
+    assert response.status_code == status.HTTP_403_FORBIDDEN
+
+
+@pytest.mark.django_db
+def test_log_group_destroy_rejects_view_only_instance_permission(api_client, authenticated_user, mocker):
+    LogGroup.objects.create(id="g-1", name="Allowed", rule={"mode": "AND", "conditions": [{"field": "app", "op": "==", "value": "demo"}]})
+    LogGroupOrganization.objects.create(log_group_id="g-1", organization=2)
+    _mock_group_permission(
+        mocker,
+        teams=[],
+        instance_permissions=[{"id": "g-1", "permission": ["View"]}],
+    )
+
+    api_client.cookies["current_team"] = "1"
+    response = api_client.delete("/api/v1/log/log_group/g-1/")
+
+    assert response.status_code == status.HTTP_403_FORBIDDEN
+
+
+@pytest.mark.django_db
 def test_log_group_create_rejects_unauthorized_organizations(api_client, authenticated_user, mocker):
     _mock_group_permission(mocker, teams=[1])
 
@@ -186,3 +224,40 @@ def test_search_condition_rejects_unauthorized_log_groups(api_client, authentica
 
     assert response.status_code == status.HTTP_400_BAD_REQUEST
     assert SearchCondition.objects.count() == 0
+
+
+@pytest.mark.django_db
+def test_search_condition_list_hides_inaccessible_saved_conditions(api_client, authenticated_user, mocker):
+    LogGroup.objects.create(id="g-1", name="Allowed", rule={"mode": "AND", "conditions": [{"field": "app", "op": "==", "value": "demo"}]})
+    LogGroup.objects.create(id="g-2", name="Denied", rule={"mode": "AND", "conditions": [{"field": "app", "op": "==", "value": "demo"}]})
+    LogGroupOrganization.objects.create(log_group_id="g-1", organization=1)
+    LogGroupOrganization.objects.create(log_group_id="g-2", organization=2)
+    SearchCondition.objects.create(name="allowed", condition={"query": "*", "log_groups": ["g-1"]}, organization=1, created_by="alice")
+    SearchCondition.objects.create(name="denied", condition={"query": "*", "log_groups": ["g-2"]}, organization=1, created_by="alice")
+    _mock_group_permission(mocker, teams=[1])
+
+    api_client.cookies["current_team"] = "1"
+    response = api_client.get("/api/v1/log/search_conditions/")
+
+    assert response.status_code == status.HTTP_200_OK
+    payload = response.json()
+    assert len(payload["data"]) == 1
+    assert payload["data"][0]["name"] == "allowed"
+
+
+@pytest.mark.django_db
+def test_search_condition_retrieve_returns_404_for_inaccessible_saved_condition(api_client, authenticated_user, mocker):
+    LogGroup.objects.create(id="g-2", name="Denied", rule={"mode": "AND", "conditions": [{"field": "app", "op": "==", "value": "demo"}]})
+    LogGroupOrganization.objects.create(log_group_id="g-2", organization=2)
+    condition = SearchCondition.objects.create(
+        name="denied",
+        condition={"query": "*", "log_groups": ["g-2"]},
+        organization=1,
+        created_by="alice",
+    )
+    _mock_group_permission(mocker, teams=[1])
+
+    api_client.cookies["current_team"] = "1"
+    response = api_client.get(f"/api/v1/log/search_conditions/{condition.id}/")
+
+    assert response.status_code == status.HTTP_404_NOT_FOUND

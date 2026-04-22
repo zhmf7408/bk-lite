@@ -150,11 +150,28 @@ class SearchConditionViewSet(ModelViewSet):
     serializer_class = SearchConditionSerializer
     filterset_class = SearchConditionFilter
 
+    def _is_accessible_search_condition(self, instance):
+        condition = instance.condition if isinstance(instance.condition, dict) else {}
+        log_groups = condition.get("log_groups", [])
+        if not isinstance(log_groups, list):
+            return False
+
+        try:
+            LogAccessScopeService.resolve_scope(self.request, log_groups)
+        except ValueError:
+            return False
+
+        return True
+
     def get_queryset(self):
         """根据当前组织过滤查询集"""
         current_team = self.request.COOKIES.get("current_team")
         if current_team:
-            return SearchCondition.objects.filter(organization=int(current_team))
+            base_queryset = SearchCondition.objects.filter(organization=int(current_team))
+            accessible_ids = [instance.id for instance in base_queryset if self._is_accessible_search_condition(instance)]
+            if not accessible_ids:
+                return SearchCondition.objects.none()
+            return base_queryset.filter(id__in=accessible_ids)
         return SearchCondition.objects.none()
 
     def create(self, request, *args, **kwargs):
