@@ -6,30 +6,6 @@ import type { Node, Edge, Graph } from '@antv/x6';
 export const getValueByPath = (obj: unknown, path: string): unknown => {
   if (!obj || !path) return undefined;
 
-  // 处理特殊的数据结构：包含 namespace_id 和 data 的数组
-  if (Array.isArray(obj) && obj.length > 0) {
-    const firstItem = obj[0];
-
-    // 如果是特殊的数据结构
-    if (firstItem && typeof firstItem === 'object' && firstItem.namespace_id && firstItem.data) {
-      if (path === 'namespace_id') {
-        return firstItem.namespace_id;
-      }
-
-      if (path.startsWith('data.')) {
-        const fieldPath = path.substring(5); // 移除 'data.' 前缀
-
-        // 如果 data 是数组，取第一个元素
-        if (Array.isArray(firstItem.data) && firstItem.data.length > 0) {
-          return getValueByPath(firstItem.data[0], fieldPath);
-        } else if (typeof firstItem.data === 'object' && firstItem.data !== null) {
-          return getValueByPath(firstItem.data, fieldPath);
-        }
-      }
-    }
-  }
-
-  // 标准路径解析
   return path.split('.').reduce((current, key) => {
     if (current === null || current === undefined) return undefined;
 

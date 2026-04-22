@@ -16,12 +16,14 @@ interface UnifiedFilterBarProps {
   definitions: UnifiedFilterDefinition[];
   values: Record<string, FilterValue>;
   onChange: (values: Record<string, FilterValue>) => void;
+  prefixContent?: React.ReactNode;
 }
 
 const UnifiedFilterBar: React.FC<UnifiedFilterBarProps> = ({
   definitions,
   values,
   onChange,
+  prefixContent,
 }) => {
   const { t } = useTranslation();
   // 本地状态，用于暂存用户输入，点击搜索后才同步到父组件
@@ -37,7 +39,7 @@ const UnifiedFilterBar: React.FC<UnifiedFilterBarProps> = ({
     setLocalValues(values);
   }, [values]);
 
-  if (enabledDefinitions.length === 0) {
+  if (enabledDefinitions.length === 0 && !prefixContent) {
     return null;
   }
 
@@ -146,6 +148,7 @@ const UnifiedFilterBar: React.FC<UnifiedFilterBarProps> = ({
   return (
     <div className="flex items-center gap-4 mx-3 mt-3 p-3 bg-(--color-bg-1) rounded-lg border border-(--color-border-2)">
       <Space wrap size="middle">
+        {prefixContent}
         {enabledDefinitions.map((definition) => (
           <div key={definition.id} className="flex items-center gap-2">
             <span className="text-sm text-(--color-text-2) whitespace-nowrap">

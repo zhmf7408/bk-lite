@@ -78,22 +78,19 @@ class DataSourceAPIModelViewSet(AuthViewSet):
     @action(detail=False, methods=["post"], url_path=r"get_source_data/(?P<pk>[^/.]+)")
     def get_source_data(self, request, *args, **kwargs):
         instance = self.get_object()
-        params = request.data
+        params = dict(request.data)
         namespace_list = instance.namespaces.all()
         if "/" not in instance.rest_api:
             namespace = "default"
             path = instance.rest_api
         else:
             namespace, path = instance.rest_api.split("/", 1)
-        client = GetNatsData(namespace=namespace, path=path, params=params, namespace_list=namespace_list,
-                             request=request)
-        result = []
+        client = GetNatsData(namespace=namespace, path=path, params=params, namespace_list=namespace_list, request=request)
         try:
-            data = client.get_data()
-            for namespace_id, _data in data.items():
-                result.append({"namespace_id": namespace_id, "data": _data})
+            result = client.get_data()
         except Exception as e:
             logger.error("获取数据源数据失败: {}".format(e))
+            result = []
 
         return Response(result)
 

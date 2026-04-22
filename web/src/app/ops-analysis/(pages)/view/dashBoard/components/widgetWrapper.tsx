@@ -12,6 +12,7 @@ import { DatasourceItem } from '@/app/ops-analysis/types/dataSource';
 import { fetchWidgetData } from '../../../../utils/widgetDataTransform';
 import { useDataSourceApi } from '@/app/ops-analysis/api/dataSource';
 import { ChartDataTransformer } from '@/app/ops-analysis/utils/chartDataTransform';
+import { datasourceSupportsNamespace } from '@/app/ops-analysis/utils/namespaceFilter';
 import ComPie from '../widgets/comPie';
 import ComLine from '../widgets/comLine';
 import ComBar from '../widgets/comBar';
@@ -32,6 +33,7 @@ interface WidgetWrapperProps extends BaseWidgetProps {
   unifiedFilterValues?: Record<string, FilterValue>;
   filterDefinitions?: UnifiedFilterDefinition[];
   searchKey?: number;
+  builtinNamespaceId?: number;
 }
 
 const WidgetWrapper: React.FC<WidgetWrapperProps> = ({
@@ -43,18 +45,18 @@ const WidgetWrapper: React.FC<WidgetWrapperProps> = ({
   unifiedFilterValues,
   filterDefinitions,
   searchKey,
+  builtinNamespaceId,
 }) => {
   const { t } = useTranslation();
   const [rawData, setRawData] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [tableLoading, setTableLoading] = useState(false);
-  const [tableQueryReady, setTableQueryReady] = useState(false);
   const [dataValidation, setDataValidation] = useState<{
     isValid: boolean;
     message?: string;
   } | null>(null);
   const [tableQueryParams, setTableQueryParams] = useState<Record<string, any>>(
-    {},
+    { page: 1, page_size: 20 },
   );
   const { getSourceDataByApiId } = useDataSourceApi();
 
@@ -110,12 +112,10 @@ const WidgetWrapper: React.FC<WidgetWrapperProps> = ({
   }, [config?.filterBindings, filterDefinitions, dataSource?.params]);
 
   const handleTableQueryChange = useCallback((params: Record<string, any>) => {
-    setTableQueryReady(true);
     setTableQueryParams((prev) => {
-      if (JSON.stringify(prev) === JSON.stringify(params || {})) {
-        return prev;
-      }
-      return params || {};
+      const next = params || {};
+      const same = JSON.stringify(prev) === JSON.stringify(next);
+      return same ? prev : next;
     });
   }, []);
 
@@ -172,7 +172,10 @@ const WidgetWrapper: React.FC<WidgetWrapperProps> = ({
       const data = await fetchWidgetData({
         config,
         dataSource,
-        extraParams: chartType === 'table' ? tableQueryParams : undefined,
+        extraParams: {
+          ...(builtinNamespaceId !== undefined ? { namespace_id: builtinNamespaceId } : {}),
+          ...(chartType === 'table' ? tableQueryParams : {}),
+        },
         getSourceDataByApiId,
         unifiedFilterValues: unifiedFilterValuesRef.current,
         filterBindings: config?.filterBindings,
@@ -205,60 +208,44 @@ const WidgetWrapper: React.FC<WidgetWrapperProps> = ({
     getSourceDataByApiId,
     filterDefinitions,
     validateChartData,
+    builtinNamespaceId,
     t,
   ]);
 
   const dataSourceId = config?.dataSource;
-  const [initialFetchDone, setInitialFetchDone] = useState(false);
+  const fetchDataRef = useRef(fetchData);
+  fetchDataRef.current = fetchData;
+  const initialFetchDoneRef = useRef(false);
 
   useEffect(() => {
-    if (!dataSourceId) {
-      setInitialFetchDone(false);
+    if (!dataSourceId || initialFetchDoneRef.current) return;
+    initialFetchDoneRef.current = true;
+    fetchDataRef.current();
+  }, [dataSourceId]);
+
+  const prevRefreshDepsRef = useRef<string>('');
+  useEffect(() => {
+    const key = JSON.stringify({ refreshKey, searchKey, hasAuth: dataSource?.hasAuth, builtinNamespaceId });
+    if (!initialFetchDoneRef.current || !dataSourceId || prevRefreshDepsRef.current === key) {
+      prevRefreshDepsRef.current = key;
       return;
     }
-
-    if (chartType === 'table' && !tableQueryReady) {
-      return;
-    }
-
-    if (!initialFetchDone) {
-      fetchData();
-      setInitialFetchDone(true);
-    }
+    prevRefreshDepsRef.current = key;
+    fetchDataRef.current();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [dataSourceId, chartType, tableQueryReady, initialFetchDone]);
+  }, [refreshKey, searchKey, dataSource?.hasAuth, builtinNamespaceId]);
 
+  const prevTableQueryRef = useRef<string>(JSON.stringify({ page: 1, page_size: 20 }));
   useEffect(() => {
-    if (!dataSourceId || !initialFetchDone) {
+    const key = JSON.stringify(tableQueryParams);
+    if (!dataSourceId || chartType !== 'table' || prevTableQueryRef.current === key) {
+      prevTableQueryRef.current = key;
       return;
     }
-
-    if (chartType === 'table' && !tableQueryReady) {
-      return;
-    }
-
-    fetchData();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [refreshKey, searchKey, dataSource?.hasAuth]);
-
-  useEffect(() => {
-    if (!dataSourceId || !initialFetchDone || chartType !== 'table' || !tableQueryReady) {
-      return;
-    }
-
-    fetchData();
+    prevTableQueryRef.current = key;
+    fetchDataRef.current();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [tableQueryParams]);
-
-  useEffect(() => {
-    if (chartType !== 'table') {
-      return;
-    }
-    setTableQueryReady(false);
-    setTableQueryParams({});
-    setTableLoading(false);
-    setLoading(false);
-  }, [chartType, config?.dataSource]);
 
   useEffect(() => {
     setDataValidation(null);
@@ -332,6 +319,8 @@ const WidgetWrapper: React.FC<WidgetWrapperProps> = ({
     </div>
   );
 
+  const nsSupported = builtinNamespaceId === undefined || datasourceSupportsNamespace(dataSource, builtinNamespaceId);
+
   if (loading && chartType !== 'table') {
     return (
       <div className="h-full flex items-center justify-center">
@@ -350,6 +339,10 @@ const WidgetWrapper: React.FC<WidgetWrapperProps> = ({
     return renderError(
       dataValidation.message || t('dashboard.dataCannotRenderAsChart'),
     );
+  }
+
+  if (builtinNamespaceId !== undefined && !nsSupported) {
+    return renderError(t('dashboard.namespaceNotSupported'));
   }
 
   return (

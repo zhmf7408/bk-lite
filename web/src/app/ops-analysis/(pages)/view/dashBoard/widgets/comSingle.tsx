@@ -18,26 +18,6 @@ interface ComSingleProps {
 const getValueByPathForSingle = (obj: unknown, path: string): unknown => {
   if (!obj || !path) return undefined;
 
-  if (Array.isArray(obj) && obj.length > 0) {
-    const firstItem = obj[0] as Record<string, unknown>;
-
-    if (firstItem && typeof firstItem === 'object' && firstItem.namespace_id && firstItem.data) {
-      if (path === 'namespace_id') {
-        return firstItem.namespace_id;
-      }
-
-      if (path.startsWith('data.')) {
-        const fieldPath = path.substring(5);
-
-        if (Array.isArray(firstItem.data) && firstItem.data.length > 0) {
-          return getValueByPathForSingle(firstItem.data[0], fieldPath);
-        } else if (typeof firstItem.data === 'object' && firstItem.data !== null) {
-          return getValueByPathForSingle(firstItem.data, fieldPath);
-        }
-      }
-    }
-  }
-
   return path.split('.').reduce((current, key) => {
     if (current === null || current === undefined) return undefined;
 
@@ -86,30 +66,12 @@ const ComSingle: React.FC<ComSingleProps> = ({
     if (Array.isArray(data) && data.length > 0) {
       const firstItem = data[0];
       if (firstItem && typeof firstItem === 'object') {
-        const dataField = (firstItem as Record<string, unknown>).data;
-        if (dataField !== undefined) {
-          if (typeof dataField === 'number' || typeof dataField === 'string') {
-            return dataField;
-          }
-          if (Array.isArray(dataField) && dataField.length > 0) {
-            const firstDataItem = dataField[0];
-            if (typeof firstDataItem === 'number' || typeof firstDataItem === 'string') {
-              return firstDataItem;
-            }
-            if (firstDataItem && typeof firstDataItem === 'object') {
-              const values = Object.values(firstDataItem as Record<string, unknown>);
-              for (const val of values) {
-                if (typeof val === 'number') return val;
-              }
-              for (const val of values) {
-                if (typeof val === 'string' && !isNaN(parseFloat(val))) return val;
-              }
-            }
-          }
-        }
         const values = Object.values(firstItem as Record<string, unknown>);
         for (const val of values) {
           if (typeof val === 'number') return val;
+        }
+        for (const val of values) {
+          if (typeof val === 'string' && !isNaN(parseFloat(val))) return val;
         }
       }
     }

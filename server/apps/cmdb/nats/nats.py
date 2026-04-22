@@ -1,4 +1,10 @@
+import datetime
+
 import nats_client
+from django.db.models import Count
+from django.db.models.functions import TruncDate, TruncHour, TruncWeek, TruncMonth
+from django.utils import timezone
+
 from apps.cmdb.constants.constants import PERMISSION_MODEL, PERMISSION_INSTANCES, PERMISSION_TASK, CollectPluginTypes
 from apps.cmdb.display_field.constants import (
     DISPLAY_SUFFIX,
@@ -15,6 +21,9 @@ from apps.cmdb.services.model import ModelManage
 from apps.cmdb.services.classification import ClassificationManage
 from apps.cmdb.models.collect_model import CollectModels
 from apps.cmdb.services.instance import InstanceManage
+from apps.cmdb.models.change_record import ChangeRecord, CREATE_INST, UPDATE_INST, DELETE_INST
+from apps.cmdb.graph.drivers.graph_client import GraphClient
+from apps.cmdb.constants.constants import INSTANCE
 from apps.system_mgmt.models import Group, User
 
 
@@ -372,3 +381,273 @@ def sync_display_fields(organizations=None, users=None):
     )
     
     return result
+
+
+@nats_client.register
+def get_cmdb_statistics(user_info=None, **kwargs):
+    """
+    获取 CMDB 统计数据（模型总数、实例总数、分类总数）
+
+    Args:
+        user_info: { team: int, user: str } - 由 operation_analysis 自动注入
+
+    Returns:
+        {
+            "result": True,
+            "data": {
+                "model_count": 15,
+                "instance_count": 1234,
+                "classification_count": 5
+            },
+            "message": ""
+        }
+    """
+    user_info = user_info or {}
+    team = user_info.get("team")
+
+    classifications = ClassificationManage.search_model_classification()
+    classification_count = len(classifications)
+
+    models = ModelManage.search_model()
+    model_count = len(models)
+
+    permissions_map = {}
+    if team is not None:
+        permissions_map[int(team)] = {"inst_names": []}
+
+    model_counts = InstanceManage.model_inst_count(permissions_map=permissions_map)
+    instance_count = sum(model_counts.values())
+
+    return {
+        "result": True,
+        "data": {
+            "model_count": model_count,
+            "instance_count": instance_count,
+            "classification_count": classification_count,
+        },
+        "message": "",
+    }
+
+
+def _get_trunc_func_and_format(group_by):
+    mapping = {
+        "hour": (TruncHour, "%Y-%m-%d %H:00"),
+        "day": (TruncDate, "%Y-%m-%d"),
+        "week": (TruncWeek, "%Y-%m-%d"),
+        "month": (TruncMonth, "%Y-%m"),
+    }
+    return mapping.get(group_by, (TruncDate, "%Y-%m-%d"))
+
+
+def _generate_time_periods(start_dt, end_dt, group_by, date_format):
+    periods = []
+    if group_by == "hour":
+        current = start_dt.replace(minute=0, second=0, microsecond=0)
+        while current < end_dt:
+            periods.append(current.strftime(date_format))
+            current += datetime.timedelta(hours=1)
+    elif group_by == "day":
+        current = start_dt.date()
+        end_date = end_dt.date()
+        while current <= end_date:
+            periods.append(current.strftime(date_format))
+            current += datetime.timedelta(days=1)
+    elif group_by == "week":
+        current = start_dt - datetime.timedelta(days=start_dt.weekday())
+        while current < end_dt:
+            periods.append(current.strftime(date_format))
+            current += datetime.timedelta(weeks=1)
+    elif group_by == "month":
+        current = start_dt.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+        while current < end_dt:
+            periods.append(current.strftime(date_format))
+            if current.month == 12:
+                current = current.replace(year=current.year + 1, month=1)
+            else:
+                current = current.replace(month=current.month + 1)
+    return periods
+
+
+@nats_client.register
+def get_change_trend(time=None, group_by="day", model_id=None, user_info=None, **kwargs):
+    """
+    获取 CMDB 变更趋势数据
+
+    Args:
+        time: [start_time, end_time] - 时间范围，格式 "YYYY-MM-DD HH:MM:SS"
+        group_by: "day" | "hour" | "week" | "month" - 分组方式
+        model_id: str | None - 可选，按模型过滤
+        user_info: { team: int, user: str }
+
+    Returns:
+        {
+            "result": True,
+            "data": {
+                "create": [["2026-04-15", 10], ["2026-04-16", 8]],
+                "update": [["2026-04-15", 25], ["2026-04-16", 30]],
+                "delete": [["2026-04-15", 2], ["2026-04-16", 1]]
+            },
+            "message": ""
+        }
+    """
+    if not time or len(time) != 2:
+        return {"result": False, "data": {}, "message": "time parameter is required as [start_time, end_time]"}
+
+    start_time, end_time = time
+    start_dt = datetime.datetime.strptime(start_time, "%Y-%m-%d %H:%M:%S")
+    end_dt = datetime.datetime.strptime(end_time, "%Y-%m-%d %H:%M:%S")
+    aware_start = timezone.make_aware(start_dt)
+    aware_end = timezone.make_aware(end_dt)
+
+    trunc_func, date_format = _get_trunc_func_and_format(group_by)
+    all_periods = _generate_time_periods(start_dt, end_dt, group_by, date_format)
+
+    base_queryset = ChangeRecord.objects.filter(created_at__gte=aware_start, created_at__lt=aware_end)
+    if model_id:
+        base_queryset = base_queryset.filter(model_id=model_id)
+
+    type_mapping = {
+        "create": CREATE_INST,
+        "update": UPDATE_INST,
+        "delete": DELETE_INST,
+    }
+
+    result_data = {}
+    for key, change_type in type_mapping.items():
+        queryset = (
+            base_queryset.filter(type=change_type)
+            .annotate(period=trunc_func("created_at"))
+            .values("period")
+            .annotate(count=Count("id"))
+            .order_by("period")
+        )
+
+        period_counts = {}
+        for item in queryset:
+            if item["period"]:
+                period_key = item["period"].strftime(date_format)
+                period_counts[period_key] = item["count"]
+
+        result_data[key] = [[p, period_counts.get(p, 0)] for p in all_periods]
+
+    return {"result": True, "data": result_data, "message": ""}
+
+
+@nats_client.register
+def get_instance_group_by(model_id=None, field=None, user_info=None, **kwargs):
+    """
+    获取实例分组统计（饼状图用）
+
+    Args:
+        model_id: str - 模型 ID，如 "host"
+        field: str - 分组字段，如 "os_type"
+        user_info: { team: int, user: str }
+
+    Returns:
+        {
+            "result": True,
+            "data": [
+                {"name": "Linux", "value": 100},
+                {"name": "Windows", "value": 50}
+            ],
+            "message": ""
+        }
+    """
+    if not model_id:
+        return {"result": False, "data": [], "message": "model_id is required"}
+    if not field:
+        return {"result": False, "data": [], "message": "field is required"}
+
+    user_info = user_info or {}
+    team = user_info.get("team")
+
+    params = [{"field": "model_id", "type": "str=", "value": model_id}]
+    format_permission_dict = {}
+    if team is not None:
+        format_permission_dict[int(team)] = []
+
+    with GraphClient() as ag:
+        instances, _ = ag.query_entity(
+            label=INSTANCE,
+            params=params,
+            format_permission_dict=format_permission_dict,
+        )
+
+    group_counts = {}
+    for inst in instances:
+        value = inst.get(field)
+        if value is None:
+            value = "unknown"
+        key = str(value)
+        group_counts[key] = group_counts.get(key, 0) + 1
+
+    attrs = ModelManage.search_model_attr(model_id)
+    field_attr = next((attr for attr in attrs if attr.get("attr_id") == field), None)
+
+    enum_map = {}
+    if field_attr and field_attr.get("attr_type") == "enum":
+        options = field_attr.get("option", [])
+        enum_map = {str(opt.get("id")): opt.get("name") for opt in options if opt}
+
+    result_data = []
+    for key, count in group_counts.items():
+        display_name = enum_map.get(key, key) if enum_map else key
+        result_data.append({"name": display_name, "value": count})
+
+    result_data.sort(key=lambda x: x["value"], reverse=True)
+
+    return {"result": True, "data": result_data, "message": ""}
+
+
+@nats_client.register
+def get_model_inst_statistics(user_info=None, **kwargs):
+    """
+    获取模型实例统计（表格用）
+
+    Args:
+        user_info: { team: int, user: str }
+
+    Returns:
+        {
+            "result": True,
+            "data": [
+                {"classification": "主机管理", "model": "主机", "model_id": "host", "count": 100}
+            ],
+            "message": ""
+        }
+    """
+    user_info = user_info or {}
+    team = user_info.get("team")
+
+    classifications = ClassificationManage.search_model_classification()
+    classification_map = {c["classification_id"]: c["classification_name"] for c in classifications}
+
+    models = ModelManage.search_model()
+
+    permissions_map = {}
+    if team is not None:
+        permissions_map[int(team)] = {"inst_names": []}
+
+    model_counts = InstanceManage.model_inst_count(permissions_map=permissions_map)
+
+    result_data = []
+    for model in models:
+        model_id = model.get("model_id")
+        model_name = model.get("model_name")
+        classification_id = model.get("classification_id")
+        classification_name = classification_map.get(classification_id, classification_id)
+
+        count = model_counts.get(model_id, 0)
+
+        result_data.append(
+            {
+                "classification": classification_name,
+                "model": model_name,
+                "model_id": model_id,
+                "count": count,
+            }
+        )
+
+    result_data.sort(key=lambda x: (-x["count"], x["classification"], x["model"]))
+
+    return {"result": True, "data": result_data, "message": ""}

@@ -19,10 +19,18 @@ from django.db.models.functions import (
 from django.utils import timezone
 
 import nats_client
-from apps.alerts.models.models import Alert
+from apps.alerts.models.models import Alert, Event, Incident
+from apps.alerts.constants.constants import AlertStatus, EventLevel
 from apps.core.logger import alert_logger as logger
 from apps.alerts.models.alert_source import AlertSource
 from apps.alerts.common.source_adapter.base import AlertSourceAdapterFactory
+
+ALERT_LEVEL_DISPLAY_MAP = {
+    EventLevel.FATAL: "致命",
+    EventLevel.SEVERITY: "严重",
+    EventLevel.WARNING: "预警",
+    EventLevel.REMAIN: "提醒",
+}
 
 
 def group_dy_date_format(group_by):
@@ -299,3 +307,132 @@ def alert_test(*args, **kwargs):
     """
     logger.info("=== alert_test ===, args={}, kwargs={}".format(args, kwargs))
     return {"result": True, "data": "alert_test success", "message": ""}
+
+
+@nats_client.register
+def get_alert_statistics(**kwargs):
+    """
+    获取告警统计数据
+
+    Returns:
+        {
+            "result": True,
+            "data": {
+                "total_count": 500,
+                "active_count": 45,
+                "pending_count": 20,
+                "processing_count": 25,
+                "event_count": 1200,
+                "incident_count": 8
+            },
+            "message": ""
+        }
+    """
+    total_count = Alert.objects.count()
+    active_count = Alert.objects.filter(status__in=AlertStatus.ACTIVATE_STATUS).count()
+    pending_count = Alert.objects.filter(status=AlertStatus.PENDING).count()
+    processing_count = Alert.objects.filter(status=AlertStatus.PROCESSING).count()
+    event_count = Event.objects.count()
+    incident_count = Incident.objects.count()
+
+    return {
+        "result": True,
+        "data": {
+            "total_count": total_count,
+            "active_count": active_count,
+            "pending_count": pending_count,
+            "processing_count": processing_count,
+            "event_count": event_count,
+            "incident_count": incident_count,
+        },
+        "message": "",
+    }
+
+
+@nats_client.register
+def get_alert_level_distribution(status_filter=None, **kwargs):
+    """
+    获取告警等级分布（饼状图用）
+
+    Args:
+        status_filter: "active" | None - 可选，仅统计活跃告警
+
+    Returns:
+        {
+            "result": True,
+            "data": [
+                {"name": "致命", "value": 10},
+                {"name": "严重", "value": 25}
+            ],
+            "message": ""
+        }
+    """
+    level_map = ALERT_LEVEL_DISPLAY_MAP
+
+    queryset = Alert.objects
+    if status_filter == "active":
+        queryset = queryset.filter(status__in=AlertStatus.ACTIVATE_STATUS)
+
+    level_counts = queryset.values("level").annotate(count=Count("id"))
+
+    result_data = []
+    for item in level_counts:
+        level = item["level"]
+        display_name = level_map.get(level, level)
+        result_data.append({"name": display_name, "value": item["count"]})
+
+    result_data.sort(key=lambda x: x["value"], reverse=True)
+
+    return {"result": True, "data": result_data, "message": ""}
+
+
+@nats_client.register
+def get_active_alert_top(limit=10, **kwargs):
+    """
+    获取活跃告警持续时间 TOP N
+
+    Args:
+        limit: int - 返回数量，默认 10
+
+    Returns:
+        {
+            "result": True,
+            "data": [
+                {
+                    "alert_id": "ALERT-ABC123",
+                    "title": "CPU使用率过高",
+                    "level": "严重",
+                    "status": "pending",
+                    "duration_seconds": 86400,
+                    "created_at": "2026-04-19 10:00:00",
+                    "resource_name": "web-server-01"
+                }
+            ],
+            "message": ""
+        }
+    """
+    limit = int(limit) if limit else 10
+    if limit <= 0:
+        limit = 10
+    if limit > 100:
+        limit = 100
+
+    active_alerts = Alert.objects.filter(status__in=AlertStatus.ACTIVATE_STATUS).order_by("created_at")[:limit]
+
+    now = timezone.now()
+    alerts_with_duration = []
+    for alert in active_alerts:
+        duration_seconds = int((now - alert.created_at).total_seconds())
+        alerts_with_duration.append(
+            {
+                "alert_id": alert.alert_id,
+                "title": alert.title,
+                "level": ALERT_LEVEL_DISPLAY_MAP.get(alert.level, alert.level),
+                "status": alert.status,
+                "duration_seconds": duration_seconds,
+                "created_at": alert.created_at.strftime("%Y-%m-%d %H:%M:%S"),
+                "resource_name": alert.resource_name or "",
+            }
+        )
+
+    return {"result": True, "data": alerts_with_duration, "message": ""}
