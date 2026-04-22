@@ -229,6 +229,33 @@
         "success": "Test Succeeded",
         "failed": "Test Failed"
       }
+    },
+    "mssql": {
+      "instances": "MSSQL Instances",
+      "noInstances": "No MSSQL instances",
+      "selectInstance": "Select a MSSQL instance",
+      "unnamedInstance": "Unnamed instance",
+      "addressNotConfigured": "Address not configured",
+      "configTitle": "{name} Configuration",
+      "instanceName": "Instance Name",
+      "instanceNamePlaceholder": "Enter instance name",
+      "host": "Host",
+      "hostPlaceholder": "Enter host address",
+      "port": "Port",
+      "database": "Database",
+      "user": "Username",
+      "userPlaceholder": "Enter username",
+      "password": "Password",
+      "passwordPlaceholder": "Enter password",
+      "testConnection": "Test Connection",
+      "instanceNameRequired": "Please enter an instance name",
+      "hostRequired": "Please enter a host address",
+      "duplicateInstanceName": "MSSQL instance names must be unique",
+      "status": {
+        "untested": "Untested",
+        "success": "Test Succeeded",
+        "failed": "Test Failed"
+      }
     }
   },
   "knowledge": {

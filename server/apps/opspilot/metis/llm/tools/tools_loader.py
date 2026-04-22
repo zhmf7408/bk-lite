@@ -59,7 +59,7 @@ class ToolsLoader:
         "github": (github, False),
         "jenkins": (jenkins, False),
         "kubernetes": (kubernetes, False),
-        "mssql": (mssql, False),
+        "mssql": (mssql, True),
         "mysql": (mysql, True),
         "oracle": (oracle, True),
         "postgres": (postgres, False),

@@ -14,6 +14,7 @@ import EditablePasswordField from '@/components/dynamic-form/editPasswordField';
 import RedisToolEditor, { RedisInstanceFormValue } from './redisToolEditor';
 import MysqlToolEditor, { MysqlInstanceFormValue } from './mysqlToolEditor';
 import OracleToolEditor, { OracleInstanceFormValue } from './oracleToolEditor';
+import MssqlToolEditor, { MssqlInstanceFormValue } from './mssqlToolEditor';
 
 const REDIS_TOOL_NAME = 'redis';
 const REDIS_INSTANCES_KEY = 'redis_instances';
@@ -378,6 +379,112 @@ const serializeOracleToolConfig = (instances: OracleInstanceFormValue[]): ToolVa
 
 const isOracleTool = (tool?: SelectTool | null) => (tool?.rawName || tool?.name) === ORACLE_TOOL_NAME;
 
+const MSSQL_TOOL_NAME = 'mssql';
+const MSSQL_INSTANCES_KEY = 'mssql_instances';
+const MSSQL_DEFAULT_INSTANCE_ID_KEY = 'mssql_default_instance_id';
+const MSSQL_AUTO_NAME_PREFIX = 'MSSQL - ';
+
+const createMssqlInstanceId = () => `mssql-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+
+const getDefaultMssqlInstance = (name: string): MssqlInstanceFormValue => ({
+  id: createMssqlInstanceId(),
+  name,
+  host: '',
+  port: 1433,
+  database: 'master',
+  user: '',
+  password: '',
+  testStatus: 'untested',
+});
+
+const getNextMssqlInstanceName = (instances: MssqlInstanceFormValue[]) => {
+  const maxIndex = instances.reduce((max, instance) => {
+    const match = instance.name.match(/^MSSQL - (\d+)$/);
+    if (!match) {
+      return max;
+    }
+    return Math.max(max, Number(match[1]));
+  }, 0);
+  return `${MSSQL_AUTO_NAME_PREFIX}${maxIndex + 1}`;
+};
+
+const parseMssqlInstancesValue = (value: unknown): Record<string, unknown>[] => {
+  if (Array.isArray(value)) {
+    return value as Record<string, unknown>[];
+  }
+  if (typeof value === 'string' && value.trim()) {
+    try {
+      const parsed = JSON.parse(value);
+      return Array.isArray(parsed) ? parsed : [];
+    } catch {
+      return [];
+    }
+  }
+  return [];
+};
+
+const parseMssqlInt = (value: unknown, defaultValue: number) => {
+  if (typeof value === 'number') {
+    return value;
+  }
+  if (typeof value === 'string') {
+    const parsed = parseInt(value, 10);
+    return isNaN(parsed) ? defaultValue : parsed;
+  }
+  return defaultValue;
+};
+
+const parseMssqlToolConfig = (kwargs: ToolVariable[] = []): MssqlInstanceFormValue[] => {
+  const kwargsMap = new Map(kwargs.filter((item) => item.key).map((item) => [item.key, item.value]));
+  const instancesValue = kwargsMap.get(MSSQL_INSTANCES_KEY);
+  const parsedInstances = parseMssqlInstancesValue(instancesValue);
+
+  if (parsedInstances.length > 0) {
+    return parsedInstances.map((item, index) => ({
+      id: String(item.id || `mssql-${index + 1}`),
+      name: String(item.name || `${MSSQL_AUTO_NAME_PREFIX}${index + 1}`),
+      host: String(item.host || ''),
+      port: parseMssqlInt(item.port, 1433),
+      database: String(item.database || 'master'),
+      user: String(item.user || ''),
+      password: String(item.password || ''),
+      testStatus: 'untested',
+    }));
+  }
+
+  const hasLegacyConfig = ['host', 'port', 'database', 'user', 'password']
+    .some((key) => kwargsMap.has(key));
+
+  if (hasLegacyConfig) {
+    return [{
+      id: 'mssql-1',
+      name: 'MSSQL - 1',
+      host: String(kwargsMap.get('host') || ''),
+      port: parseMssqlInt(kwargsMap.get('port'), 1433),
+      database: String(kwargsMap.get('database') || 'master'),
+      user: String(kwargsMap.get('user') || ''),
+      password: String(kwargsMap.get('password') || ''),
+      testStatus: 'untested',
+    }];
+  }
+
+  return [getDefaultMssqlInstance('MSSQL - 1')];
+};
+
+const serializeMssqlToolConfig = (instances: MssqlInstanceFormValue[]): ToolVariable[] => {
+  const normalizedInstances = instances.map((instance) => {
+    const normalizedInstance = { ...instance };
+    delete normalizedInstance.testStatus;
+    return normalizedInstance;
+  });
+  return [
+    { key: MSSQL_INSTANCES_KEY, value: JSON.stringify(normalizedInstances) },
+    { key: MSSQL_DEFAULT_INSTANCE_ID_KEY, value: normalizedInstances[0]?.id || '' },
+  ];
+};
+
+const isMssqlTool = (tool?: SelectTool | null) => (tool?.rawName || tool?.name) === MSSQL_TOOL_NAME;
+
 interface ToolSelectorProps {
   defaultTools: SelectTool[];
   onChange: (selected: SelectTool[]) => void;
@@ -385,7 +492,7 @@ interface ToolSelectorProps {
 
 const ToolSelector: React.FC<ToolSelectorProps> = ({ defaultTools, onChange }) => {
   const { t } = useTranslation();
-  const { fetchSkillTools, testRedisConnection, testMysqlConnection, testOracleConnection } = useSkillApi();
+  const { fetchSkillTools, testRedisConnection, testMysqlConnection, testOracleConnection, testMssqlConnection } = useSkillApi();
   const [loading, setLoading] = useState<boolean>(false);
   const [modalVisible, setModalVisible] = useState(false);
   const [tools, setTools] = useState<SelectTool[]>([]);
@@ -401,6 +508,9 @@ const ToolSelector: React.FC<ToolSelectorProps> = ({ defaultTools, onChange }) =
   const [oracleInstances, setOracleInstances] = useState<OracleInstanceFormValue[]>([]);
   const [selectedOracleInstanceId, setSelectedOracleInstanceId] = useState<string | null>(null);
   const [testingOracleConnection, setTestingOracleConnection] = useState(false);
+  const [mssqlInstances, setMssqlInstances] = useState<MssqlInstanceFormValue[]>([]);
+  const [selectedMssqlInstanceId, setSelectedMssqlInstanceId] = useState<string | null>(null);
+  const [testingMssqlConnection, setTestingMssqlConnection] = useState(false);
   const [form] = Form.useForm();
 
   useEffect(() => {
@@ -415,6 +525,7 @@ const ToolSelector: React.FC<ToolSelectorProps> = ({ defaultTools, onChange }) =
       const defaultRedisTool = defaultTools.find((tool) => isRedisTool(tool));
       const defaultMysqlTool = defaultTools.find((tool) => isMysqlTool(tool));
       const defaultOracleTool = defaultTools.find((tool) => isOracleTool(tool));
+      const defaultMssqlTool = defaultTools.find((tool) => isMssqlTool(tool));
       const fetchedTools = data.map((tool: any) => {
         const defaultTool = defaultToolMap.get(tool.id);
         const kwargs = (tool.params.kwargs || [])
@@ -435,9 +546,9 @@ const ToolSelector: React.FC<ToolSelectorProps> = ({ defaultTools, onChange }) =
       setTools(fetchedTools);
 
       const initialSelectedTools = fetchedTools
-        .filter((tool) => defaultToolMap.has(tool.id) || (isRedisTool(tool) && !!defaultRedisTool) || (isMysqlTool(tool) && !!defaultMysqlTool) || (isOracleTool(tool) && !!defaultOracleTool))
+        .filter((tool) => defaultToolMap.has(tool.id) || (isRedisTool(tool) && !!defaultRedisTool) || (isMysqlTool(tool) && !!defaultMysqlTool) || (isOracleTool(tool) && !!defaultOracleTool) || (isMssqlTool(tool) && !!defaultMssqlTool))
         .map((tool) => {
-          const matchedDefaultTool = defaultToolMap.get(tool.id) || (isRedisTool(tool) ? defaultRedisTool : undefined) || (isMysqlTool(tool) ? defaultMysqlTool : undefined) || (isOracleTool(tool) ? defaultOracleTool : undefined);
+          const matchedDefaultTool = defaultToolMap.get(tool.id) || (isRedisTool(tool) ? defaultRedisTool : undefined) || (isMysqlTool(tool) ? defaultMysqlTool : undefined) || (isOracleTool(tool) ? defaultOracleTool : undefined) || (isMssqlTool(tool) ? defaultMssqlTool : undefined);
           if (!matchedDefaultTool) {
             return tool;
           }
@@ -490,6 +601,10 @@ const ToolSelector: React.FC<ToolSelectorProps> = ({ defaultTools, onChange }) =
       const instances = parseOracleToolConfig(tool.kwargs);
       setOracleInstances(instances);
       setSelectedOracleInstanceId(instances[0]?.id || null);
+    } else if (isMssqlTool(tool)) {
+      const instances = parseMssqlToolConfig(tool.kwargs);
+      setMssqlInstances(instances);
+      setSelectedMssqlInstanceId(instances[0]?.id || null);
     } else {
       form.setFieldsValue({
         kwargs: tool.kwargs?.map((item: any) => ({ key: item.key, value: item.value, type: item.type, isRequired: item.isRequired })) || [],
@@ -595,6 +710,38 @@ const ToolSelector: React.FC<ToolSelectorProps> = ({ defaultTools, onChange }) =
       return;
     }
 
+    if (isMssqlTool(editingTool)) {
+      const trimmedNames = mssqlInstances.map((instance) => instance.name.trim()).filter(Boolean);
+      if (mssqlInstances.length === 0) {
+        message.error(t('tool.mssql.noInstances'));
+        return;
+      }
+      if (trimmedNames.length !== mssqlInstances.length) {
+        message.error(t('tool.mssql.instanceNameRequired'));
+        return;
+      }
+      if (new Set(trimmedNames).size !== trimmedNames.length) {
+        message.error(t('tool.mssql.duplicateInstanceName'));
+        return;
+      }
+      if (mssqlInstances.some((instance) => !instance.host.trim())) {
+        message.error(t('tool.mssql.hostRequired'));
+        return;
+      }
+      if (editingTool) {
+        const updatedTool = {
+          ...editingTool,
+          kwargs: serializeMssqlToolConfig(mssqlInstances.map((instance) => ({ ...instance, name: instance.name.trim(), host: instance.host.trim() }))),
+        };
+        const updatedSelectedTools = selectedTools.map((tool) => (tool.id === editingTool.id ? updatedTool : tool));
+        setSelectedTools(updatedSelectedTools);
+        onChange(updatedSelectedTools);
+      }
+      setEditModalVisible(false);
+      setEditingTool(null);
+      return;
+    }
+
     form.validateFields().then((values) => {
       if (editingTool) {
         const updatedTool = {
@@ -619,6 +766,8 @@ const ToolSelector: React.FC<ToolSelectorProps> = ({ defaultTools, onChange }) =
     setSelectedMysqlInstanceId(null);
     setOracleInstances([]);
     setSelectedOracleInstanceId(null);
+    setMssqlInstances([]);
+    setSelectedMssqlInstanceId(null);
   };
 
   const handleAddRedisInstance = () => {
@@ -768,6 +917,55 @@ const ToolSelector: React.FC<ToolSelectorProps> = ({ defaultTools, onChange }) =
     }
   };
 
+  const handleAddMssqlInstance = () => {
+    const nextInstance = getDefaultMssqlInstance(getNextMssqlInstanceName(mssqlInstances));
+    setMssqlInstances((prev) => [...prev, nextInstance]);
+    setSelectedMssqlInstanceId(nextInstance.id);
+  };
+
+  const handleDeleteMssqlInstance = (instanceId: string) => {
+    setMssqlInstances((prev) => {
+      const nextInstances = prev.filter((instance) => instance.id !== instanceId);
+      if (selectedMssqlInstanceId === instanceId) {
+        setSelectedMssqlInstanceId(nextInstances[0]?.id || null);
+      }
+      return nextInstances;
+    });
+  };
+
+  const handleMssqlInstanceChange = <K extends keyof MssqlInstanceFormValue>(
+    instanceId: string,
+    field: K,
+    value: MssqlInstanceFormValue[K],
+  ) => {
+    setMssqlInstances((prev) => prev.map((instance) => (
+      instance.id === instanceId ? { ...instance, [field]: value, testStatus: 'untested' } : instance
+    )));
+  };
+
+  const handleTestMssqlInstance = async () => {
+    const currentInstance = mssqlInstances.find((instance) => instance.id === selectedMssqlInstanceId);
+    if (!currentInstance) {
+      return;
+    }
+    setTestingMssqlConnection(true);
+    try {
+      const payload = { ...currentInstance };
+      delete payload.testStatus;
+      await testMssqlConnection(payload);
+      message.success(t('tool.mssql.status.success'));
+      setMssqlInstances((prev) => prev.map((instance) => (
+        instance.id === currentInstance.id ? { ...instance, testStatus: 'success' } : instance
+      )));
+    } catch {
+      setMssqlInstances((prev) => prev.map((instance) => (
+        instance.id === currentInstance.id ? { ...instance, testStatus: 'failed' } : instance
+      )));
+    } finally {
+      setTestingMssqlConnection(false);
+    }
+  };
+
   return (
     <div>
       <Button onClick={openModal}>+ {t('common.add')}</Button>
@@ -815,7 +1013,7 @@ const ToolSelector: React.FC<ToolSelectorProps> = ({ defaultTools, onChange }) =
         onCancel={handleEditModalCancel}
         okText={t('common.save')}
         cancelText={t('common.cancel')}
-        width={isRedisTool(editingTool) || isMysqlTool(editingTool) || isOracleTool(editingTool) ? 800 : undefined}
+        width={isRedisTool(editingTool) || isMysqlTool(editingTool) || isOracleTool(editingTool) || isMssqlTool(editingTool) ? 800 : undefined}
       >
         <Form form={form} layout="vertical">
           {isRedisTool(editingTool) ? (
@@ -850,6 +1048,17 @@ const ToolSelector: React.FC<ToolSelectorProps> = ({ defaultTools, onChange }) =
               onDelete={handleDeleteOracleInstance}
               onChange={handleOracleInstanceChange}
               onTest={handleTestOracleInstance}
+            />
+          ) : isMssqlTool(editingTool) ? (
+            <MssqlToolEditor
+              instances={mssqlInstances}
+              selectedInstanceId={selectedMssqlInstanceId}
+              testing={testingMssqlConnection}
+              onSelect={setSelectedMssqlInstanceId}
+              onAdd={handleAddMssqlInstance}
+              onDelete={handleDeleteMssqlInstance}
+              onChange={handleMssqlInstanceChange}
+              onTest={handleTestMssqlInstance}
             />
           ) : (
             <Form.List name="kwargs">

@@ -12,15 +12,18 @@ from apps.core.logger import opspilot_logger as logger
 from apps.core.mixinx import EncryptMixin
 from apps.core.utils.loader import LanguageLoader
 from apps.core.utils.viewset_utils import AuthViewSet, LanguageViewSet
+from apps.opspilot.metis.llm.tools.mssql.connection import normalize_mssql_instance, test_mssql_instance
 from apps.opspilot.metis.llm.tools.mysql.connection import normalize_mysql_instance, test_mysql_instance
 from apps.opspilot.metis.llm.tools.oracle.connection import normalize_oracle_instance, test_oracle_instance
 from apps.opspilot.metis.llm.tools.redis.connection import normalize_redis_instance, test_redis_instance
 from apps.opspilot.models import KnowledgeBase, LLMModel, LLMSkill, SkillRequestLog, SkillTools, UserPin
 from apps.opspilot.serializers.llm_serializer import LLMModelSerializer, LLMSerializer, SkillRequestLogSerializer, SkillToolsSerializer
 from apps.opspilot.services.builtin_tools import (
+    BUILTIN_MSSQL_TOOL_NAME,
     BUILTIN_MYSQL_TOOL_NAME,
     BUILTIN_ORACLE_TOOL_NAME,
     BUILTIN_REDIS_TOOL_NAME,
+    build_builtin_mssql_tool,
     build_builtin_mysql_tool,
     build_builtin_oracle_tool,
     build_builtin_redis_tool,
@@ -494,6 +497,8 @@ class SkillToolsViewSet(AuthViewSet):
                 response.data.append(build_builtin_mysql_tool(loader))
             if not any(item.get("name") == BUILTIN_ORACLE_TOOL_NAME for item in response.data):
                 response.data.append(build_builtin_oracle_tool(loader))
+            if not any(item.get("name") == BUILTIN_MSSQL_TOOL_NAME for item in response.data):
+                response.data.append(build_builtin_mssql_tool(loader))
         return response
 
     @HasPermission("tool_list-Add")
@@ -616,3 +621,16 @@ class SkillToolsViewSet(AuthViewSet):
         except Exception as error:
             return JsonResponse({"result": False, "message": f"Oracle connection test failed: {error}"}, status=status.HTTP_400_BAD_REQUEST)
         return JsonResponse({"result": False, "message": "Oracle connection test failed"}, status=status.HTTP_400_BAD_REQUEST)
+
+    @action(methods=["POST"], detail=False)
+    @HasPermission("tool_list-View")
+    def test_mssql_connection(self, request):
+        try:
+            instance = normalize_mssql_instance(request.data)
+            if test_mssql_instance(instance):
+                return JsonResponse({"result": True, "data": {"success": True}})
+        except ValueError as error:
+            return JsonResponse({"result": False, "message": str(error)}, status=status.HTTP_400_BAD_REQUEST)
+        except Exception as error:
+            return JsonResponse({"result": False, "message": f"MSSQL connection test failed: {error}"}, status=status.HTTP_400_BAD_REQUEST)
+        return JsonResponse({"result": False, "message": "MSSQL connection test failed"}, status=status.HTTP_400_BAD_REQUEST)

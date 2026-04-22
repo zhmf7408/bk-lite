@@ -1,4 +1,6 @@
 from apps.core.utils.loader import LanguageLoader
+from apps.opspilot.metis.llm.tools.mssql import CONSTRUCTOR_PARAMS as MSSQL_CONSTRUCTOR_PARAMS, __all__ as MSSQL_EXPORTS
+from apps.opspilot.metis.llm.tools.mssql.connection import get_mssql_instances_prompt
 from apps.opspilot.metis.llm.tools.mysql import CONSTRUCTOR_PARAMS as MYSQL_CONSTRUCTOR_PARAMS, __all__ as MYSQL_EXPORTS
 from apps.opspilot.metis.llm.tools.mysql.connection import get_mysql_instances_prompt
 from apps.opspilot.metis.llm.tools.oracle import CONSTRUCTOR_PARAMS as ORACLE_CONSTRUCTOR_PARAMS, __all__ as ORACLE_EXPORTS
@@ -14,6 +16,9 @@ BUILTIN_MYSQL_TOOL_NAME = "mysql"
 
 BUILTIN_ORACLE_TOOL_ID = -3
 BUILTIN_ORACLE_TOOL_NAME = "oracle"
+
+BUILTIN_MSSQL_TOOL_ID = -4
+BUILTIN_MSSQL_TOOL_NAME = "mssql"
 
 
 def _build_kwargs_from_params(constructor_params):
@@ -139,4 +144,37 @@ def build_builtin_oracle_runtime_tool(tool_kwargs):
         "enable_auth": False,
         "auth_token": "",
         "extra_tools_prompt": get_oracle_instances_prompt(tool_kwargs),
+    }
+
+
+def build_builtin_mssql_tool(loader: LanguageLoader):
+    description = loader.get(f"tools.{BUILTIN_MSSQL_TOOL_NAME}.description") or "MSSQL built-in tool"
+    return {
+        "id": BUILTIN_MSSQL_TOOL_ID,
+        "name": BUILTIN_MSSQL_TOOL_NAME,
+        "display_name": "MSSQL",
+        "description": description,
+        "description_tr": description,
+        "icon": "gongjuji",
+        "team": [],
+        "tags": [],
+        "params": {
+            "name": BUILTIN_MSSQL_TOOL_NAME,
+            "url": f"langchain:{BUILTIN_MSSQL_TOOL_NAME}",
+            "kwargs": _build_kwargs_from_params(MSSQL_CONSTRUCTOR_PARAMS),
+            "enable_auth": False,
+            "auth_token": "",
+        },
+        "is_build_in": True,
+        "tools": _build_sub_tools(BUILTIN_MSSQL_TOOL_NAME, MSSQL_EXPORTS, loader),
+    }
+
+
+def build_builtin_mssql_runtime_tool(tool_kwargs):
+    return {
+        "name": BUILTIN_MSSQL_TOOL_NAME,
+        "url": f"langchain:{BUILTIN_MSSQL_TOOL_NAME}",
+        "enable_auth": False,
+        "auth_token": "",
+        "extra_tools_prompt": get_mssql_instances_prompt(tool_kwargs),
     }

@@ -9,9 +9,11 @@ from apps.core.utils.loader import LanguageLoader
 from apps.opspilot.enum import SkillTypeChoices
 from apps.opspilot.models import LLMModel, SkillTools
 from apps.opspilot.services.builtin_tools import (
+    BUILTIN_MSSQL_TOOL_NAME,
     BUILTIN_MYSQL_TOOL_NAME,
     BUILTIN_ORACLE_TOOL_NAME,
     BUILTIN_REDIS_TOOL_NAME,
+    build_builtin_mssql_runtime_tool,
     build_builtin_mysql_runtime_tool,
     build_builtin_oracle_runtime_tool,
     build_builtin_redis_runtime_tool,
@@ -192,6 +194,7 @@ class ChatService:
             selected_builtin_redis_kwargs = None
             selected_builtin_mysql_kwargs = None
             selected_builtin_oracle_kwargs = None
+            selected_builtin_mssql_kwargs = None
             for tool in selected_tools:
                 for i in tool.get("kwargs", []):
                     if i.get("type") == "password":
@@ -202,6 +205,8 @@ class ChatService:
                     selected_builtin_mysql_kwargs = {u["key"]: u["value"] for u in tool.get("kwargs", []) if u.get("key")}
                 if tool.get("name") == BUILTIN_ORACLE_TOOL_NAME:
                     selected_builtin_oracle_kwargs = {u["key"]: u["value"] for u in tool.get("kwargs", []) if u.get("key")}
+                if tool.get("name") == BUILTIN_MSSQL_TOOL_NAME:
+                    selected_builtin_mssql_kwargs = {u["key"]: u["value"] for u in tool.get("kwargs", []) if u.get("key")}
             tool_map = {i["id"]: {u["key"]: u["value"] for u in i["kwargs"] if u.get("key")} for i in selected_tools if "id" in i}
 
             # 查询工具对象，需要判断是否为内置工具
@@ -216,7 +221,7 @@ class ChatService:
                 tool_params.pop("kwargs", None)
 
                 # 如果是内置工具（通过 is_build_in 标记或名称匹配），添加 langchain 前缀的 URL
-                is_builtin = skill_tool.is_build_in or skill_tool.name in (BUILTIN_REDIS_TOOL_NAME, BUILTIN_MYSQL_TOOL_NAME, BUILTIN_ORACLE_TOOL_NAME)
+                is_builtin = skill_tool.is_build_in or skill_tool.name in (BUILTIN_REDIS_TOOL_NAME, BUILTIN_MYSQL_TOOL_NAME, BUILTIN_ORACLE_TOOL_NAME, BUILTIN_MSSQL_TOOL_NAME)
                 if is_builtin:
                     tool_params["url"] = f"langchain:{skill_tool.name}"
                     tool_kwargs_for_builtin = tool_map.get(skill_tool.id, {})
@@ -226,6 +231,8 @@ class ChatService:
                         tool_params["extra_tools_prompt"] = build_builtin_mysql_runtime_tool(tool_kwargs_for_builtin)["extra_tools_prompt"]
                     elif skill_tool.name == BUILTIN_ORACLE_TOOL_NAME:
                         tool_params["extra_tools_prompt"] = build_builtin_oracle_runtime_tool(tool_kwargs_for_builtin)["extra_tools_prompt"]
+                    elif skill_tool.name == BUILTIN_MSSQL_TOOL_NAME:
+                        tool_params["extra_tools_prompt"] = build_builtin_mssql_runtime_tool(tool_kwargs_for_builtin)["extra_tools_prompt"]
                 tools.append(tool_params)
 
             if selected_builtin_redis_kwargs and BUILTIN_REDIS_TOOL_NAME not in loaded_tool_names:
@@ -236,6 +243,9 @@ class ChatService:
 
             if selected_builtin_oracle_kwargs and BUILTIN_ORACLE_TOOL_NAME not in loaded_tool_names:
                 tools.append(build_builtin_oracle_runtime_tool(selected_builtin_oracle_kwargs))
+
+            if selected_builtin_mssql_kwargs and BUILTIN_MSSQL_TOOL_NAME not in loaded_tool_names:
+                tools.append(build_builtin_mssql_runtime_tool(selected_builtin_mssql_kwargs))
 
             for i in tool_map.values():
                 extra_config.update(i)
