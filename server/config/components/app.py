@@ -89,7 +89,10 @@ MIDDLEWARE = (
 _install_apps = {item.strip() for item in os.getenv("INSTALL_APPS", "").split(",") if item.strip()}
 
 if "license_mgmt" in _install_apps:
-    MIDDLEWARE += ("apps.license_mgmt.middleware.license_guard.LicenseCreateGuardMiddleware",)
+    MIDDLEWARE += (
+        "apps.license_mgmt.middleware.license_guard.LicenseAppGuardMiddleware",
+        "apps.license_mgmt.middleware.license_guard.LicenseCreateGuardMiddleware",
+    )
 
 # 达梦数据库环境下，添加连接管理中间件（放在最前面）
 if _db_engine == "dameng":
