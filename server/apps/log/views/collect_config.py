@@ -3,6 +3,7 @@ import yaml
 from rest_framework.decorators import action
 from rest_framework.viewsets import ModelViewSet, ViewSet
 
+from apps.core.constants import DEFAULT_PERMISSION
 from apps.core.utils.loader import LanguageLoader
 from apps.core.utils.permission_utils import (
     get_permissions_rules,
@@ -175,6 +176,149 @@ class CollectTypeViewSet(ModelViewSet):
 
 
 class CollectInstanceViewSet(ViewSet):
+    OPERATE_PERMISSION = "Operate"
+
+    @staticmethod
+    def _normalize_ids(values):
+        if not values:
+            return []
+        if not isinstance(values, list):
+            values = [values]
+        return [str(value) for value in values if value is not None and str(value) != ""]
+
+    @staticmethod
+    def _normalize_orgs(values):
+        if not values:
+            return set()
+        if not isinstance(values, list):
+            values = [values]
+        orgs = set()
+        for value in values:
+            try:
+                orgs.add(int(value))
+            except (TypeError, ValueError):
+                continue
+        return orgs
+
+    @staticmethod
+    def _normalize_team_permissions(values):
+        team_ids = set()
+        if not isinstance(values, list):
+            return team_ids
+        for value in values:
+            if isinstance(value, dict):
+                value = value.get("id")
+            try:
+                team_ids.add(int(value))
+            except (TypeError, ValueError):
+                continue
+        return team_ids
+
+    @staticmethod
+    def _normalize_instance_permissions(values):
+        permission_map = {}
+        if not isinstance(values, list):
+            return permission_map
+        for value in values:
+            if not isinstance(value, dict) or "id" not in value:
+                continue
+            permission_map[str(value["id"])] = value.get("permission") or DEFAULT_PERMISSION
+        return permission_map
+
+    def _get_permission_context(self, request):
+        include_children = request.COOKIES.get("include_children", "0") == "1"
+        permission_result = get_permissions_rules(
+            request.user,
+            request.COOKIES.get("current_team"),
+            "log",
+            PermissionConstants.INSTANCE_MODULE,
+            include_children=include_children,
+        )
+        if not isinstance(permission_result, dict):
+            permission_result = {}
+        return permission_result.get("data", {}), self._normalize_orgs(permission_result.get("team", []))
+
+    @staticmethod
+    def _instance_orgs(instance):
+        return {rel.organization for rel in instance.collectinstanceorganization_set.all()}
+
+    def _permissions_for_instance(self, instance, permission_data, current_teams):
+        instance_orgs = self._instance_orgs(instance)
+
+        admin_teams = self._normalize_orgs(permission_data.get("all", {}).get("team", []))
+        if admin_teams and instance_orgs & admin_teams:
+            return DEFAULT_PERMISSION
+
+        type_permission = permission_data.get(str(instance.collect_type_id), {})
+        if not type_permission:
+            if current_teams & instance_orgs:
+                return DEFAULT_PERMISSION
+            return []
+
+        instance_permissions = self._normalize_instance_permissions(type_permission.get("instance", []))
+        if str(instance.id) in instance_permissions:
+            return instance_permissions[str(instance.id)]
+
+        team_permissions = self._normalize_team_permissions(type_permission.get("team", []))
+        if instance_orgs & team_permissions:
+            return DEFAULT_PERMISSION
+
+        return []
+
+    def _allowed_organization_scope(self, permission_data, current_teams, collect_type_id=None):
+        allowed = set(current_teams)
+        allowed |= self._normalize_orgs(permission_data.get("all", {}).get("team", []))
+
+        if collect_type_id is not None:
+            type_permission = permission_data.get(str(collect_type_id), {})
+            allowed |= self._normalize_team_permissions(type_permission.get("team", []))
+        else:
+            for key, type_permission in permission_data.items():
+                if key == "all" or not isinstance(type_permission, dict):
+                    continue
+                allowed |= self._normalize_team_permissions(type_permission.get("team", []))
+
+        return allowed
+
+    def _authorize_instances(self, request, instance_ids, required_permission=OPERATE_PERMISSION):
+        normalized_ids = self._normalize_ids(instance_ids)
+        if not normalized_ids:
+            return None, WebUtils.response_error(error_message="instance_ids is required")
+
+        instances = list(
+            CollectInstance.objects.filter(id__in=normalized_ids)
+            .select_related("collect_type")
+            .prefetch_related("collectinstanceorganization_set")
+        )
+        instance_map = {str(instance.id): instance for instance in instances}
+        missing_ids = [instance_id for instance_id in normalized_ids if instance_id not in instance_map]
+        if missing_ids:
+            return None, WebUtils.response_error(error_message="collect instance does not exist")
+
+        permission_data, current_teams = self._get_permission_context(request)
+        for instance_id in normalized_ids:
+            permissions = self._permissions_for_instance(instance_map[instance_id], permission_data, current_teams)
+            if required_permission not in permissions:
+                return None, WebUtils.response_403("User does not have permission to operate this instance")
+
+        return instances, None
+
+    def _authorize_target_organizations(self, request, organizations, collect_type_id=None):
+        target_orgs = self._normalize_orgs(organizations)
+        if not target_orgs:
+            return None
+        permission_data, current_teams = self._get_permission_context(request)
+        allowed_orgs = self._allowed_organization_scope(permission_data, current_teams, collect_type_id)
+        if not target_orgs.issubset(allowed_orgs):
+            return WebUtils.response_403("User does not have permission to assign instances to these organizations")
+        return None
+
+    def _extract_batch_instance_organizations(self, request_data):
+        organizations = set()
+        for instance in request_data.get("instances", []):
+            organizations |= self._normalize_orgs(instance.get("group_ids", []))
+        return list(organizations)
+
     @action(methods=["post"], detail=False, url_path="search")
     def search(self, request):
         """
@@ -229,7 +373,7 @@ class CollectInstanceViewSet(ViewSet):
             # 超管权限检查
             admin_cur_team = instance_res.get("all", {}).get("team")
             if admin_cur_team:
-                qs = CollectInstance.objects.filter(collectinstanceorganization__organization_in=admin_cur_team)
+                qs = CollectInstance.objects.filter(collectinstanceorganization__organization__in=admin_cur_team)
                 inst_permission_map = {}
             else:
                 objs = CollectInstance.objects.prefetch_related("collectinstanceorganization_set").all()
@@ -276,12 +420,22 @@ class CollectInstanceViewSet(ViewSet):
 
     @action(methods=["post"], detail=False, url_path="batch_create")
     def batch_create(self, request):
+        error_response = self._authorize_target_organizations(
+            request,
+            self._extract_batch_instance_organizations(request.data),
+            request.data.get("collect_type_id"),
+        )
+        if error_response:
+            return error_response
         CollectTypeService.batch_create_collect_configs(request.data)
         return WebUtils.response_success()
 
     @action(methods=["post"], detail=False, url_path="remove_collect_instance")
     def remove_collect_instance(self, request):
         instance_ids = request.data.get("instance_ids", [])
+        _, error_response = self._authorize_instances(request, instance_ids)
+        if error_response:
+            return error_response
         config_objs = CollectConfig.objects.filter(collect_instance_id__in=instance_ids)
         child_configs, configs = [], []
         for config in config_objs:
@@ -302,8 +456,19 @@ class CollectInstanceViewSet(ViewSet):
 
     @action(methods=["post"], detail=False, url_path="instance_update")
     def instance_update(self, request):
+        instance_id = request.data.get("instance_id")
+        instances, error_response = self._authorize_instances(request, [instance_id])
+        if error_response:
+            return error_response
+        error_response = self._authorize_target_organizations(
+            request,
+            request.data.get("organizations", []),
+            instances[0].collect_type_id,
+        )
+        if error_response:
+            return error_response
         CollectTypeService.update_instance(
-            request.data.get("instance_id"),
+            instance_id,
             request.data.get("name"),
             request.data.get("organizations", []),
         )
@@ -314,16 +479,39 @@ class CollectInstanceViewSet(ViewSet):
         """设置监控对象实例组织"""
         instance_ids = request.data.get("instance_ids", [])
         organizations = request.data.get("organizations", [])
+        instances, error_response = self._authorize_instances(request, instance_ids)
+        if error_response:
+            return error_response
+        collect_type_ids = {instance.collect_type_id for instance in instances}
+        for collect_type_id in collect_type_ids:
+            error_response = self._authorize_target_organizations(request, organizations, collect_type_id)
+            if error_response:
+                return error_response
         CollectTypeService.set_instances_organizations(instance_ids, organizations)
         return WebUtils.response_success()
 
 
 class CollectConfigViewSet(ViewSet):
+    @staticmethod
+    def _extract_config_instance_ids(config_objs):
+        return list({config_obj.collect_instance_id for config_obj in config_objs})
+
+    def _authorize_config_instances(self, request, config_objs, required_permission="Operate"):
+        instance_ids = self._extract_config_instance_ids(config_objs)
+        helper = CollectInstanceViewSet()
+        _, error_response = helper._authorize_instances(request, instance_ids, required_permission)
+        return error_response
+
     @action(methods=["post"], detail=False, url_path="get_config_content")
     def get_config_content(self, request):
-        config_objs = CollectConfig.objects.filter(id__in=request.data["ids"])
+        config_objs = list(
+            CollectConfig.objects.filter(id__in=request.data["ids"]).select_related("collect_instance")
+        )
         if not config_objs:
             return WebUtils.response_error("配置不存在!")
+        error_response = self._authorize_config_instances(request, config_objs, required_permission="View")
+        if error_response:
+            return error_response
 
         result = {}
         for config_obj in config_objs:
@@ -350,11 +538,18 @@ class CollectConfigViewSet(ViewSet):
     def update_instance_collect_config(self, request):
         child = request.data.get("child")
         base = request.data.get("base")
+        instance_id = request.data.get("instance_id")
+        collect_type_id = request.data.get("collect_type_id")
 
         if isinstance(child, dict) and child.get("content") is None:
             return WebUtils.response_error("child.content is required")
         if isinstance(base, dict) and base.get("content") is None:
             return WebUtils.response_error("base.content is required")
+        instances, error_response = CollectInstanceViewSet()._authorize_instances(request, [instance_id])
+        if error_response:
+            return error_response
+        if str(instances[0].collect_type_id) != str(collect_type_id):
+            return WebUtils.response_error(error_message="collect_type does not match instance")
 
         CollectTypeService.update_instance_config_v2(
             child,
