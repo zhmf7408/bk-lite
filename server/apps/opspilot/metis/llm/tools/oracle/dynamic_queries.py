@@ -36,7 +36,7 @@ SENSITIVE_COLUMNS = {
 @tool()
 def search_tables_by_keyword(
     keyword: str,
-    schema: str = None,
+    db_schema: str = None,
     instance_name: str = None,
     instance_id: str = None,
     config: RunnableConfig = None,
@@ -49,10 +49,10 @@ def search_tables_by_keyword(
         try:
             pattern = f"%{keyword.upper()}%"
 
-            if schema:
+            if db_schema:
                 owner_filter = "AND OWNER = :owner"
-                tables_params = {"pattern": pattern, "owner": schema.upper()}
-                columns_params = {"pattern": pattern, "owner": schema.upper()}
+                tables_params = {"pattern": pattern, "owner": db_schema.upper()}
+                columns_params = {"pattern": pattern, "owner": db_schema.upper()}
             else:
                 owner_filter = ""
                 tables_params = {"pattern": pattern}
@@ -82,7 +82,7 @@ def search_tables_by_keyword(
 
             return {
                 "keyword": keyword,
-                "schema": schema,
+                "schema": db_schema,
                 "matching_tables": tables,
                 "matching_columns": columns,
             }

@@ -109,7 +109,7 @@ def check_tablespace_usage(instance_name: str = None, instance_id: str = None, c
 
 
 @tool()
-def check_unused_indexes(schema: str = None, instance_name: str = None, instance_id: str = None, config: RunnableConfig = None) -> str:
+def check_unused_indexes(db_schema: str = None, instance_name: str = None, instance_id: str = None, config: RunnableConfig = None) -> str:
     """检测Oracle未使用的索引，帮助识别可以删除以减少维护开销的冗余索引"""
     normalized = build_oracle_normalized_from_runnable(config, instance_name, instance_id)
 
@@ -135,9 +135,9 @@ def check_unused_indexes(schema: str = None, instance_name: str = None, instance
                   AND i.OWNER NOT IN ('SYS', 'SYSTEM', 'OUTLN', 'DBSNMP', 'WMSYS', 'XDB', 'CTXSYS', 'MDSYS', 'ORDSYS', 'ORDDATA')
                   AND i.INDEX_TYPE != 'LOB'
                 """
-                if schema:
+                if db_schema:
                     usage_query += " AND i.OWNER = :schema"
-                    rows = execute_readonly_query(conn, usage_query, (schema.upper(),))
+                    rows = execute_readonly_query(conn, usage_query, (db_schema.upper(),))
                 else:
                     rows = execute_readonly_query(conn, usage_query)
 
@@ -170,9 +170,9 @@ def check_unused_indexes(schema: str = None, instance_name: str = None, instance
                         AND sp.OBJECT_NAME = i.INDEX_NAME
                   )
                 """
-                if schema:
+                if db_schema:
                     fallback_query += " AND i.OWNER = :schema"
-                    rows = execute_readonly_query(conn, fallback_query, (schema.upper(),))
+                    rows = execute_readonly_query(conn, fallback_query, (db_schema.upper(),))
                 else:
                     rows = execute_readonly_query(conn, fallback_query)
 
@@ -191,7 +191,7 @@ def check_unused_indexes(schema: str = None, instance_name: str = None, instance
             return {
                 "unused_indexes": unused_indexes,
                 "total_count": len(unused_indexes),
-                "schema_filter": schema,
+                "schema_filter": db_schema,
                 "recommendation": "建议在确认索引确实不再需要后，使用 DROP INDEX 删除冗余索引以减少DML操作的维护开销",
             }
         except oracledb.Error as e:
@@ -203,7 +203,7 @@ def check_unused_indexes(schema: str = None, instance_name: str = None, instance
 
 
 @tool()
-def check_table_fragmentation(schema: str = None, instance_name: str = None, instance_id: str = None, config: RunnableConfig = None) -> str:
+def check_table_fragmentation(db_schema: str = None, instance_name: str = None, instance_id: str = None, config: RunnableConfig = None) -> str:
     """检查Oracle表碎片和行迁移/行链接情况，帮助识别需要重组的表"""
     normalized = build_oracle_normalized_from_runnable(config, instance_name, instance_id)
 
@@ -226,9 +226,9 @@ def check_table_fragmentation(schema: str = None, instance_name: str = None, ins
               AND t.BLOCKS > 0
               AND t.OWNER NOT IN ('SYS', 'SYSTEM', 'OUTLN', 'DBSNMP', 'WMSYS', 'XDB', 'CTXSYS', 'MDSYS', 'ORDSYS', 'ORDDATA')
             """
-            if schema:
+            if db_schema:
                 query += " AND t.OWNER = :schema"
-                rows = execute_readonly_query(conn, query, (schema.upper(),))
+                rows = execute_readonly_query(conn, query, (db_schema.upper(),))
             else:
                 rows = execute_readonly_query(conn, query)
 
@@ -296,7 +296,7 @@ def check_table_fragmentation(schema: str = None, instance_name: str = None, ins
                 "warnings": warnings,
                 "total_count": len(fragmented_tables),
                 "warning_count": len(warnings),
-                "schema_filter": schema,
+                "schema_filter": db_schema,
             }
         except oracledb.Error as e:
             return {"error": str(e)}

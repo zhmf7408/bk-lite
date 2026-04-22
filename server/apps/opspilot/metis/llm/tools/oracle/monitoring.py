@@ -72,7 +72,7 @@ def get_database_metrics(instance_name: str = None, instance_id: str = None, con
 @tool()
 def get_table_metrics(
     table_name: str,
-    schema: str = None,
+    db_schema: str = None,
     instance_name: str = None,
     instance_id: str = None,
     config: RunnableConfig = None,
@@ -83,7 +83,7 @@ def get_table_metrics(
     def _executor(item):
         conn = get_oracle_connection_from_item(item)
         try:
-            owner = schema.upper() if schema else item["config"].get("user", "").upper()
+            owner = db_schema.upper() if db_schema else item["config"].get("user", "").upper()
             upper_table = table_name.upper()
 
             # 获取表大小

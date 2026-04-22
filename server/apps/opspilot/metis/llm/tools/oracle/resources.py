@@ -123,14 +123,14 @@ def list_oracle_tablespaces(instance_name: str = None, instance_id: str = None, 
 
 
 @tool()
-def list_oracle_tables(schema: str = None, instance_name: str = None, instance_id: str = None, config: RunnableConfig = None) -> str:
+def list_oracle_tables(db_schema: str = None, instance_name: str = None, instance_id: str = None, config: RunnableConfig = None) -> str:
     """列出指定Schema或当前用户的表及行数、大小信息"""
     normalized = build_oracle_normalized_from_runnable(config, instance_name, instance_id)
 
     def _executor(item):
         conn = get_oracle_connection_from_item(item)
         try:
-            if schema:
+            if db_schema:
                 query = """
                 SELECT
                     t.OWNER,
@@ -144,7 +144,7 @@ def list_oracle_tables(schema: str = None, instance_name: str = None, instance_i
                 WHERE t.OWNER = UPPER(:schema)
                 ORDER BY size_bytes DESC
                 """
-                results = execute_readonly_query(conn, query, params={"schema": schema})
+                results = execute_readonly_query(conn, query, params={"schema": db_schema})
             else:
                 query = """
                 SELECT
@@ -174,7 +174,7 @@ def list_oracle_tables(schema: str = None, instance_name: str = None, instance_i
                     }
                 )
 
-            return {"schema": schema or "current_user", "total_tables": len(tables), "tables": tables}
+            return {"schema": db_schema or "current_user", "total_tables": len(tables), "tables": tables}
         except oracledb.Error as e:
             return {"error": str(e)}
         finally:
@@ -185,7 +185,7 @@ def list_oracle_tables(schema: str = None, instance_name: str = None, instance_i
 
 @tool()
 def list_oracle_indexes(
-    table_name: str = None, schema: str = None, instance_name: str = None, instance_id: str = None, config: RunnableConfig = None
+    table_name: str = None, db_schema: str = None, instance_name: str = None, instance_id: str = None, config: RunnableConfig = None
 ) -> str:
     """列出指定表或Schema的索引信息"""
     normalized = build_oracle_normalized_from_runnable(config, instance_name, instance_id)
@@ -196,9 +196,9 @@ def list_oracle_indexes(
             conditions = []
             params = {}
 
-            if schema:
+            if db_schema:
                 conditions.append("i.OWNER = UPPER(:schema)")
-                params["schema"] = schema
+                params["schema"] = db_schema
             if table_name:
                 conditions.append("i.TABLE_NAME = UPPER(:table_name)")
                 params["table_name"] = table_name
@@ -251,7 +251,7 @@ def list_oracle_indexes(
 
 @tool()
 def get_table_structure(
-    table_name: str, schema: str = None, instance_name: str = None, instance_id: str = None, config: RunnableConfig = None
+    table_name: str, db_schema: str = None, instance_name: str = None, instance_id: str = None, config: RunnableConfig = None
 ) -> str:
     """获取Oracle表的详细结构，包括列定义和约束"""
     normalized = build_oracle_normalized_from_runnable(config, instance_name, instance_id)
@@ -259,7 +259,7 @@ def get_table_structure(
     def _executor(item):
         conn = get_oracle_connection_from_item(item)
         try:
-            if schema:
+            if db_schema:
                 columns_query = """
                 SELECT
                     COLUMN_NAME,
@@ -274,7 +274,7 @@ def get_table_structure(
                 WHERE OWNER = UPPER(:schema) AND TABLE_NAME = UPPER(:table_name)
                 ORDER BY COLUMN_ID
                 """
-                columns = execute_readonly_query(conn, columns_query, params={"schema": schema, "table_name": table_name})
+                columns = execute_readonly_query(conn, columns_query, params={"schema": db_schema, "table_name": table_name})
 
                 constraints_query = """
                 SELECT
@@ -289,7 +289,7 @@ def get_table_structure(
                 WHERE c.OWNER = UPPER(:schema) AND c.TABLE_NAME = UPPER(:table_name)
                 ORDER BY c.CONSTRAINT_TYPE, c.CONSTRAINT_NAME, cc.POSITION
                 """
-                constraints = execute_readonly_query(conn, constraints_query, params={"schema": schema, "table_name": table_name})
+                constraints = execute_readonly_query(conn, constraints_query, params={"schema": db_schema, "table_name": table_name})
             else:
                 columns_query = """
                 SELECT
@@ -350,7 +350,7 @@ def get_table_structure(
                 )
 
             return {
-                "schema": schema or "current_user",
+                "schema": db_schema or "current_user",
                 "table": table_name,
                 "columns": column_list,
                 "constraints": constraint_list,
