@@ -8,6 +8,7 @@ from apps.core.utils.permission_utils import (
     get_permissions_rules,
     check_instance_permission,
     get_instance_permissions,
+    get_instance_permission_map,
     get_permission_rules,
     permission_filter,
     filter_instances_with_permissions,
@@ -320,7 +321,7 @@ class CollectInstanceViewSet(ViewSet):
                 queryset=qs,
             )
             # 添加实例级别权限信息（与监控模块保持一致）
-            inst_permission_map = {i["id"]: i["permission"] for i in permission.get("instance", [])}
+            inst_permission_map = get_instance_permission_map(permission)
         else:
             include_children = request.COOKIES.get("include_children", "0") == "1"
             instance_res = get_permissions_rules(

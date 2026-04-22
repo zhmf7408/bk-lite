@@ -166,6 +166,13 @@ def _normalize_instance_permissions(values):
     return permission_map
 
 
+def get_instance_permission_map(permission):
+    """从权限规则中提取实例权限映射，并合并重复实例权限。"""
+    if not isinstance(permission, dict):
+        return {}
+    return _normalize_instance_permissions(permission.get("instance", []))
+
+
 def get_instance_permissions(object_type_id, instance_id, teams, permissions, cur_team):
     """返回实例具备的权限列表，无权限时返回空列表。"""
     teams = {team for team in teams if team is not None}
@@ -178,7 +185,7 @@ def get_instance_permissions(object_type_id, instance_id, teams, permissions, cu
     if not permission:
         return DEFAULT_PERMISSION if teams & set(cur_team) else []
 
-    instance_permissions = _normalize_instance_permissions(permission.get("instance", []))
+    instance_permissions = get_instance_permission_map(permission)
     normalized_instance_id = str(instance_id)
     if normalized_instance_id in instance_permissions:
         return instance_permissions[normalized_instance_id]

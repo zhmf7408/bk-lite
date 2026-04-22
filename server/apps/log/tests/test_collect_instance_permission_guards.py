@@ -269,3 +269,37 @@ def test_search_all_collect_types_respects_admin_scope_from_permission_data(monk
     collect_instance_filter.assert_called_once_with(collectinstanceorganization__organization__in=[2])
     payload = json.loads(response.content)
     assert payload["data"]["items"][0]["permission"] == ["View", "Operate"]
+
+
+def test_search_single_collect_type_merges_duplicate_instance_permissions(monkeypatch):
+    instance = make_instance()
+    from apps.log.views import collect_config
+
+    search_result = {"count": 1, "items": [{"id": instance.id}]}
+    permission_queryset = FakeQuerySet([instance])
+
+    monkeypatch.setattr(
+        collect_config,
+        "get_permission_rules",
+        Mock(
+            return_value={
+                "team": [1],
+                "instance": [
+                    {"id": instance.id, "permission": ["View"]},
+                    {"id": instance.id, "permission": ["Operate"]},
+                ],
+            }
+        ),
+    )
+    monkeypatch.setattr(collect_config, "permission_filter", Mock(return_value=permission_queryset))
+    monkeypatch.setattr(
+        collect_config.CollectTypeService,
+        "search_instance_with_permission",
+        Mock(return_value=search_result),
+    )
+
+    response = CollectInstanceViewSet().search(make_request({"collect_type_id": str(instance.collect_type_id), "page": 1, "page_size": 10}))
+
+    assert response.status_code == 200
+    payload = json.loads(response.content)
+    assert payload["data"]["items"][0]["permission"] == ["View", "Operate"]
