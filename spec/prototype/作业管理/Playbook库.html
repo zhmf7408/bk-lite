@@ -106,9 +106,12 @@
         .modal-body { max-height: calc(85vh - 180px); overflow-y: auto; }
 
         .form-group { margin-bottom: 20px; }
+        .form-label-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 8px; }
         .form-label { display: block; font-size: 14px; font-weight: 500; color: #1f2329; margin-bottom: 8px; }
+        .form-label-row .form-label { margin-bottom: 0; }
         .form-input { width: 100%; padding: 10px 12px; border: 1px solid #dcdee0; border-radius: 6px; font-size: 14px; }
         .form-input:focus { outline: none; border-color: #0052d9; box-shadow: 0 0 0 3px rgba(0, 82, 217, 0.1); }
+        .upload-template-tip { font-size: 12px; color: #8f959e; margin-top: 8px; }
 
         .upload-area { border: 2px dashed #dcdee0; border-radius: 8px; padding: 40px; text-align: center; cursor: pointer; transition: all 0.3s; background: #fafbfc; }
         .upload-area:hover { border-color: #0052d9; background: #f0f5ff; }
@@ -319,7 +322,10 @@
             </div>
             
             <div class="form-group">
-                <label class="form-label">上传文件</label>
+                <div class="form-label-row">
+                    <label class="form-label">上传文件</label>
+                    <button class="btn btn-default btn-sm" type="button" onclick="downloadPlaybookTemplate()"><svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg> 下载模版</button>
+                </div>
                 <div class="upload-area" id="uploadArea" onclick="document.getElementById('fileInput').click()">
                     <div class="upload-icon"><svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/><polyline points="3.27 6.96 12 12.01 20.73 6.96"/><line x1="12" y1="22.08" x2="12" y2="12"/></svg></div>
                     <div class="upload-text">点击或拖拽 ZIP 文件到此处上传</div>
@@ -327,6 +333,7 @@
                     <div class="upload-filename" id="uploadFilename" style="display: none;"></div>
                     <input type="file" id="fileInput" accept=".zip" style="display: none;" onchange="handleFileSelect(event)" />
                 </div>
+                <div class="upload-template-tip">模版说明包含标准目录结构、playbook.yml 示例和 README 编写示例。</div>
             </div>
 
             <div class="form-group">
@@ -946,6 +953,70 @@ error_log_path: /var/log/nginx/error.log` },
             initMultiSelect('uploadOrgSelect', 'uploadOrgDropdown', []);
             document.getElementById('uploadModal').classList.add('active');
         }
+
+                function downloadPlaybookTemplate() {
+                        const templateContent = `# Playbook ZIP 模版说明
+
+请将以下目录打包为 ZIP 后上传：
+
+playbook-template/
+├── playbook.yml
+├── README.md
+└── vars/
+        └── main.yml
+
+--- playbook.yml 示例 ---
+---
+- name: Example Playbook
+    hosts: all
+    become: yes
+    vars:
+        service_name: "nginx"
+        service_state: "started"
+
+    tasks:
+        - name: Ensure service package exists
+            package:
+                name: "{{ service_name }}"
+                state: present
+
+        - name: Ensure service is running
+            service:
+                name: "{{ service_name }}"
+                state: "{{ service_state }}"
+
+--- README.md 示例 ---
+# Example Playbook
+
+## 功能说明
+- 安装并启动指定服务
+- 支持通过变量覆盖服务名和状态
+
+## 参数说明
+| 参数名 | 默认值 | 说明 |
+| --- | --- | --- |
+| service_name | nginx | 服务名称 |
+| service_state | started | 服务状态 |
+
+## 执行示例
+ansible-playbook -i inventory playbook.yml -e "service_name=httpd"
+
+--- vars/main.yml 示例 ---
+---
+service_name: nginx
+service_state: started
+`;
+
+                        const blob = new Blob([templateContent], { type: 'text/plain;charset=utf-8' });
+                        const url = URL.createObjectURL(blob);
+                        const link = document.createElement('a');
+                        link.href = url;
+                        link.download = 'playbook-template.txt';
+                        document.body.appendChild(link);
+                        link.click();
+                        document.body.removeChild(link);
+                        URL.revokeObjectURL(url);
+                }
 
         function closeUploadModal() {
             document.getElementById('uploadModal').classList.remove('active');
