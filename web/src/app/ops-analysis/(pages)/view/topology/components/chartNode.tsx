@@ -37,6 +37,7 @@ const ChartNode: React.FC<ChartNodeProps> = ({ node }) => {
   };
 
   const shouldShowLoading = isLoading || (!rawData && !hasError);
+  const normalizedDescription = description?.trim();
 
   const Component = valueConfig.chartType
     ? componentMap[valueConfig.chartType]
@@ -66,22 +67,24 @@ const ChartNode: React.FC<ChartNodeProps> = ({ node }) => {
               fontSize: '14px',
               fontWeight: '500',
               color: 'var(--color-text-1)',
-              marginBottom: '4px',
+              marginBottom: normalizedDescription ? '4px' : 0,
               lineHeight: '20px',
             }}
           >
             {componentName}
           </div>
-          <div
-            style={{
-              fontSize: '12px',
-              color: 'var(--color-text-3)',
-              lineHeight: '16px',
-              opacity: 0.8,
-            }}
-          >
-            {description || '--'}
-          </div>
+          {normalizedDescription && (
+            <div
+              style={{
+                fontSize: '12px',
+                color: 'var(--color-text-3)',
+                lineHeight: '16px',
+                opacity: 0.8,
+              }}
+            >
+              {normalizedDescription}
+            </div>
+          )}
         </div>
       )}
       <div

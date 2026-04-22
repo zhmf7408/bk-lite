@@ -810,16 +810,16 @@ const Dashboard = forwardRef<DashboardRef, DashboardProps>(
                         key={item.i}
                         className="widget bg-(--color-bg-1) rounded-lg shadow-sm overflow-hidden p-4 flex flex-col"
                       >
-                        <div className="widget-header pb-4 flex justify-between items-center">
+                        <div className="widget-header pb-4 flex justify-between items-start">
                           <div className="flex-1">
                             <h4 className="text-md font-medium text-(--color-text-1)">
                               {item.name}
                             </h4>
-                            {
+                            {item.description?.trim() && (
                               <p className="text-sm text-(--color-text-2) mt-1">
-                                {item.description || '--'}
+                                {item.description}
                               </p>
-                            }
+                            )}
                           </div>
                           {isEditMode && (
                             <Dropdown overlay={menu} trigger={['click']}>

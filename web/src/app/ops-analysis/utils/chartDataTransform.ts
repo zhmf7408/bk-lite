@@ -19,6 +19,43 @@ export interface LineBarChartData {
 export type PieChartData = ChartDataItem[];
 
 export class ChartDataTransformer {
+  static formatCategoryValue(value: any): string {
+    if (value === undefined || value === null) return '';
+    return String(value);
+  }
+
+  static shouldFormatAsTimeDimension(values: any[]): boolean {
+    const normalizedValues = values.filter(
+      (value) => value !== undefined && value !== null && value !== ''
+    );
+
+    if (normalizedValues.length === 0) {
+      return false;
+    }
+
+    const validCount = normalizedValues.filter((value) => {
+      if (typeof value === 'string') {
+        const trimmed = value.trim();
+        if (!trimmed) return false;
+
+        const hasExplicitDateMarkers = /[-/:T\s]/.test(trimmed);
+        if (!hasExplicitDateMarkers) return false;
+
+        return dayjs(trimmed).isValid();
+      }
+
+      return false;
+    }).length;
+
+    return validCount > 0 && validCount === normalizedValues.length;
+  }
+
+  static formatDimensionValue(value: any, shouldFormatAsTime: boolean): string {
+    return shouldFormatAsTime
+      ? this.formatTimeValue(value)
+      : this.formatCategoryValue(value);
+  }
+
   static isStructurallyEmpty(rawData: any): boolean {
     if (!rawData) return true;
     if (Array.isArray(rawData)) return rawData.length === 0;
@@ -74,16 +111,26 @@ export class ChartDataTransformer {
 
       // [{name, value}] format
       if (rawData[0] && typeof rawData[0] === 'object' && !Array.isArray(rawData[0]) && 'name' in rawData[0] && 'value' in rawData[0]) {
+        const shouldFormatAsTime = this.shouldFormatAsTimeDimension(
+          rawData.map((item: any) => item.name)
+        );
         return {
-          categories: rawData.map((item: any) => this.formatTimeValue(item.name)),
+          categories: rawData.map((item: any) =>
+            this.formatDimensionValue(item.name, shouldFormatAsTime)
+          ),
           values: rawData.map((item: any) => parseFloat(item.value) || 0),
         };
       }
 
       // [[key, value], ...] format
       if (Array.isArray(rawData[0]) && rawData[0].length >= 2) {
+        const shouldFormatAsTime = this.shouldFormatAsTimeDimension(
+          rawData.map((item: any[]) => item[0])
+        );
         return {
-          categories: rawData.map((item: any[]) => this.formatTimeValue(item[0])),
+          categories: rawData.map((item: any[]) =>
+            this.formatDimensionValue(item[0], shouldFormatAsTime)
+          ),
           values: rawData.map((item: any[]) => item[1]),
         };
       }
@@ -96,19 +143,59 @@ export class ChartDataTransformer {
       const keys = Object.keys(rawData);
       const isMultiSeries = keys.length > 0 && keys.every((k) => Array.isArray(rawData[k]));
       if (isMultiSeries) {
+        const rawCategories: any[] = [];
+        keys.forEach((k) => {
+          rawData[k].forEach((item: any) => {
+            if (Array.isArray(item) && item.length >= 2) {
+              rawCategories.push(item[0]);
+            } else if (item && typeof item === 'object' && 'name' in item) {
+              rawCategories.push(item.name);
+            }
+          });
+        });
+
+        const shouldFormatAsTime = this.shouldFormatAsTimeDimension(rawCategories);
         const allCategoriesSet = new Set<string>();
         keys.forEach((k) => {
           rawData[k].forEach((item: any) => {
             if (Array.isArray(item) && item.length >= 2) {
-              allCategoriesSet.add(this.formatTimeValue(item[0]));
+              allCategoriesSet.add(
+                this.formatDimensionValue(item[0], shouldFormatAsTime)
+              );
             } else if (item && typeof item === 'object' && 'name' in item) {
-              allCategoriesSet.add(this.formatTimeValue(item.name));
+              allCategoriesSet.add(
+                this.formatDimensionValue(item.name, shouldFormatAsTime)
+              );
             }
           });
         });
         const categories = Array.from(allCategoriesSet).sort();
         const series = keys.map((k) => {
-          const dataMap = this.dataToMap(rawData[k]);
+          const dataMap = this.dataToMap(
+            rawData[k].map((item: any) => {
+              if (Array.isArray(item) && item.length >= 2) {
+                return [
+                  this.formatDimensionValue(item[0], shouldFormatAsTime),
+                  item[1],
+                ];
+              }
+
+              if (
+                item &&
+                typeof item === 'object' &&
+                !Array.isArray(item) &&
+                'name' in item &&
+                'value' in item
+              ) {
+                return {
+                  ...item,
+                  name: this.formatDimensionValue(item.name, shouldFormatAsTime),
+                };
+              }
+
+              return item;
+            })
+          );
           return {
             name: k,
             data: categories.map((cat) => dataMap[cat] || 0),
@@ -130,7 +217,7 @@ export class ChartDataTransformer {
       // [{name, value}]
       if (typeof rawData[0] === 'object' && !Array.isArray(rawData[0]) && 'name' in rawData[0] && 'value' in rawData[0]) {
         return rawData.map((item: any) => ({
-          name: this.formatTimeValue(item.name),
+          name: this.formatCategoryValue(item.name),
           value: parseFloat(item.value) || 0,
         }));
       }
@@ -138,7 +225,7 @@ export class ChartDataTransformer {
       // [[key, value], ...]
       if (Array.isArray(rawData[0]) && rawData[0].length >= 2) {
         return rawData.map((item: any[]) => ({
-          name: this.formatTimeValue(item[0]),
+          name: this.formatCategoryValue(item[0]),
           value: parseFloat(item[1]) || 0,
         }));
       }

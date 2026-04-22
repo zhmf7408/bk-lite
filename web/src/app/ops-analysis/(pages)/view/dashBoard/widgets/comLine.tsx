@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useRef } from 'react';
+import React, { useEffect, useRef } from 'react';
 import ReactEcharts from 'echarts-for-react';
 import ChartLegend from '../components/chartLegend';
 import { Spin, Empty } from 'antd';
@@ -16,7 +16,6 @@ const TrendLine: React.FC<TrendLineProps> = ({
   loading = false,
   onReady,
 }) => {
-  const [isDataReady, setIsDataReady] = useState(false);
   const chartRef = useRef<any>(null);
   const chartColors = randomColorForLegend();
 
@@ -25,16 +24,15 @@ const TrendLine: React.FC<TrendLineProps> = ({
   };
 
   const chartData = transformData(rawData);
+  const isDataReady = chartData.categories.length > 0;
 
   useEffect(() => {
     if (!loading) {
-      const hasData = chartData && chartData.categories.length > 0;
-      setIsDataReady(hasData);
       if (onReady) {
-        onReady(hasData);
+        onReady(isDataReady);
       }
     }
-  }, [chartData, loading, onReady]);
+  }, [isDataReady, loading, onReady]);
 
   const option: any = {
     color: chartColors,

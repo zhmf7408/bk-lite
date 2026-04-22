@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect } from 'react';
 import { Spin, Empty } from 'antd';
 import {
   getColorByThreshold,
@@ -41,8 +41,6 @@ const ComSingle: React.FC<ComSingleProps> = ({
   config,
   onReady,
 }) => {
-  const [isDataReady, setIsDataReady] = useState(false);
-
   const extractValue = (data: unknown): number | string | null => {
     if (data === null || data === undefined) {
       return null;
@@ -93,6 +91,7 @@ const ComSingle: React.FC<ComSingleProps> = ({
 
   const thresholds: ThresholdColorConfig[] = config?.thresholdColors ?? DEFAULT_THRESHOLD_COLORS;
   const color = getColorByThreshold(numericValue, thresholds, '#000000');
+  const isDataReady = rawValue !== null;
   const displayValue = formatDisplayValue(
     numericValue,
     config?.unit,
@@ -102,11 +101,9 @@ const ComSingle: React.FC<ComSingleProps> = ({
 
   useEffect(() => {
     if (!loading) {
-      const hasData = rawValue !== null;
-      setIsDataReady(hasData);
-      onReady?.(hasData);
+      onReady?.(isDataReady);
     }
-  }, [rawValue, loading, onReady]);
+  }, [isDataReady, loading, onReady]);
 
   if (loading) {
     return (

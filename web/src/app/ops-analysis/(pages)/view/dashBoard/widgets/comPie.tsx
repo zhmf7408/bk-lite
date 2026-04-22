@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useRef } from 'react';
+import React, { useEffect, useRef } from 'react';
 import ReactEcharts from 'echarts-for-react';
 import ChartLegend from '../components/chartLegend';
 import { Spin, Empty } from 'antd';
@@ -12,7 +12,6 @@ interface OsPieProps {
 }
 
 const OsPie: React.FC<OsPieProps> = ({ rawData, loading = false, onReady }) => {
-  const [isDataReady, setIsDataReady] = useState(false);
   const chartRef = useRef<any>(null);
   const chartColors = randomColorForLegend();
 
@@ -21,16 +20,15 @@ const OsPie: React.FC<OsPieProps> = ({ rawData, loading = false, onReady }) => {
   };
 
   const chartData = transformData(rawData);
+  const isDataReady = chartData.length > 0;
 
   useEffect(() => {
     if (!loading) {
-      const hasData = chartData && chartData.length > 0;
-      setIsDataReady(hasData);
       if (onReady) {
-        onReady(hasData);
+        onReady(isDataReady);
       }
     }
-  }, [chartData, loading, onReady]);
+  }, [isDataReady, loading, onReady]);
   const option: any = {
     color: chartColors,
     animation: true,

@@ -373,6 +373,11 @@ export const useGraphOperations = (
         return;
       }
 
+      const eventTarget = e.target as HTMLElement | null;
+      if (eventTarget?.closest('.chart-legend')) {
+        return;
+      }
+
       e.preventDefault();
       e.stopPropagation();
 
