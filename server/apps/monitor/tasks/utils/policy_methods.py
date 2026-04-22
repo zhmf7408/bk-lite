@@ -53,8 +53,8 @@ def _count(metric_query, start, end, step, group_by):
 
 
 def last_over_time(metric_query, start, end, step, group_by):
-    query = f"any(last_over_time({metric_query})) by ({group_by})"
-    metrics = VictoriaMetricsAPI().query(query, step, end)
+    query = f"any(last_over_time({metric_query}[{step}])) by ({group_by})"
+    metrics = VictoriaMetricsAPI().query(query, None, end)
     for data in metrics.get("data", {}).get("result", []):
         data["values"] = [data["value"]]
     return metrics

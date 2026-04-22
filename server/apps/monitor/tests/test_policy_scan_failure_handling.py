@@ -414,3 +414,129 @@ def test_send_notice_returns_channel_result_for_event_audit(monkeypatch):
     event = types.SimpleNamespace(content="cpu critical")
 
     assert manager.send_notice(event) == send_results
+
+
+def test_alert_center_notification_result_is_persisted(monkeypatch):
+    bulk_update_calls = []
+    send_calls = []
+    send_result = {"result": False, "message": "channel unavailable"}
+
+    class MonitorEvent:
+        class objects:
+            @staticmethod
+            def bulk_update(event_objs, fields, batch_size=None):
+                bulk_update_calls.append((event_objs, fields, batch_size))
+
+    _install_module(
+        monkeypatch,
+        "apps.monitor.constants.alert_policy",
+        AlertConstants=types.SimpleNamespace(),
+    )
+    _install_module(
+        monkeypatch,
+        "apps.monitor.constants.database",
+        DatabaseConstants=types.SimpleNamespace(BULK_UPDATE_BATCH_SIZE=100),
+    )
+    _install_module(
+        monkeypatch,
+        "apps.monitor.models",
+        MonitorAlert=object,
+        MonitorEvent=MonitorEvent,
+        MonitorEventRawData=object,
+    )
+    _install_module(
+        monkeypatch,
+        "apps.monitor.utils.dimension",
+        format_dimension_str=lambda dimensions: "",
+    )
+    _install_module(
+        monkeypatch,
+        "apps.monitor.utils.system_mgmt_api",
+        SystemMgmtUtils=types.SimpleNamespace(
+            send_msg_with_channel=lambda *args: send_calls.append(args) or send_result
+        ),
+    )
+    _install_module(monkeypatch, "apps.system_mgmt.models", Channel=object)
+    _install_module(monkeypatch, "apps.core.logger", celery_logger=_Logger())
+
+    module = _load_module(
+        "monitor_policy_event_alert_manager_alert_center_test_module",
+        Path(__file__).resolve().parents[1]
+        / "tasks"
+        / "services"
+        / "policy_scan"
+        / "event_alert_manager.py",
+    )
+
+    manager = object.__new__(module.EventAlertManager)
+    manager.policy = types.SimpleNamespace(
+        id=1008,
+        name="alert-center-policy",
+        notice_type_id=9,
+    )
+    manager.instances_map = {"host-1": "Host 1"}
+    manager._is_alert_center = True
+
+    event = types.SimpleNamespace(
+        id="evt-1",
+        level="critical",
+        policy_id=1008,
+        content="cpu critical",
+        event_time=datetime(2026, 4, 21, 8, 0, tzinfo=timezone.utc),
+        value=95.0,
+        monitor_instance_id="host-1",
+        dimensions={"instance_id": "host-1"},
+        metric_instance_id="('host-1',)",
+        alert_id=77,
+        notice_result=None,
+    )
+
+    manager.notify_events([event])
+
+    assert len(send_calls) == 1
+    assert send_calls[0][0] == 9
+    assert send_calls[0][2]["events"][0]["external_id"] == "evt-1"
+    assert event.notice_result == [send_result]
+    assert bulk_update_calls == [([event], ["notice_result"], 100)]
+
+
+def test_last_over_time_uses_policy_window_in_range_selector(monkeypatch):
+    query_calls = []
+
+    class VictoriaMetricsAPI:
+        def query(self, query, step="5m", time=None):
+            query_calls.append((query, step, time))
+            return {"data": {"result": [{"value": [200, "7"]}]}}
+
+    _install_module(
+        monkeypatch,
+        "apps.core.exceptions.base_app_exception",
+        BaseAppException=Exception,
+    )
+    _install_module(
+        monkeypatch,
+        "apps.monitor.utils.victoriametrics_api",
+        VictoriaMetricsAPI=VictoriaMetricsAPI,
+    )
+
+    module = _load_module(
+        "monitor_policy_methods_last_over_time_test_module",
+        Path(__file__).resolve().parents[1] / "tasks" / "utils" / "policy_methods.py",
+    )
+
+    result = module.last_over_time(
+        "ping_percent_packet_loss{instance_type='ping'}",
+        start=100,
+        end=200,
+        step="5m",
+        group_by="instance_id",
+    )
+
+    assert query_calls == [
+        (
+            "any(last_over_time(ping_percent_packet_loss{instance_type='ping'}[5m])) by (instance_id)",
+            None,
+            200,
+        )
+    ]
+    assert result["data"]["result"][0]["values"] == [[200, "7"]]

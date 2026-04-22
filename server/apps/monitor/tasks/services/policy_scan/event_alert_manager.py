@@ -40,7 +40,7 @@ class EventAlertManager:
                     value=event["value"],
                     level=event["level"],
                     content=event["content"],
-                    notice_result=True,
+                    notice_result=[],
                     event_time=self.policy.last_run_time,
                 )
             )
@@ -193,10 +193,6 @@ class EventAlertManager:
             instance_name = self.instances_map.get(
                 monitor_instance_id, monitor_instance_id
             )
-            dimension_str = self._format_dimension_str(dimensions)
-            # display_name = (
-            #     f"{instance_name} - {dimension_str}" if dimension_str else instance_name
-            # )
 
             if event["level"] != "no_data":
                 alert_type = "alert"
@@ -326,7 +322,14 @@ class EventAlertManager:
             return
 
         if self._is_alert_center:
-            self._push_to_alert_center(events_to_notify)
+            notice_results = self._push_to_alert_center(events_to_notify)
+            for event in events_to_notify:
+                event.notice_result = notice_results
+            MonitorEvent.objects.bulk_update(
+                events_to_notify,
+                ["notice_result"],
+                batch_size=DatabaseConstants.BULK_UPDATE_BATCH_SIZE,
+            )
         else:
             for event in events_to_notify:
                 notice_results = self.send_notice(event)
@@ -399,11 +402,13 @@ class EventAlertManager:
                     f"Push to alert center success for policy {self.policy.name}: "
                     f"{len(alert_events)} events"
                 )
+            return [send_result]
         except Exception as e:
             logger.error(
                 f"Push to alert center exception for policy {self.policy.name}: {e}",
                 exc_info=True,
             )
+            return [{"result": False, "message": str(e)}]
 
     def _map_level_to_alert_center(self, level):
         """映射告警级别到告警中心格式: 0-致命, 1-错误, 2-预警, 3-提醒"""
