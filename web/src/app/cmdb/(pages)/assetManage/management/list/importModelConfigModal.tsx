@@ -70,6 +70,8 @@ const ImportModelConfigModal = forwardRef<ImportModelConfigModalRef, ImportModel
         message.success(t('Model.importSuccess'));
         onSuccess();
         handleCancel();
+      } catch (error) {
+        message.error(error instanceof Error ? error.message : t('common.serverError'));
       } finally {
         setConfirmLoading(false);
       }

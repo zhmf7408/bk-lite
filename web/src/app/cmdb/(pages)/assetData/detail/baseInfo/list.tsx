@@ -138,9 +138,6 @@ const InfoList: React.FC<AssetDataFieldProps> = ({
     if (fieldKey === 'cloud') {
       return String(value);
     }
-    if (fieldKey === 'cloud_id') {
-      return value == null ? value : +value;
-    }
     return value;
   };
   const getAttrById = (id: string) =>
@@ -152,9 +149,9 @@ const InfoList: React.FC<AssetDataFieldProps> = ({
     const list = deepClone(attrList);
     const values: any = {};
 
-    list.forEach((group: any) => {
-      (group.attrs || []).forEach((item: any) => {
-        if (item.editable && item.attr_id !== 'cloud_id') {
+      list.forEach((group: any) => {
+        (group.attrs || []).forEach((item: any) => {
+        if (item.editable) {
           item.isEdit = nextState;
           if (nextState) {
             const rawValue = getEditableFieldValue(item);
@@ -235,19 +232,6 @@ const InfoList: React.FC<AssetDataFieldProps> = ({
       itemList.forEach((item: any) => {
         const originalValue = item.value || instDetail[item.attr_id];
         item.value = originalValue;
-
-        if (item.attr_id === 'cloud' && modelId === 'host') {
-          const cloudId = String(originalValue);
-          const cloudName = cloudOptions.find(
-            (option: any) => option.proxy_id === cloudId
-          );
-          if (cloudName) {
-            item.value = cloudName.proxy_name;
-            item._originalValue = cloudId;
-          } else if (originalValue) {
-            item._originalValue = cloudId;
-          }
-        }
         item.key = item.attr_id;
         const isTableFieldCollapsed = !!collapsedTableFields[item.attr_id];
         item.label = (
@@ -358,7 +342,7 @@ const InfoList: React.FC<AssetDataFieldProps> = ({
                   </>
                 ) : (
                   <>
-                    {item.editable && item.attr_id !== 'cloud_id' && (
+                    {item.editable && (
                       <PermissionWrapper
                         requiredPermissions={['Edit']}
                         instPermissions={instDetail.permission}
@@ -426,14 +410,7 @@ const InfoList: React.FC<AssetDataFieldProps> = ({
     setAttrList(list);
   };
 
-  const handleValuesChange = (changedValues: any,) => {
-    if (changedValues.cloud !== undefined && modelId === 'host') {
-      const cloudId = changedValues.cloud;
-      form.setFieldsValue({
-        cloud_id: cloudId ? Number(cloudId) : undefined,
-      });
-    }
-  };
+  const handleValuesChange = () => {};
 
   const confirmEdit = (id: string) => {
     if (isBatchEdit) {
@@ -511,7 +488,7 @@ const InfoList: React.FC<AssetDataFieldProps> = ({
 
   const hasEditableField = attrList.some((group: any) =>
     (group.attrs || []).some(
-      (item: any) => item.editable && item.attr_id !== 'cloud_id'
+      (item: any) => item.editable
     )
   );
 

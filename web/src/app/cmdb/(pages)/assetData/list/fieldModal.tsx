@@ -83,7 +83,6 @@ const FieldMoadal = forwardRef<FieldModalRef, FieldModalProps>(
         if (ipValue && cloudName) {
           form.setFieldsValue({
             inst_name: `${ipValue || ''}[${cloudName || ''}]`,
-            cloud_id: Number(cloudValue),
           });
         }
       }
@@ -236,11 +235,6 @@ const FieldMoadal = forwardRef<FieldModalRef, FieldModalProps>(
         );
       }
 
-      // 特殊处理-主机的云区域ID显示,但是不允许修改（弹窗中）
-      if (item.attr_id === 'cloud_id' && modelId === 'host') {
-        return <Input disabled={true} placeholder={t('common.inputTip')} />;
-      }
-
       // 特殊处理-主机的实例名称（inst_name）不允许修改
       if (hostDisabled) {
         return <Input disabled={true} placeholder={t('common.inputTip')} />;
@@ -282,9 +276,6 @@ const FieldMoadal = forwardRef<FieldModalRef, FieldModalProps>(
 
           if (values.cloud) {
             values.cloud = String(values.cloud);
-          }
-          if (values.cloud_id) {
-            values.cloud_id = +values.cloud_id;
           }
           operateAttr(values, confirmType);
         })
