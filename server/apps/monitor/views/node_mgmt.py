@@ -19,13 +19,24 @@ def _build_actor_context(request):
     except (TypeError, ValueError):
         raise BaseAppException("current_team 参数非法")
 
+    group_list = []
+    for group in getattr(request.user, "group_list", []):
+        if isinstance(group, dict) and "id" in group:
+            group_id = group["id"]
+        else:
+            group_id = group
+        try:
+            group_list.append(int(group_id))
+        except (TypeError, ValueError):
+            continue
+
     return {
         "username": request.user.username,
         "domain": request.user.domain,
         "current_team": current_team,
         "include_children": request.COOKIES.get("include_children", "0") == "1",
         "is_superuser": request.user.is_superuser,
-        "group_list": [int(group["id"]) for group in getattr(request.user, "group_list", []) if isinstance(group, dict) and "id" in group],
+        "group_list": group_list,
     }
 
 
