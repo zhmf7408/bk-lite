@@ -13,6 +13,7 @@ import { useWebLogicConfig } from './objects/middleware/webLogic';
 import { useNginxConfig } from './objects/middleware/nginx';
 import { useApacheConfig } from './objects/middleware/apache';
 import { useConsulConfig } from './objects/middleware/consul';
+import { useEtcdBkpullConfig } from './objects/middleware/etcd';
 import { useClickHouseConfig } from './objects/database/clickHouse';
 import { useTomcatConfig } from './objects/middleware/tomcat';
 import { useMinioBkpullConfig } from './objects/middleware/minio';
@@ -77,6 +78,7 @@ export const useMonitorConfig = () => {
   const nginxConfig = useNginxConfig();
   const apacheConfig = useApacheConfig();
   const consulConfig = useConsulConfig();
+  const etcdConfig = useEtcdBkpullConfig();
   const clickHouseConfig = useClickHouseConfig();
   const tomcatConfig = useTomcatConfig();
   const minioBkpullConfig = useMinioBkpullConfig();
@@ -131,6 +133,7 @@ export const useMonitorConfig = () => {
       Nginx: nginxConfig,
       Apache: apacheConfig,
       Consul: consulConfig,
+      Etcd: etcdConfig,
       ClickHouse: clickHouseConfig,
       Tomcat: tomcatConfig,
       Minio: minioBkpullConfig,
