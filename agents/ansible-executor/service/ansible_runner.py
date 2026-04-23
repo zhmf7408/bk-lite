@@ -537,6 +537,22 @@ async def prepare_playbook_execution(
     workspace = create_task_workspace(payload.task_id)
     extra_vars = dict(payload.extra_vars or {})
 
+    logger.info(
+        "[prepare_playbook] task_id=%s workspace=%s playbook_path=%s "
+        "has_playbook_content=%s has_files=%s has_file_distribution=%s "
+        "has_host_credentials=%s has_private_key=%s extra_vars_keys=%s timeout=%s",
+        payload.task_id,
+        workspace,
+        payload.playbook_path,
+        bool(payload.playbook_content),
+        bool(payload.files),
+        bool(payload.file_distribution),
+        bool(payload.host_credentials),
+        bool(payload.private_key_content),
+        list((payload.extra_vars or {}).keys()),
+        payload.execute_timeout,
+    )
+
     if payload.private_key_content and not payload.host_credentials:
         private_key_path = _materialize_private_key(workspace, payload.private_key_content)
         extra_vars.setdefault("ansible_ssh_private_key_file", private_key_path)
@@ -549,20 +565,36 @@ async def prepare_playbook_execution(
     # Playbook ZIP 包处理：当有 files 但没有 file_distribution 时，
     # 下载 ZIP 文件并解压到 workspace，playbook_path 指向解压后的入口文件
     if payload.files and not payload.file_distribution:
+        logger.info("[prepare_playbook] 开始处理 Playbook ZIP 文件: file_count=%d", len(payload.files))
         for file_item in payload.files:
             bucket_name = str(file_item.get("bucket_name", "")).strip()
             if not bucket_name:
                 raise ValueError("file item bucket_name is required")
+            logger.info(
+                "[prepare_playbook] 下载文件: name=%s file_key=%s bucket=%s",
+                file_item.get("name"),
+                file_item.get("file_key"),
+                bucket_name,
+            )
             local_path = await download_object_to_workspace(config, workspace, bucket_name, file_item)
+            logger.info("[prepare_playbook] 文件已下载: local_path=%s", local_path)
             if local_path.endswith(".zip"):
                 with zipfile.ZipFile(local_path, "r") as zf:
+                    namelist = zf.namelist()
+                    logger.info("[prepare_playbook] ZIP 内容 (%d 个文件): %s", len(namelist), namelist)
                     zf.extractall(workspace)
+                logger.info("[prepare_playbook] ZIP 已解压到: %s", workspace)
+                # 列出解压后的 workspace 内容
+                all_files = [str(p.relative_to(workspace)) for p in workspace.rglob("*") if p.is_file()]
+                logger.info("[prepare_playbook] workspace 文件列表: %s", all_files)
                 # 在解压后的内容中查找 playbook.yml 入口文件
                 playbook_entry = payload.playbook_path or "playbook.yml"
                 # 支持 ZIP 内有顶层目录的情况（如 playbook-template/playbook.yml）
                 candidates = list(workspace.rglob(Path(playbook_entry).name))
+                logger.info("[prepare_playbook] 查找入口文件 '%s', 候选: %s", playbook_entry, candidates)
                 if candidates:
                     playbook_path = str(candidates[0])
+                    logger.info("[prepare_playbook] 使用 playbook_path=%s", playbook_path)
                 else:
                     raise ValueError(f"ZIP 解压后未找到入口文件: {playbook_entry}")
                 # 已通过 ZIP 提供 playbook，清除 playbook_content 避免被覆盖
@@ -587,6 +619,7 @@ async def prepare_playbook_execution(
         playbook_file = workspace / "playbook.yml"
         playbook_file.write_text(playbook_content, encoding="utf-8")
         playbook_path = str(playbook_file)
+        logger.info("[prepare_playbook] playbook_content 已写入: %s", playbook_file)
 
     inventory_value = payload.inventory
     if payload.inventory_content or payload.host_credentials:
@@ -595,9 +628,11 @@ async def prepare_playbook_execution(
         if payload.inventory_content:
             parts.append(payload.inventory_content.rstrip("\n"))
         if payload.host_credentials:
+            logger.info("[prepare_playbook] 构建 host_credentials inventory: %d 个主机", len(payload.host_credentials))
             parts.append(_build_host_credentials_inventory(workspace, payload.host_credentials).rstrip("\n"))
         inventory_file.write_text("\n".join([p for p in parts if p]) + "\n", encoding="utf-8")
         inventory_value = str(inventory_file)
+        logger.info("[prepare_playbook] inventory 已写入: %s", inventory_file)
 
     prepared_payload = PlaybookRequest(
         playbook_path=playbook_path,
@@ -615,6 +650,13 @@ async def prepare_playbook_execution(
         file_distribution=None,
     )
     cmd = build_playbook_command(prepared_payload)
+    logger.info("[prepare_playbook] 最终命令: %s", " ".join(cmd))
+    logger.info(
+        "[prepare_playbook] 最终参数: playbook_path=%s inventory=%s extra_vars_keys=%s",
+        prepared_payload.playbook_path,
+        prepared_payload.inventory,
+        list(extra_vars.keys()),
+    )
     return cmd, workspace, prepared_payload
 
 
