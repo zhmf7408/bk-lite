@@ -2,6 +2,8 @@
 # @File: init_data.py
 # @Time: 2026/2/6 14:42
 # @Author: windyzhao
+from copy import deepcopy
+
 from apps.alerts.constants.constants import LevelType, AlertsSourceTypes, AlertAccessType
 from apps.alerts.common.source_adapter.constants import DEFAULT_SOURCE_CONFIG
 
@@ -125,6 +127,19 @@ SYSTEM_SETTINGS = [
     }
 ]
 
+
+def build_k8s_source_config():
+    config = deepcopy(DEFAULT_SOURCE_CONFIG)
+    config["params"]["source_id"] = "k8s"
+    config["examples"]["CURL"] = config["examples"]["CURL"].replace('"source_id": "restful"', '"source_id": "k8s"')
+    config["examples"]["Python"] = config["examples"]["Python"].replace('"source_id": "restful"', '"source_id": "k8s"')
+    config["examples"]["CURL"] = config["examples"]["CURL"].replace('"push_source_id": "zabbix"', '"push_source_id": "k8s"')
+    config["examples"]["Python"] = config["examples"]["Python"].replace('"push_source_id": "zabbix"', '"push_source_id": "k8s"')
+    config["event_fields_desc_mapping"]["push_source_id"] = (
+        "事件来源 | 类型: string | 必填: 否(默认k8s) | 说明: 标记具体由哪个K8s推送链路或上游模块推送, 默认为k8s, 支持用户在YAML中修改"
+    )
+    return config
+
 # 内置告警源配置
 BUILTIN_ALERT_SOURCES = [
     {
@@ -146,7 +161,18 @@ BUILTIN_ALERT_SOURCES = [
         "access_type": AlertAccessType.BUILT_IN,
         "is_active": True,
         "is_effective": True,
-        "description": "内置NATS告警源, 周期拉取NATS网关数据",
+        "description": "内置NATS告警源, 通过NATS网关接收数据",
         "logo": "data:image/svg+xml;base64,PD94bWwgdmVyc2lvbj0iMS4wIiBzdGFuZGFsb25lPSJubyI/PjwhRE9DVFlQRSBzdmcgUFVCTElDICItLy9XM0MvL0RURCBTVkcgMS4xLy9FTiIgImh0dHA6Ly93d3cudzMub3JnL0dyYXBoaWNzL1NWRy8xLjEvRFREL3N2ZzExLmR0ZCI+PHN2ZyB0PSIxNzQ5NTM4Mjk5NTYwIiBjbGFzcz0iaWNvbiIgdmlld0JveD0iMCAwIDEwMjQgMTAyNCIgdmVyc2lvbj0iMS4xIiB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHAtaWQ9IjE0ODQ2IiB4bWxuczp4bGluaz0iaHR0cDovL3d3dy53My5vcmcvMTk5OS94bGluayIgd2lkdGg9IjIwMCIgaGVpZ2h0PSIyMDAiPjxwYXRoIGQ9Ik0xMTMuOSA5Ny4xdjY0Ni40aDMzOS40TDY0NyA5MjcuMVY3NDMuNmgyNjJWOTcuMUgxMTMuOXpNNzcyIDU5NC4ySDYyNUwzMzEuMiAzMjQuOXYyNjkuM2gtOTUuNVYyNDguOWgxNTYuN2wyODYuNSAyNjMuMlYyNDguOWg5M2wwLjEgMzQ1LjN6IiBmaWxsPSIjZmZmZmZmIiBwLWlkPSIxNDg0NyIgZGF0YS1zcG0tYW5jaG9yLWlkPSJhMzEzeC5zZWFyY2hfaW5kZXguMC5pMC4xMTczM2E4MWpVNTlzSSIgY2xhc3M9InNlbGVjdGVkIj48L3BhdGg+PC9zdmc+"
+    },
+    {
+        "name": "K8s",
+        "source_id": "k8s",
+        "source_type": AlertsSourceTypes.RESTFUL,
+        "config": build_k8s_source_config(),
+        "access_type": AlertAccessType.BUILT_IN,
+        "is_active": True,
+        "is_effective": True,
+        "description": "内置K8s告警源, Kubernetes Event Exporter 可通过此通道推送事件",
+        "logo": "/assets/icons/mm-k8s_K8S.svg",
     }
 ]
