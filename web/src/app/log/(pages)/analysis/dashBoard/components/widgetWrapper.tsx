@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Spin, message } from 'antd';
+import { Spin } from 'antd';
 import { BaseWidgetProps } from '@/app/log/types/analysis';
 import useSearchApi from '@/app/log/api/search';
 import useApiClient from '@/utils/request';
@@ -11,7 +11,6 @@ import Msgtable from '../widgets/msgTable';
 import ComSingle from '../widgets/comSingle';
 import ComSankey from '../widgets/comSankey';
 import { SearchParams } from '@/app/log/types/search';
-import { useTranslation } from '@/utils/i18n';
 
 // 根据时间跨度计算时间间隔
 const calculateTimeInterval = (startTime: string, endTime: string): string => {
@@ -57,7 +56,6 @@ const WidgetWrapper: React.FC<WidgetWrapperProps> = ({
   getLatestTimeRange,
   ...otherProps
 }) => {
-  const { t } = useTranslation();
   const timerRef = useRef<NodeJS.Timeout | null>(null);
   const abortControllerRef = useRef<AbortController | null>(null);
   const globalTimeRangeRef = useRef(globalTimeRange);
@@ -121,7 +119,7 @@ const WidgetWrapper: React.FC<WidgetWrapperProps> = ({
   const fetchData = async (silent = false) => {
     if (!otherConfig?.groupIds?.length) {
       setLoading(false);
-      return message.error(t('log.search.searchError'));
+      return;
     }
     // 取消上一次未完成的请求
     abortControllerRef.current?.abort();

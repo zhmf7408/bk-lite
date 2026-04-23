@@ -9,7 +9,7 @@ import React, {
 } from 'react';
 import TimeSelector from '@/components/time-selector';
 import GridLayout, { WidthProvider } from 'react-grid-layout';
-import { Button, Dropdown, Menu, Modal, Spin, Select } from 'antd';
+import { Button, Dropdown, Menu, Modal, Spin, Select, message } from 'antd';
 import { useTranslation } from '@/utils/i18n';
 import { LayoutItem, DirItem } from '@/app/log/types/analysis';
 import { SaveOutlined, MoreOutlined } from '@ant-design/icons';
@@ -69,6 +69,10 @@ const Dashboard = forwardRef<DashboardRef, DashboardProps>(
       const viewSets = selectedDashboard.view_sets || [];
       setLayout(viewSets);
       setOriginalLayout([...viewSets]);
+      if (!groups.length) {
+        message.error(t('log.search.searchError'));
+        return;
+      }
       setRefreshKey((prev) => prev + 1);
     }, [selectedDashboard?.id]);
 
@@ -100,6 +104,9 @@ const Dashboard = forwardRef<DashboardRef, DashboardProps>(
         const ids = list.at()?.id ? [list.at().id] : [];
         setGroupList(list);
         setGroups(ids);
+        if (!ids.length) {
+          message.error(t('log.search.searchError'));
+        }
         setOtherConfig((prev: any) => ({
           ...prev,
           groupIds: ids
@@ -132,6 +139,10 @@ const Dashboard = forwardRef<DashboardRef, DashboardProps>(
     };
 
     const handleTimeChange = (range: number[]) => {
+      if (!groups.length) {
+        message.error(t('log.search.searchError'));
+        return;
+      }
       // 更新全局时间范围
       setOtherConfig((prev: any) => ({
         ...prev,
@@ -141,6 +152,9 @@ const Dashboard = forwardRef<DashboardRef, DashboardProps>(
 
     const onGroupChange = (val: React.Key[]) => {
       setGroups(val);
+      if (!val.length) {
+        message.error(t('log.search.searchError'));
+      }
       setOtherConfig((prev: any) => ({
         ...prev,
         groupIds: val
@@ -148,6 +162,10 @@ const Dashboard = forwardRef<DashboardRef, DashboardProps>(
     };
 
     const handleRefresh = () => {
+      if (!groups.length) {
+        message.error(t('log.search.searchError'));
+        return;
+      }
       // 重新获取时间选择器的最新值，确保定时刷新时时间范围是最新的
       const latestTimeRange = getTimeRange();
       setOtherConfig((prev: any) => ({
