@@ -24,6 +24,21 @@ export class ChartDataTransformer {
     return String(value);
   }
 
+  private static isUnixTimestampLike(value: any): boolean {
+    if (typeof value === 'string' && !/^\d+(\.\d+)?$/.test(value.trim())) {
+      return false;
+    }
+
+    const numericValue = Number(value);
+    if (!Number.isFinite(numericValue)) {
+      return false;
+    }
+
+    const secondsValue = numericValue > 9999999999 ? numericValue / 1000 : numericValue;
+
+    return secondsValue >= 946684800 && secondsValue <= 4102444800;
+  }
+
   static shouldFormatAsTimeDimension(values: any[]): boolean {
     const normalizedValues = values.filter(
       (value) => value !== undefined && value !== null && value !== ''
@@ -34,9 +49,17 @@ export class ChartDataTransformer {
     }
 
     const validCount = normalizedValues.filter((value) => {
+      if (typeof value === 'number') {
+        return this.isUnixTimestampLike(value);
+      }
+
       if (typeof value === 'string') {
         const trimmed = value.trim();
         if (!trimmed) return false;
+
+        if (this.isUnixTimestampLike(trimmed)) {
+          return true;
+        }
 
         const hasExplicitDateMarkers = /[-/:T\s]/.test(trimmed);
         if (!hasExplicitDateMarkers) return false;
@@ -63,16 +86,19 @@ export class ChartDataTransformer {
     return false;
   }
 
-  private static dataToMap(data: any[]): { [key: string]: number } {
+  private static dataToMap(
+    data: any[],
+    shouldFormatAsTime: boolean
+  ): { [key: string]: number } {
     const map: { [key: string]: number } = {};
     if (data.length === 0) return map;
     if (typeof data[0] === 'object' && !Array.isArray(data[0]) && 'name' in data[0] && 'value' in data[0]) {
       data.forEach((item: any) => {
-        map[this.formatTimeValue(item.name)] = parseFloat(item.value) || 0;
+        map[this.formatDimensionValue(item.name, shouldFormatAsTime)] = parseFloat(item.value) || 0;
       });
     } else if (Array.isArray(data[0]) && data[0].length >= 2) {
       data.forEach((item: any[]) => {
-        map[this.formatTimeValue(item[0])] = item[1];
+        map[this.formatDimensionValue(item[0], shouldFormatAsTime)] = parseFloat(item[1]) || 0;
       });
     }
     return map;
@@ -80,8 +106,21 @@ export class ChartDataTransformer {
 
   static formatTimeValue(value: any): string {
     if (typeof value === 'number') {
-      return dayjs(value * 1000).format('MM-DD HH:mm:ss');
+      const timestamp = value > 9999999999 ? value : value * 1000;
+      return dayjs(timestamp).format('MM-DD HH:mm:ss');
     } else if (typeof value === 'string') {
+      if (this.isUnixTimestampLike(value)) {
+        const numericValue = Number(value);
+        const timestamp = numericValue > 9999999999 ? numericValue : numericValue * 1000;
+        return dayjs(timestamp).format('MM-DD HH:mm:ss');
+      }
+
+      const trimmed = value.trim();
+      const hasExplicitDateMarkers = /[-/:T\s]/.test(trimmed);
+      if (!hasExplicitDateMarkers) {
+        return value;
+      }
+
       const dateValue = dayjs(value);
       if (dateValue.isValid()) {
         return dateValue.format('MM-DD HH:mm:ss');
@@ -171,31 +210,7 @@ export class ChartDataTransformer {
         });
         const categories = Array.from(allCategoriesSet).sort();
         const series = keys.map((k) => {
-          const dataMap = this.dataToMap(
-            rawData[k].map((item: any) => {
-              if (Array.isArray(item) && item.length >= 2) {
-                return [
-                  this.formatDimensionValue(item[0], shouldFormatAsTime),
-                  item[1],
-                ];
-              }
-
-              if (
-                item &&
-                typeof item === 'object' &&
-                !Array.isArray(item) &&
-                'name' in item &&
-                'value' in item
-              ) {
-                return {
-                  ...item,
-                  name: this.formatDimensionValue(item.name, shouldFormatAsTime),
-                };
-              }
-
-              return item;
-            })
-          );
+          const dataMap = this.dataToMap(rawData[k], shouldFormatAsTime);
           return {
             name: k,
             data: categories.map((cat) => dataMap[cat] || 0),
