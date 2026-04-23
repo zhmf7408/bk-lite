@@ -95,6 +95,14 @@ class SystemMgmt(object):
         )
         return return_data
 
+    def get_authorized_groups_scoped(self, actor_context, include_children=False):
+        return_data = self.client.run(
+            "get_authorized_groups_scoped",
+            actor_context=actor_context,
+            include_children=include_children,
+        )
+        return return_data
+
     def get_all_users(self):
         return_data = self.client.run("get_all_users")
         return return_data

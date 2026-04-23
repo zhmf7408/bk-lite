@@ -373,6 +373,13 @@ def get_group_users_scoped(actor_context, group=None, include_children=False):
 
 
 @nats_client.register
+def get_authorized_groups_scoped(actor_context, include_children=False):
+    """返回调用方在当前组织上下文下可访问的组织范围。"""
+    _user_obj, authorized_groups = _get_actor_user_scope(actor_context, include_children=include_children)
+    return {"result": True, "data": authorized_groups}
+
+
+@nats_client.register
 def get_all_users():
     data = User.objects.all().values(*User.display_fields())
     return {"result": True, "data": list(data)}
