@@ -10,10 +10,6 @@ from apps.cmdb.services.encrypt_collect_password import get_collect_model_passwo
 from apps.cmdb.utils.config_file_path import validate_absolute_path
 from apps.core.utils.serializers import UsernameSerializer, AuthSerializer
 
-
-DEFAULT_CONFIG_FILE_SIZE_LIMIT = 1024 * 1024
-
-
 class CollectModelSerializer(AuthSerializer):
     permission_key = PERMISSION_TASK
 
@@ -42,20 +38,9 @@ class CollectModelSerializer(AuthSerializer):
         if not validate_absolute_path(file_path):
             raise serializers.ValidationError({"params": "请输入有效的配置文件完整绝对路径，不能填写目录"})
 
-        file_size_limit = params.get("file_size_limit")
-        if file_size_limit in (None, ""):
-            file_size_limit = DEFAULT_CONFIG_FILE_SIZE_LIMIT
-        try:
-            file_size_limit = int(file_size_limit)
-        except (TypeError, ValueError):
-            raise serializers.ValidationError({"params": "文件大小限制必须为整数"})
-        if file_size_limit < 1:
-            raise serializers.ValidationError({"params": "文件大小限制必须大于 0"})
-
         params.update(
             {
                 "config_file_path": file_path,
-                "file_size_limit": file_size_limit,
             }
         )
 

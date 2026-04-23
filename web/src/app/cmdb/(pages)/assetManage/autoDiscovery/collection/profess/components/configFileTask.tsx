@@ -23,7 +23,7 @@ interface ConfigFileTaskFormProps {
   editId?: number | null;
 }
 
-const DEFAULT_LIMIT = 1024 * 1024;
+const MAX_FILE_SIZE_LIMIT = 5 * 1024 * 1024;
 const LINUX_FILE_PATH_RE = /^\/(?!.*\/$)(?!.*[*?]).+/;
 const WINDOWS_FILE_PATH_RE = /^[A-Za-z]:\\(?!.*[\\/]$)(?!.*[*?]).+/;
 
@@ -94,7 +94,6 @@ const ConfigFileTask: React.FC<ConfigFileTaskFormProps> = ({
           ),
           params: {
             config_file_path: values.configFilePath?.trim(),
-            file_size_limit: Number(values.fileSizeLimit || DEFAULT_LIMIT),
           },
         };
       },
@@ -112,7 +111,6 @@ const ConfigFileTask: React.FC<ConfigFileTaskFormProps> = ({
     port: values.credential?.port,
     accessPointId: values.access_point?.[0]?.id,
     configFilePath: values.params?.config_file_path || '',
-    fileSizeLimit: values.params?.file_size_limit || DEFAULT_LIMIT,
   });
 
   useEffect(() => {
@@ -164,7 +162,7 @@ const ConfigFileTask: React.FC<ConfigFileTaskFormProps> = ({
             type="info"
             showIcon
             className="mb-4"
-            message={`单文件大小上限 ${DEFAULT_LIMIT / 1024} KB，仅支持文本文件采集`}
+            message={`单文件大小上限 ${MAX_FILE_SIZE_LIMIT / 1024 / 1024} MB，由系统在入库时统一限制，仅支持文本文件采集`}
           />
 
           <Form.Item
@@ -176,10 +174,6 @@ const ConfigFileTask: React.FC<ConfigFileTaskFormProps> = ({
               autoComplete="off"
               placeholder="/etc/nginx/nginx.conf 或 C:\\Windows\\System32\\drivers\\etc\\hosts"
             />
-          </Form.Item>
-
-          <Form.Item label="文件大小限制" name="fileSizeLimit">
-            <InputNumber min={1} className="w-48" addonAfter="Bytes" />
           </Form.Item>
 
           <Collapse

@@ -1,5 +1,4 @@
 $FilePath='{{config_file_path}}'
-$SizeLimit={{file_size_limit}}
 
 if (-not (Test-Path $FilePath -PathType Leaf)) {
   @{status='error'; error_type='file_not_found'; error='文件不存在'; size=0} | ConvertTo-Json -Compress
@@ -14,11 +13,6 @@ try {
 }
 
 $size = [int]$fi.Length
-if ($size -gt $SizeLimit) {
-  @{status='error'; error_type='file_too_large'; error='文件超限'; size=$size} | ConvertTo-Json -Compress
-  exit 0
-}
-
 $bytes = [System.IO.File]::ReadAllBytes($FilePath)
 for ($i = 0; $i -lt [Math]::Min($bytes.Length, 8192); $i++) {
   if ($bytes[$i] -eq 0) {

@@ -45,7 +45,6 @@ class ConfigFileInfo(SSHPlugin):
     def _render_script(self, script_content: str, config_file_path: str) -> str:
         replacements = {
             "{{config_file_path}}": self._escape_script_value(config_file_path),
-            "{{file_size_limit}}": str(self.params.get("file_size_limit", "")),
         }
         rendered = script_content
         for source, target in replacements.items():

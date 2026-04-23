@@ -17,8 +17,7 @@ from apps.core.logger import cmdb_logger as logger
 from apps.core.utils.permission_utils import get_permission_rules
 from apps.system_mgmt.utils.group_utils import GroupUtils
 
-
-DEFAULT_CONFIG_FILE_SIZE_LIMIT = 1024 * 1024
+MAX_CONFIG_FILE_SIZE_LIMIT = 5 * 1024 * 1024
 
 
 class ConfigFileService(object):
@@ -72,6 +71,7 @@ class ConfigFileService(object):
             error_message = str(payload.get("error") or payload.get("error_message") or "")
             content_base64 = payload.get("content_base64") or ""
             stale_callback = cls._is_stale_callback(task, version)
+            status, error_message = cls._apply_storage_limit(status, file_size, error_message)
 
             with transaction.atomic():
                 if status != ConfigFileVersionStatus.SUCCESS:
@@ -248,6 +248,14 @@ class ConfigFileService(object):
         if is_naive(version_time):
             version_time = make_aware(version_time, get_current_timezone())
         return version_time
+
+    @staticmethod
+    def _apply_storage_limit(status: str, file_size: int, error_message: str) -> tuple[str, str]:
+        if status != ConfigFileVersionStatus.SUCCESS:
+            return status, error_message
+        if file_size <= MAX_CONFIG_FILE_SIZE_LIMIT:
+            return status, error_message
+        return ConfigFileVersionStatus.FILE_TOO_LARGE, f"文件大小超过 5MB 限制，当前大小 {file_size} Bytes"
 
     @staticmethod
     def _is_stale_callback(task: CollectModels, version: str) -> bool:

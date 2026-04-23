@@ -1,6 +1,5 @@
 #!/bin/bash
 FILE_PATH='{{config_file_path}}'
-SIZE_LIMIT={{file_size_limit}}
 
 if [ ! -f "$FILE_PATH" ]; then
   printf '{"status":"error","error_type":"file_not_found","error":"文件不存在","size":0}\n'
@@ -13,11 +12,6 @@ if [ ! -r "$FILE_PATH" ]; then
 fi
 
 FILE_SIZE=$(wc -c < "$FILE_PATH" | tr -d ' ')
-if [ "$FILE_SIZE" -gt "$SIZE_LIMIT" ]; then
-  printf '{"status":"error","error_type":"file_too_large","error":"文件超限","size":%s}\n' "$FILE_SIZE"
-  exit 0
-fi
-
 if command -v file >/dev/null 2>&1; then
   FILE_TYPE=$(file -b --mime-type "$FILE_PATH" 2>/dev/null || true)
   case "$FILE_TYPE" in
