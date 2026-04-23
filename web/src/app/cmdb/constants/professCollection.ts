@@ -170,8 +170,6 @@ export const CONFIG_FILE_FORM_INITIAL_VALUES = {
   ...HOST_FORM_INITIAL_VALUES,
   intervalValue: 10,
   configFilePath: '',
-  configFileName: '',
-  fileSizeLimit: 1024 * 1024,
 };
 
 export const validateCycleTime = (

@@ -23,7 +23,30 @@ interface ConfigFileTaskFormProps {
   editId?: number | null;
 }
 
-const DEFAULT_LIMIT = 1024 * 1024;
+const MAX_FILE_SIZE_LIMIT = 5 * 1024 * 1024;
+const LINUX_FILE_PATH_RE = /^\/(?!.*\/$)(?!.*[*?]).+/;
+const WINDOWS_FILE_PATH_RE = /^[A-Za-z]:\\(?!.*[\\/]$)(?!.*[*?]).+/;
+
+const validateConfigFilePath = (_: unknown, value: string) => {
+  const normalizedValue = (value || '').trim();
+  if (!normalizedValue) {
+    return Promise.reject(new Error('请输入配置文件绝对路径'));
+  }
+
+  const matchesAbsolutePath =
+    LINUX_FILE_PATH_RE.test(normalizedValue) || WINDOWS_FILE_PATH_RE.test(normalizedValue);
+  if (!matchesAbsolutePath) {
+    return Promise.reject(new Error('请输入完整的配置文件路径，不能填写目录'));
+  }
+
+  const pathSegments = normalizedValue.split(/[\\/]/).filter(Boolean);
+  const fileName = pathSegments[pathSegments.length - 1] || '';
+  if (!fileName || fileName === '.' || fileName === '..') {
+    return Promise.reject(new Error('请输入完整的配置文件路径，不能填写目录'));
+  }
+
+  return Promise.resolve();
+};
 
 const ConfigFileTask: React.FC<ConfigFileTaskFormProps> = ({
   onClose,
@@ -71,8 +94,6 @@ const ConfigFileTask: React.FC<ConfigFileTaskFormProps> = ({
           ),
           params: {
             config_file_path: values.configFilePath?.trim(),
-            config_file_name: values.configFileName?.trim(),
-            file_size_limit: Number(values.fileSizeLimit || DEFAULT_LIMIT),
           },
         };
       },
@@ -90,8 +111,6 @@ const ConfigFileTask: React.FC<ConfigFileTaskFormProps> = ({
     port: values.credential?.port,
     accessPointId: values.access_point?.[0]?.id,
     configFilePath: values.params?.config_file_path || '',
-    configFileName: values.params?.config_file_name || '',
-    fileSizeLimit: values.params?.file_size_limit || DEFAULT_LIMIT,
   });
 
   useEffect(() => {
@@ -143,30 +162,18 @@ const ConfigFileTask: React.FC<ConfigFileTaskFormProps> = ({
             type="info"
             showIcon
             className="mb-4"
-            message={`单文件大小上限 ${DEFAULT_LIMIT / 1024} KB，仅支持文本文件采集`}
+            message={`单文件大小上限 ${MAX_FILE_SIZE_LIMIT / 1024 / 1024} MB，由系统在入库时统一限制，仅支持文本文件采集`}
           />
 
           <Form.Item
             label="配置文件绝对路径"
             name="configFilePath"
-            rules={[{ required: true, message: '请输入配置文件绝对路径' }]}
+            rules={[{ validator: validateConfigFilePath }]}
           >
             <Input
               autoComplete="off"
               placeholder="/etc/nginx/nginx.conf 或 C:\\Windows\\System32\\drivers\\etc\\hosts"
             />
-          </Form.Item>
-
-          <Form.Item
-            label="配置文件名称"
-            name="configFileName"
-            rules={[{ required: true, message: '请输入配置文件名称' }]}
-          >
-            <Input autoComplete="off" placeholder="例如 nginx.conf" />
-          </Form.Item>
-
-          <Form.Item label="文件大小限制" name="fileSizeLimit">
-            <InputNumber min={1} className="w-48" addonAfter="Bytes" />
           </Form.Item>
 
           <Collapse

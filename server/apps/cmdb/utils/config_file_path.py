@@ -9,12 +9,19 @@ _INVALID_GLOB_RE = re.compile(r"[*?]")
 
 
 def validate_absolute_path(path: str) -> bool:
-    """校验 Linux / Windows 绝对路径，拒绝空串和通配符。"""
+    """校验 Linux / Windows 文件绝对路径，拒绝空串、通配符和目录路径。"""
     if not path or not isinstance(path, str):
         return False
 
     normalized_path = path.strip()
     if not normalized_path or _INVALID_GLOB_RE.search(normalized_path):
+        return False
+
+    if normalized_path.endswith(("/", "\\")):
+        return False
+
+    file_name = extract_file_name(normalized_path)
+    if not file_name or file_name in {".", ".."}:
         return False
 
     return bool(_LINUX_ABS_RE.match(normalized_path) or _WIN_ABS_RE.match(normalized_path))

@@ -1,11 +1,13 @@
-from concurrent.futures import ThreadPoolExecutor, as_completed
+import shlex
 
 from django.utils import timezone
 
 from apps.core.logger import job_logger as logger
-from apps.job_mgmt.constants import ExecutionStatus, TargetSource
+from apps.job_mgmt.constants import ExecutionStatus
+from apps.job_mgmt.models import Target
 from apps.job_mgmt.services import ExecutionTaskBaseService
-from apps.rpc.executor import Executor
+from apps.rpc.ansible import AnsibleExecutor
+from config.components.nats import NATS_NAMESPACE
 
 
 class PlaybookExecution(ExecutionTaskBaseService):
@@ -25,98 +27,134 @@ class PlaybookExecution(ExecutionTaskBaseService):
             self.update_execution_status(execution, ExecutionStatus.FAILED, finished_at=timezone.now())
             return
 
-        # 并发执行
-        results = []
-        with ThreadPoolExecutor(max_workers=min(self.MAX_WORKERS, len(target_list))) as pool:
-            futures = {pool.submit(self.execute_playbook_on_target, t, execution.target_source, execution.timeout): t for t in target_list}
-            for future in as_completed(futures):
-                target_info = futures[future]
-                try:
-                    result = future.result()
-                    results.append(result)
-                    logger.info(f"[{self.task_name}] 目标 {target_info.get('name')} 执行完成: status={result['status']}")
-                except Exception as e:
-                    logger.exception(f"[{self.task_name}] 目标 {target_info.get('name')} 执行异常: {e}")
-                    results.append(
-                        {
-                            "target_key": target_info.get("node_id") or str(target_info.get("target_id", "")),
-                            "name": target_info.get("name", ""),
-                            "ip": target_info.get("ip", ""),
-                            "status": ExecutionStatus.FAILED,
-                            "error_message": str(e),
-                        }
-                    )
+        # 判断是否走 Ansible 路径
+        if self._should_use_ansible(execution.target_source, target_list):
+            self._run_via_ansible(execution, target_list)
+        else:
+            error_msg = "Playbook 执行仅支持 Ansible 驱动的目标管理主机"
+            logger.warning(f"[{self.task_name}] {error_msg}: execution_id={self.execution_id}")
+            execution.execution_results = [self.build_target_failed_result(t, error_msg) for t in target_list]
+            execution.save(update_fields=["execution_results", "updated_at"])
+            self.update_execution_status(execution, ExecutionStatus.FAILED, finished_at=timezone.now())
 
-        self.finalize_execution(execution, self.task_name, results)
+    def _run_via_ansible(self, execution, target_list: list):
+        """通过 AnsibleExecutor.playbook() 执行 Playbook（异步回调）"""
+        try:
+            self._execute_playbook_via_ansible(execution, target_list)
+            logger.info(f"[{self.task_name}] Ansible Playbook 任务已提交，等待回调: execution_id={self.execution_id}")
+        except Exception as e:
+            error_msg = f"Ansible Playbook 执行失败: {str(e)}"
+            logger.exception(f"[{self.task_name}] {error_msg}")
+            self.update_execution_status(execution, ExecutionStatus.FAILED, finished_at=timezone.now())
+            execution.execution_results = [self.build_target_failed_result(t, error_msg) for t in target_list]
+            execution.save(update_fields=["execution_results", "updated_at"])
 
-    def execute_playbook_on_target(self, target_info: dict, target_source: str, timeout: int) -> dict:
-        """在单个目标上执行 Playbook
-
-        Playbook 简化设计：直接执行 playbook.yml，无需额外参数
-        注意：实际实现需要先下载 Playbook 压缩包到目标并解压
-
-        Args:
-            target_info: 目标信息字典
-            target_source: 目标来源 (node_mgmt / manual)
-            timeout: 超时时间
+    @classmethod
+    def _execute_playbook_via_ansible(cls, execution, target_list: list) -> None:
         """
-        target_key = target_info.get("node_id") or str(target_info.get("target_id", ""))
-        target_name = target_info.get("name", "")
-        target_ip = target_info.get("ip", "")
+        通过 Ansible 执行 Playbook（异步方式）
 
-        result = {
-            "target_key": target_key,
-            "name": target_name,
-            "ip": target_ip,
-            "status": ExecutionStatus.PENDING,
-            "stdout": "",
-            "stderr": "",
-            "exit_code": None,
-            "error_message": "",
-            "started_at": timezone.now().isoformat(),
-            "finished_at": "",
+        使用 AnsibleExecutor.playbook()，将 Playbook ZIP 文件信息和主机凭据
+        传递给远端 Ansible 执行器，结果通过 NATS 回调返回。
+        """
+        task_name = "execute_playbook_via_ansible"
+        playbook = execution.playbook
+
+        # 获取目标 Target 对象
+        target_ids = [t.get("target_id") for t in target_list if t.get("target_id")]
+        if not target_ids:
+            raise ValueError("未找到有效的目标ID")
+
+        targets = list(Target.objects.filter(id__in=target_ids))
+        if not targets:
+            raise ValueError("未找到有效的目标记录")
+
+        # 按云区域分组，当前仅取第一个云区域
+        region_targets = {}
+        for target in targets:
+            region_id = target.cloud_region_id
+            if region_id not in region_targets:
+                region_targets[region_id] = []
+            region_targets[region_id].append(target)
+
+        if len(region_targets) > 1:
+            logger.warning(f"[{task_name}] 检测到多个云区域，当前仅使用第一个云区域执行")
+
+        cloud_region_id = list(region_targets.keys())[0]
+        region_target_list = region_targets[cloud_region_id]
+
+        # 获取 Ansible 执行节点
+        ansible_node_id = cls._get_ansible_node(cloud_region_id)
+
+        # 构建主机凭据
+        host_credentials = cls._build_host_credentials(region_target_list)
+
+        # 构建回调配置
+        callback_config = {
+            "subject": f"{NATS_NAMESPACE}.ansible_task_callback",
+            "timeout": 30,
         }
 
+        # 构建 extra_vars（从 execution.params 和 playbook.params 还原）
+        extra_vars = cls._build_extra_vars(execution.params, playbook.params)
+
+        # 构建文件列表（Playbook ZIP 存储在 MinIO）
+        files = []
+        if playbook.file:
+            files.append(
+                {
+                    "name": playbook.file_name,
+                    "file_key": playbook.file_key,
+                    "bucket_name": playbook.bucket_name,
+                }
+            )
+
+        # 调用 AnsibleExecutor.playbook()
+        executor = AnsibleExecutor(ansible_node_id)
+        result = executor.playbook(
+            playbook_path="playbook.yml",
+            host_credentials=host_credentials,
+            files=files,
+            extra_vars=extra_vars,
+            callback=callback_config,
+            task_id=str(execution.id),
+            timeout=execution.timeout,
+        )
+
+        logger.info(f"[{task_name}] Ansible Playbook 任务已提交: execution_id={execution.id}, result={result}")
+
+    @staticmethod
+    def _build_extra_vars(params_str: str, playbook_params: list) -> dict:
+        """
+        从执行记录的 params 字符串和 Playbook 参数定义还原 extra_vars 字典
+
+        execution.params 存储的是空格分隔的值字符串（如 "value1 value2"），
+        playbook.params 存储的是参数定义列表（如 [{name, default, ...}]）。
+        按顺序将值映射回参数名。
+
+        Args:
+            params_str: 执行记录的参数字符串
+            playbook_params: Playbook 参数定义列表
+
+        Returns:
+            dict: {param_name: param_value}
+        """
+        if not params_str or not playbook_params:
+            return {}
+
         try:
-            # 构建 ansible-playbook 命令
-            command = "ansible-playbook playbook.yml -i localhost, -c local"
+            values = shlex.split(params_str)
+        except ValueError:
+            values = params_str.split()
 
-            if target_source in (TargetSource.NODE_MGMT, TargetSource.SYNC):
-                node_id = target_info.get("node_id")
-                executor = Executor(node_id)
-                exec_result = executor.execute_local(command, timeout=timeout, shell="bash")
-            else:
-                target_id = target_info.get("target_id")
-                ssh_creds = self.get_ssh_credentials(target_id)
-                if not ssh_creds:
-                    raise ValueError(f"无法获取目标凭据: target_id={target_id}")
+        extra_vars = {}
+        for i, param_def in enumerate(playbook_params):
+            name = param_def.get("name", "")
+            if not name:
+                continue
+            if i < len(values):
+                extra_vars[name] = values[i]
+            elif param_def.get("default"):
+                extra_vars[name] = param_def["default"]
 
-                executor = Executor(ssh_creds["node_id"])
-                exec_result = executor.execute_ssh(
-                    command=command,
-                    host=ssh_creds["host"],
-                    username=ssh_creds["username"],
-                    password=ssh_creds["password"],
-                    private_key=ssh_creds["private_key"],
-                    timeout=timeout,
-                    port=ssh_creds["port"],
-                )
-
-            if isinstance(exec_result, dict):
-                result["stdout"] = exec_result.get("stdout", "")
-                result["stderr"] = exec_result.get("stderr", "")
-                result["exit_code"] = exec_result.get("exit_code", exec_result.get("code", -1))
-                result["status"] = ExecutionStatus.SUCCESS if result["exit_code"] == 0 else ExecutionStatus.FAILED
-            else:
-                result["stdout"] = str(exec_result)
-                result["exit_code"] = 0
-                result["status"] = ExecutionStatus.SUCCESS
-
-        except Exception as e:
-            result["error_message"] = self.format_error_message(e)
-            result["stderr"] = result["error_message"]
-            result["status"] = ExecutionStatus.FAILED
-            logger.exception(f"目标 {target_name}({target_ip}) Playbook执行失败")
-
-        result["finished_at"] = timezone.now().isoformat()
-        return result
+        return extra_vars

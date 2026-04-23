@@ -428,7 +428,7 @@ const useJobApi = () => {
     timeout?: number;
     team?: number[];
   }): Promise<any> => {
-    return await post('/job_mgmt/api/execution/playbook_execute/', data);
+    return await post('/job_mgmt/api/execution/quick_execute/', data);
   };
 
   // Job Record management

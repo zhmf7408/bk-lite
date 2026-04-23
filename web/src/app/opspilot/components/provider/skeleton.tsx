@@ -5,7 +5,7 @@ export const ProviderGridSkeleton: React.FC = () => {
   return (
     <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 2xl:grid-cols-5 gap-4">
       {Array.from({ length: 8 }, (_, index) => (
-        <div key={index} className="rounded-lg border border-(--color-border-1) bg-(--color-bg) p-4">
+        <div key={index} className="rounded-xl border border-(--color-border-1) bg-(--color-bg) p-4">
           <div className="flex justify-between items-start">
             <div style={{flex: '0 0 auto'}}>
               <Skeleton.Avatar
