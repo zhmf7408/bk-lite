@@ -19,6 +19,7 @@ from apps.opspilot.services.builtin_tools import (
 from apps.opspilot.services.history_service import history_service
 from apps.opspilot.services.rag_service import rag_service
 from apps.opspilot.utils.agent_factory import create_agent_instance
+from apps.opspilot.utils.prompt_utils import resolve_skill_params
 
 
 def _is_eventlet_environment() -> bool:
@@ -88,9 +89,7 @@ class ChatService:
 
         try:
             if _is_eventlet_environment():
-                raise RuntimeError(
-                    "当前 Celery worker 使用 eventlet 池，不支持在任务中执行 asyncio.run(graph.execute(...))，请改用 --pool threads 或 solo"
-                )
+                raise RuntimeError("当前 Celery worker 使用 eventlet 池，不支持在任务中执行 asyncio.run(graph.execute(...))，请改用 --pool threads 或 solo")
 
             # 调用 agent 的 execute 方法（非流式同步执行）
             response = asyncio.run(graph.execute(request))
@@ -146,12 +145,15 @@ class ChatService:
         # 处理聊天历史
         chat_history = history_service.process_chat_history(kwargs["chat_history"], kwargs.get("conversation_window_size", 10), image_data)
 
+        # 处理 skill_params: 解密并替换 prompt 中的 {{key}} 占位符
+        resolved_prompt = resolve_skill_params(kwargs["skill_prompt"], kwargs.get("skill_params", []))
+
         # 构建聊天参数
         chat_kwargs = {
             "openai_api_base": llm_model.openai_api_base,
             "openai_api_key": llm_model.openai_api_key,
             "model": llm_model.model_name,
-            "system_message_prompt": kwargs["skill_prompt"],
+            "system_message_prompt": resolved_prompt,
             "temperature": kwargs["temperature"],
             "user_message": user_message,
             "chat_history": chat_history,

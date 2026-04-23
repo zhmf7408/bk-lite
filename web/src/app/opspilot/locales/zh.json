@@ -691,6 +691,23 @@
       "complexTypeScene": "故障排查决策树：根据症状选择不同排查路径。\n跨系统操作决策：按条件选择系统和工具执行任务。\n资源调整决策：按负载和配置选择扩容或缩容路径。",
       "planTypeDesc": "将任务分解为多个可执行步骤，逐步完成复杂任务，适合需要层次化规划的情境。"
     },
+    "skillParams": {
+      "title": "提示词参数",
+      "tip": "在提示词中使用 {{参数名}} 引用参数值，参数名只允许英文字母、数字和下划线，且必须以英文字母开头。例如提示词为「你是{{role}}，请用{{language}}回答」，添加参数 role=客服、language=中文，执行时会自动替换。密码类型参数会加密存储。",
+      "paramName": "参数名",
+      "paramValue": "值",
+      "paramType": "类型",
+      "add": "添加参数",
+      "text": "文本",
+      "password": "密码",
+      "paramNamePlaceholder": "请输入参数名",
+      "paramNameRule": "参数名只允许英文字母、数字和下划线，且必须以英文字母开头",
+      "invalidKeyWarning": "参数名不合法，将被忽略。参数名只允许英文字母、数字和下划线，且必须以英文字母开头。",
+      "paramValuePlaceholder": "请输入参数值",
+      "emptyHint": "在上方提示中输入 {{name}} 这类占位符",
+      "emptySubHint": "这里会自动生成对应参数",
+      "emptyExample": "示例：你是{{role}}，请用{{language}}回答"
+    },
     "information": "基本信息",
     "selectTemplate": "选择模板",
     "rules": {

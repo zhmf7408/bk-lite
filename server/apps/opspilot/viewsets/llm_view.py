@@ -126,11 +126,16 @@ class LLMViewSet(AuthViewSet):
             return JsonResponse({"result": False, "message": message})
         params["team"] = params.get("team", []) or [int(request.COOKIES.get("current_team"))]
         params["enable_conversation_history"] = True
-        params["skill_prompt"] = """你是关于专业机器人，请按照以下要求进行回复
+        params[
+            "skill_prompt"
+        ] = """你是关于专业机器人，请按照以下要求进行回复
 1、请根据用户的问题，从知识库检索关联的知识进行总结回复
 2、请根据用户需求，从工具中选取适当的工具进行执行
 3、回复的语句请保证准确，不要杜撰
 4、请按照要点有条理的梳理答案"""
+        for item in params.get("skill_params", []):
+            if item.get("type") == "password":
+                EncryptMixin.encrypt_field("value", item)
         serializer = self.get_serializer(data=params)
         serializer.is_valid(raise_exception=True)
         self.perform_create(serializer)
@@ -184,6 +189,16 @@ class LLMViewSet(AuthViewSet):
                 if i.get("type") == "password":
                     EncryptMixin.decrypt_field("value", i)
                     EncryptMixin.encrypt_field("value", i)
+        # 处理 skill_params 中 password 类型的加密/保留
+        old_skill_params = {p.get("key"): p for p in (instance.skill_params or [])}
+        for item in params.get("skill_params", []):
+            if item.get("type") == "password":
+                if item.get("value") == "******":
+                    old_param = old_skill_params.get(item.get("key"))
+                    if old_param:
+                        item["value"] = old_param["value"]
+                else:
+                    EncryptMixin.encrypt_field("value", item)
         for key in params.keys():
             if hasattr(instance, key):
                 setattr(instance, key, params[key])
@@ -279,6 +294,10 @@ class LLMViewSet(AuthViewSet):
             params["enable_suggest"] = params["enable_suggest"] if params.get("enable_suggest") else skill_obj.enable_suggest
             params["enable_query_rewrite"] = params["enable_query_rewrite"] if params.get("enable_query_rewrite") else skill_obj.enable_query_rewrite
             params["locale"] = getattr(request.user, "locale", "en")  # 用户语言设置
+            # 合并前端传入的 skill_params 和 DB 中的值（处理 ****** 掩码）
+            from apps.opspilot.utils.prompt_utils import merge_skill_params
+
+            params["skill_params"] = merge_skill_params(params.get("skill_params", []), skill_obj.skill_params or [])
             # 调用stream_chat函数返回流式响应
             return stream_chat(params, skill_obj.name, {}, current_ip, params["user_message"])
         except LLMSkill.DoesNotExist:
@@ -350,6 +369,10 @@ class LLMViewSet(AuthViewSet):
             params["enable_query_rewrite"] = params["enable_query_rewrite"] if params.get("enable_query_rewrite") else skill_obj.enable_query_rewrite
             params["locale"] = getattr(request.user, "locale", "en")  # 用户语言设置
             params["browser_use_force_task"] = True
+            # 合并前端传入的 skill_params 和 DB 中的值（处理 ****** 掩码）
+            from apps.opspilot.utils.prompt_utils import merge_skill_params
+
+            params["skill_params"] = merge_skill_params(params.get("skill_params", []), skill_obj.skill_params or [])
 
             # 调用AGUI协议的流式响应
             return stream_agui_chat(params, skill_obj.name, {}, current_ip, params["user_message"])
