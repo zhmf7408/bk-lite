@@ -2,7 +2,8 @@
 import base64
 import hashlib
 import json
-from pathlib import Path
+import ntpath
+import posixpath
 from typing import Any, Dict
 import time
 
@@ -67,15 +68,20 @@ class ConfigFileInfo(SSHPlugin):
         )
 
     def _get_config_file_path(self) -> str:
-        """配置文件插件要求传入完整文件绝对路径，而不是所在目录。"""
-        file_name = self.params.get("config_file_name")
-        file_path = self.params.get("config_file_path")
-        if not file_name or not file_path:
-            raise ValueError("config_file_name and config_file_path are required")
+        """配置文件插件直接消费完整文件绝对路径。"""
+        file_path = str(self.params.get("config_file_path") or "").strip()
+        if not file_path:
+            raise ValueError("config_file_path is required")
+        return file_path
 
-        _file_path = Path(file_path)
-        config_file_path = _file_path / file_name
-        return config_file_path.as_posix()
+    @staticmethod
+    def _extract_file_name(file_path: str) -> str:
+        normalized_path = str(file_path or "").strip()
+        if not normalized_path:
+            return ""
+        if ":\\" in normalized_path or "\\" in normalized_path:
+            return ntpath.basename(normalized_path)
+        return posixpath.basename(normalized_path)
 
     def _build_callback_payload(self, payload: dict) -> dict:
         status = str(payload.get("status") or "error").lower()
@@ -104,7 +110,7 @@ class ConfigFileInfo(SSHPlugin):
             "instance_name": instance_name,
             "model_id": model_id,
             "file_path": self._get_config_file_path(),
-            "file_name": self.params.get("config_file_name", ""),
+            "file_name": self._extract_file_name(self._get_config_file_path()),
             "version": version,
             "status": payload.get("error_type") if status != "success" else "success",
             "size": payload.get("size", 0),

@@ -9,6 +9,8 @@
 
 import time
 import traceback
+import ntpath
+import posixpath
 from typing import Dict, Any
 from sanic.log import logger
 
@@ -33,6 +35,15 @@ def _resolve_callback_identity(params: Dict[str, Any]) -> Dict[str, str]:
             or "host"
         ),
     }
+
+
+def _extract_file_name(file_path: str) -> str:
+    normalized_path = str(file_path or "").strip()
+    if not normalized_path:
+        return ""
+    if ":\\" in normalized_path or "\\" in normalized_path:
+        return ntpath.basename(normalized_path)
+    return posixpath.basename(normalized_path)
 
 
 async def collect_plugin_task(
@@ -99,7 +110,7 @@ async def collect_plugin_task(
                     "instance_name": identity["instance_name"],
                     "model_id": identity["model_id"],
                     "file_path": params.get("config_file_path", ""),
-                    "file_name": params.get("config_file_name", ""),
+                    "file_name": _extract_file_name(params.get("config_file_path", "")),
                     "version": str(int(time.time())),
                     "status": "error",
                     "size": 0,

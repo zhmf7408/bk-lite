@@ -63,7 +63,6 @@ class ConfigFileNodeParams(SSHNodeParamsMixin, BaseNodeParams):
         credential_data.update(
             {
                 "config_file_path": params.get("config_file_path", ""),
-                "config_file_name": params.get("config_file_name", ""),
                 "file_size_limit": params.get("file_size_limit") or DEFAULT_CONFIG_FILE_SIZE_LIMIT,
                 "collect_task_id": self.instance.id,
                 "target_model_id": target_instance.get("model_id") or params.get("target_model_id") or "host",

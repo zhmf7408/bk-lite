@@ -11,6 +11,7 @@ from django.utils.timezone import get_current_timezone, is_aware, is_naive, make
 from apps.cmdb.constants.constants import CollectRunStatusType
 from apps.cmdb.models.collect_model import CollectModels
 from apps.cmdb.models.config_file_version import ConfigFileVersion, ConfigFileVersionStatus
+from apps.cmdb.utils.config_file_path import extract_file_name
 from apps.core.exceptions.base_app_exception import BaseAppException
 from apps.core.logger import cmdb_logger as logger
 from apps.core.utils.permission_utils import get_permission_rules
@@ -64,7 +65,7 @@ class ConfigFileService(object):
 
             model_id = str(payload.get("model_id") or (instance or {}).get("model_id") or params.get("target_model_id") or task.model_id or "host")
             file_path = str(payload.get("file_path") or params.get("config_file_path") or "")
-            file_name = str(payload.get("file_name") or params.get("config_file_name") or "")
+            file_name = str(payload.get("file_name") or params.get("config_file_name") or extract_file_name(file_path) or "")
             version = cls._normalize_version(str(payload.get("version") or payload.get("collected_at") or ""))
             status = cls.STATUS_MAP.get(str(payload.get("status") or "error").lower(), ConfigFileVersionStatus.ERROR)
             file_size = int(payload.get("size") or payload.get("file_size") or 0)
@@ -185,7 +186,7 @@ class ConfigFileService(object):
                 "status": ConfigFileVersionStatus.ERROR,
                 "error_message": error_message,
                 "file_path": (task.params or {}).get("config_file_path", ""),
-                "file_name": (task.params or {}).get("config_file_name", ""),
+                "file_name": extract_file_name((task.params or {}).get("config_file_path", "")),
             }
 
         summary = cls._build_summary(task, items)
@@ -207,7 +208,10 @@ class ConfigFileService(object):
             nested = dict(collect_result)
             payload.update(nested)
             payload.setdefault("file_path", data.get("config_file_path") or data.get("file_path") or "")
-            payload.setdefault("file_name", data.get("config_file_name") or data.get("file_name") or "")
+            payload.setdefault(
+                "file_name",
+                data.get("config_file_name") or data.get("file_name") or extract_file_name(payload.get("file_path") or "") or "",
+            )
         return payload
 
     @staticmethod
@@ -291,7 +295,7 @@ class ConfigFileService(object):
             "status": status,
             "error_message": error_message,
             "file_path": version_obj.file_path if version_obj else (task.params or {}).get("config_file_path", ""),
-            "file_name": version_obj.file_name if version_obj else (task.params or {}).get("config_file_name", ""),
+            "file_name": version_obj.file_name if version_obj else extract_file_name((task.params or {}).get("config_file_path", "")),
         }
 
         summary = cls._build_summary(task, items)
@@ -452,7 +456,7 @@ class ConfigFileService(object):
             "changed": bool(latest_item.get("changed", False)),
             "content_key": latest_item.get("content_key", ""),
             "file_path": latest_item.get("file_path") or (task.params or {}).get("config_file_path", ""),
-            "file_name": latest_item.get("file_name") or (task.params or {}).get("config_file_name", ""),
+            "file_name": latest_item.get("file_name") or extract_file_name((task.params or {}).get("config_file_path", "")),
         }
 
         format_data = {

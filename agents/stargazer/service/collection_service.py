@@ -2,6 +2,8 @@
 
 import importlib
 import json
+import ntpath
+import posixpath
 import time
 import traceback
 from typing import Dict, Any, Optional
@@ -67,6 +69,15 @@ class CollectionService:
             or self.params.get("model_id")
             or "host"
         )
+
+    @staticmethod
+    def _extract_file_name(file_path: str) -> str:
+        normalized_path = str(file_path or "").strip()
+        if not normalized_path:
+            return ""
+        if ":\\" in normalized_path or "\\" in normalized_path:
+            return ntpath.basename(normalized_path)
+        return posixpath.basename(normalized_path)
 
     async def collect(self):
         """
@@ -141,7 +152,7 @@ class CollectionService:
                             "instance_name": self._get_callback_instance_name(),
                             "model_id": self._get_callback_model_id(),
                             "file_path": self.params.get("config_file_path", ""),
-                            "file_name": self.params.get("config_file_name", ""),
+                            "file_name": self._extract_file_name(self.params.get("config_file_path", "")),
                             "version": "",
                             "status": "error",
                             "size": 0,
@@ -156,7 +167,7 @@ class CollectionService:
                             "instance_id": self.params.get("instance_id") or self.host or "",
                             "model_id": self.params.get("target_model_id") or self.params.get("model_id"),
                             "file_path": self.params.get("config_file_path", ""),
-                            "file_name": self.params.get("config_file_name", ""),
+                            "file_name": self._extract_file_name(self.params.get("config_file_path", "")),
                             "version": "",
                             "status": "error",
                             "size": 0,

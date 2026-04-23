@@ -7,7 +7,7 @@ from rest_framework import serializers
 from apps.cmdb.constants.constants import CollectDriverTypes, CollectPluginTypes, PERMISSION_TASK
 from apps.cmdb.models.collect_model import CollectModels, OidMapping
 from apps.cmdb.services.encrypt_collect_password import get_collect_model_passwords
-from apps.cmdb.utils.config_file_path import extract_file_name, validate_absolute_path
+from apps.cmdb.utils.config_file_path import validate_absolute_path
 from apps.core.utils.serializers import UsernameSerializer, AuthSerializer
 
 
@@ -40,13 +40,7 @@ class CollectModelSerializer(AuthSerializer):
         params = dict(raw_params or {})
         file_path = (params.get("config_file_path") or "").strip()
         if not validate_absolute_path(file_path):
-            raise serializers.ValidationError({"params": "请输入有效的配置文件绝对路径"})
-
-        file_name = (params.get("config_file_name") or "").strip()
-        if not file_name:
-            file_name = extract_file_name(file_path)
-        if not file_name:
-            raise serializers.ValidationError({"params": "无法从配置文件路径中识别文件名"})
+            raise serializers.ValidationError({"params": "请输入有效的配置文件完整绝对路径，不能填写目录"})
 
         file_size_limit = params.get("file_size_limit")
         if file_size_limit in (None, ""):
@@ -61,7 +55,6 @@ class CollectModelSerializer(AuthSerializer):
         params.update(
             {
                 "config_file_path": file_path,
-                "config_file_name": file_name,
                 "file_size_limit": file_size_limit,
             }
         )
