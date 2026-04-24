@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useRef } from 'react';
+import React, { useEffect, useState, useCallback, useRef } from 'react';
 import ReactEcharts from 'echarts-for-react';
 import ChartLegend from '../components/chartLegend';
 import { Spin, Empty } from 'antd';
@@ -19,8 +19,26 @@ const OsPie: React.FC<OsPieProps> = ({
   onReady
 }) => {
   const [isDataReady, setIsDataReady] = useState(false);
-  const chartRef = useRef<any>(null);
+  const [chartInstance, setChartInstance] = useState<any>(null);
+  const [showLegend, setShowLegend] = useState(true);
+  const containerRef = useRef<HTMLDivElement>(null);
   const chartColors = randomColorForLegend();
+
+  useEffect(() => {
+    const el = containerRef.current;
+    if (!el) return;
+    const observer = new ResizeObserver((entries) => {
+      for (const entry of entries) {
+        setShowLegend(entry.contentRect.width >= 360);
+      }
+    });
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, []);
+
+  const onChartReady = useCallback((instance: any) => {
+    setChartInstance(instance);
+  }, []);
 
   const transformData = (rawData: any) => {
     // 如果有 displayMaps 配置，先将原始数据映射为 {name, value} 格式
@@ -154,21 +172,21 @@ const OsPie: React.FC<OsPieProps> = ({
   }
 
   return (
-    <div className="h-full flex">
+    <div className="h-full flex" ref={containerRef}>
       {/* 图表区域 */}
-      <div className="flex-1">
+      <div className="flex-1 min-w-[200px]">
         <ReactEcharts
-          ref={chartRef}
           option={option}
           style={{ height: '100%', width: '100%' }}
+          onChartReady={onChartReady}
         />
       </div>
 
       {/* 图例区域 */}
-      {chartData && chartData.length > 1 && (
-        <div className="w-34 flex-shrink-0 h-full">
+      {showLegend && chartData && chartData.length > 1 && (
+        <div className="w-40 flex-shrink-0 h-full">
           <ChartLegend
-            chart={chartRef.current?.getEchartsInstance()}
+            chart={chartInstance}
             data={chartData.map((item: any) => ({ name: item.name }))}
             colors={chartColors}
           />
