@@ -1,4 +1,4 @@
-import React, { useEffect, useRef } from 'react';
+import React, { useEffect, useRef, useCallback, useState } from 'react';
 import ReactEcharts from 'echarts-for-react';
 import ChartLegend from '../components/chartLegend';
 import { Spin, Empty } from 'antd';
@@ -14,6 +14,11 @@ interface OsPieProps {
 const OsPie: React.FC<OsPieProps> = ({ rawData, loading = false, onReady }) => {
   const chartRef = useRef<any>(null);
   const chartColors = randomColorForLegend();
+  const [legendSelected, setLegendSelected] = useState<Record<string, boolean>>({});
+
+  const handleLegendChange = useCallback((selected: Record<string, boolean>) => {
+    setLegendSelected(selected);
+  }, []);
 
   const transformData = (rawData: any) => {
     return ChartDataTransformer.transformToPieData(rawData);
@@ -57,6 +62,7 @@ const OsPie: React.FC<OsPieProps> = ({ rawData, loading = false, onReady }) => {
     },
     legend: {
       show: false,
+      selected: legendSelected,
     },
     series: [
       {
@@ -133,6 +139,7 @@ const OsPie: React.FC<OsPieProps> = ({ rawData, loading = false, onReady }) => {
         <ReactEcharts
           ref={chartRef}
           option={option}
+          notMerge={true}
           style={{ height: '100%', width: '100%' }}
         />
       </div>
@@ -141,9 +148,9 @@ const OsPie: React.FC<OsPieProps> = ({ rawData, loading = false, onReady }) => {
       {chartData && chartData.length > 1 && (
         <div className="w-38 shrink-0 h-full">
           <ChartLegend
-            chart={chartRef.current?.getEchartsInstance()}
             data={chartData.map((item: any) => ({ name: item.name }))}
             colors={chartColors}
+            onSelectionChange={handleLegendChange}
           />
         </div>
       )}

@@ -22,7 +22,7 @@ from apps.cmdb.services.classification import ClassificationManage
 from apps.cmdb.models.collect_model import CollectModels
 from apps.cmdb.services.config_file_service import ConfigFileService
 from apps.cmdb.services.instance import InstanceManage
-from apps.cmdb.models.change_record import ChangeRecord, CREATE_INST, UPDATE_INST, DELETE_INST
+from apps.cmdb.models.change_record import ChangeRecord, CREATE_INST, UPDATE_INST, DELETE_INST, OPERATE_TYPE_CHOICES
 from apps.cmdb.graph.drivers.graph_client import GraphClient
 from apps.cmdb.constants.constants import INSTANCE
 from apps.system_mgmt.models import Group, User
@@ -515,6 +515,12 @@ def get_change_trend(time=None, group_by="day", model_id=None, user_info=None, *
         "update": UPDATE_INST,
         "delete": DELETE_INST,
     }
+    operate_type_display = dict(OPERATE_TYPE_CHOICES)
+    type_display = {
+        "create": operate_type_display.get(CREATE_INST, "创建"),
+        "update": operate_type_display.get(UPDATE_INST, "修改"),
+        "delete": operate_type_display.get(DELETE_INST, "删除"),
+    }
 
     result_data = {}
     for key, change_type in type_mapping.items():
@@ -532,7 +538,8 @@ def get_change_trend(time=None, group_by="day", model_id=None, user_info=None, *
                 period_key = item["period"].strftime(date_format)
                 period_counts[period_key] = item["count"]
 
-        result_data[key] = [[p, period_counts.get(p, 0)] for p in all_periods]
+        display_key = type_display.get(key, key)
+        result_data[display_key] = [[p, period_counts.get(p, 0)] for p in all_periods]
 
     return {"result": True, "data": result_data, "message": ""}
 

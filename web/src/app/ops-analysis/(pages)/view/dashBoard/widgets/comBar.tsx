@@ -1,4 +1,4 @@
-import React, { useEffect, useRef } from 'react';
+import React, { useEffect, useRef, useCallback, useState } from 'react';
 import ReactEcharts from 'echarts-for-react';
 import ChartLegend from '../components/chartLegend';
 import { Spin, Empty } from 'antd';
@@ -18,6 +18,11 @@ const BarChart: React.FC<BarChartProps> = ({
 }) => {
   const chartRef = useRef<any>(null);
   const chartColors = randomColorForLegend();
+  const [legendSelected, setLegendSelected] = useState<Record<string, boolean>>({});
+
+  const handleLegendChange = useCallback((selected: Record<string, boolean>) => {
+    setLegendSelected(selected);
+  }, []);
 
   const transformData = (rawData: any) => {
     return ChartDataTransformer.transformToLineBarData(rawData);
@@ -39,7 +44,7 @@ const BarChart: React.FC<BarChartProps> = ({
     animation: false,
     calculable: true,
     title: { show: false },
-    legend: { show: false },
+    legend: { show: false, selected: legendSelected },
     toolbox: { show: false },
     tooltip: {
       trigger: 'axis',
@@ -191,6 +196,7 @@ const BarChart: React.FC<BarChartProps> = ({
         <ReactEcharts
           ref={chartRef}
           option={option}
+          notMerge={true}
           style={{ height: '100%', width: '100%' }}
         />
       </div>
@@ -199,9 +205,9 @@ const BarChart: React.FC<BarChartProps> = ({
       {chartData?.series && chartData.series.length > 1 && (
         <div className="w-38 ml-2 shrink-0 h-full">
           <ChartLegend
-            chart={chartRef.current?.getEchartsInstance()}
             data={chartData.series}
             colors={chartColors}
+            onSelectionChange={handleLegendChange}
           />
         </div>
       )}
