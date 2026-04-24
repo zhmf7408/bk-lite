@@ -4,20 +4,22 @@
 import { useCallback, useEffect } from 'react';
 import type { Graph as X6Graph, Node, Edge } from '@antv/x6';
 import { v4 as uuidv4 } from 'uuid';
-import { formatTimeRange } from '@/app/ops-analysis/utils/widgetDataTransform';
+import { processDataSourceParams, buildDefaultFilterBindings } from '@/app/ops-analysis/utils/widgetDataTransform';
 import { Graph } from '@antv/x6';
 import { Selection } from '@antv/x6-plugin-selection';
 import { Transform } from '@antv/x6-plugin-transform';
 import { MiniMap } from '@antv/x6-plugin-minimap';
 import { COLORS } from '../constants/nodeDefaults';
 import { useDataSourceApi } from '@/app/ops-analysis/api/dataSource';
+import type { DatasourceItem } from '@/app/ops-analysis/types/dataSource';
 import { TopologyNodeData } from '@/app/ops-analysis/types/topology';
-import type { ParamItem } from '@/app/ops-analysis/types/dataSource';
+import type { UnifiedFilterDefinition, FilterValue } from '@/app/ops-analysis/types/dashBoard';
 import { updateNodeAttributes, registerNodes, createNodeByType } from '../utils/registerNode';
 import { useTranslation } from '@/utils/i18n';
 import { registerEdges } from '../utils/registerEdge';
 import { useGraphData } from './useGraphData';
 import { useGraphHistory } from './useGraphHistory';
+import { buildValueConfig } from '../utils/namespaceUtils';
 import type {
   NodeConfigFormValues,
   ViewConfigFormValues
@@ -41,7 +43,8 @@ const LOADING_ANIMATION_INTERVAL = 300; // 加载动画间隔时间（ms）
 export const useGraphOperations = (
   containerRef: React.RefObject<HTMLDivElement | null>,
   state: ReturnType<typeof import('./useTopologyState').useTopologyState>,
-  minimapContainerRef?: React.RefObject<HTMLDivElement | null>
+  minimapContainerRef?: React.RefObject<HTMLDivElement | null>,
+  onNodeRemoved?: () => void
 ) => {
   const { t } = useTranslation();
   const { getSourceDataByApiId } = useDataSourceApi();
@@ -79,7 +82,12 @@ export const useGraphOperations = (
     finishInitialization,
   } = history;
 
-  const updateSingleNodeData = useCallback(async (nodeConfig: TopologyNodeData) => {
+  const updateSingleNodeData = useCallback(async (
+    nodeConfig: TopologyNodeData,
+    unifiedFilterValues?: Record<string, FilterValue>,
+    filterDefinitions?: UnifiedFilterDefinition[],
+    namespaceId?: number
+  ) => {
     if (!nodeConfig || !graphInstance || !nodeConfig.id) return;
 
     const node = graphInstance.getCellById(nodeConfig.id);
@@ -91,30 +99,39 @@ export const useGraphOperations = (
     }
 
     // 设置加载状态并启动加载动画
-    node.setData({ ...node.getData(), isLoading: true, hasError: false });
+    node.setData({ ...node.getData(), isLoading: true, hasError: false }, { overwrite: true });
     if (node.isNode()) {
       startLoadingAnimation(node as Node);
     }
 
     try {
-      let requestParams = {};
+      const effectiveFilterBindings = valueConfig.filterBindings || 
+        buildDefaultFilterBindings(valueConfig.dataSourceParams || [], filterDefinitions || [], undefined);
+      
+      const requestParams = processDataSourceParams({
+        sourceParams: valueConfig.dataSourceParams || [],
+        userParams: {},
+        unifiedFilterValues,
+        filterBindings: effectiveFilterBindings,
+        filterDefinitions,
+      });
 
-      if (valueConfig.dataSourceParams && Array.isArray(valueConfig.dataSourceParams)) {
-        requestParams = valueConfig.dataSourceParams.reduce((acc: Record<string, unknown>, param: ParamItem) => {
-          if (param.value !== undefined) {
-            acc[param.name] = (param.type === 'timeRange')
-              ? formatTimeRange(param.value)
-              : param.value;
-          }
-          return acc;
-        }, {});
+      const finalParams = namespaceId !== undefined 
+        ? { ...requestParams, namespace_id: namespaceId }
+        : requestParams;
+
+      const resData = await getSourceDataByApiId(Number(valueConfig.dataSource), finalParams);
+      
+      let dataToExtract: unknown = null;
+      if (Array.isArray(resData) && resData.length > 0) {
+        dataToExtract = resData[resData.length - 1];
+      } else if (resData && typeof resData === 'object' && !Array.isArray(resData)) {
+        dataToExtract = resData;
       }
 
-      const resData = await getSourceDataByApiId(Number(valueConfig.dataSource), requestParams);
-      if (resData && Array.isArray(resData) && resData.length > 0) {
-        const latestData = resData[resData.length - 1];
+      if (dataToExtract) {
         const field = valueConfig.selectedFields[0];
-        const value = getValueByPath(latestData, field);
+        const value = getValueByPath(dataToExtract, field);
 
         let displayValue;
         const numericValue = typeof value === 'string' ? parseFloat(value) : value;
@@ -146,7 +163,7 @@ export const useGraphOperations = (
           isLoading: false,
           hasError: false,
         };
-        node.setData(updatedData);
+        node.setData(updatedData, { overwrite: true });
         node.setAttrByPath('label/text', displayValue);
         node.setAttrByPath('label/fill', textColor);
 
@@ -164,7 +181,7 @@ export const useGraphOperations = (
         isLoading: false,
         hasError: true,
       };
-      node.setData(updatedData);
+      node.setData(updatedData, { overwrite: true });
       node.setAttrByPath('label/text', '--');
       if (node.isNode()) {
         adjustSingleValueNodeSize(node, '--');
@@ -262,6 +279,7 @@ export const useGraphOperations = (
           before: node.toJSON()
         }
       });
+      onNodeRemoved?.();
     };
 
     const handleEdgeAdded = ({ edge }: { edge: Edge }) => {
@@ -358,7 +376,7 @@ export const useGraphOperations = (
       nodePositions.clear();
       edgeVertices.clear();
     };
-  }, [graphInstance, recordOperation]);
+  }, [graphInstance, recordOperation, onNodeRemoved]);
 
   const bindGraphEvents = (graph: X6Graph) => {
     const hideCtx = () => setContextMenuVisible(false);
@@ -497,7 +515,7 @@ export const useGraphOperations = (
       edge.setData({
         ...currentData,
         vertices: vertices
-      });
+      }, { overwrite: true });
     });
 
     graph.on('edge:connecting', () => {
@@ -593,7 +611,7 @@ export const useGraphOperations = (
         },
       };
 
-      node.setData(updatedConfig);
+      node.setData(updatedConfig, { overwrite: true });
 
       if (nodeData.type === 'icon' || nodeData.type === 'single-value') {
         if (!isRealtime) {
@@ -827,7 +845,7 @@ export const useGraphOperations = (
     }
   }, [graphInstance]);
 
-  const addNewNode = useCallback((nodeConfig: TopologyNodeData) => {
+  const addNewNode = useCallback((nodeConfig: TopologyNodeData, skipInitialFetch?: boolean) => {
     if (!graphInstance) {
       return null;
     }
@@ -837,9 +855,11 @@ export const useGraphOperations = (
     if (nodeConfig.type === 'single-value') {
       adjustSingleValueNodeSize(addedNode, nodeConfig.name || '');
     }
-    if (nodeConfig.type === 'single-value' && valueConfig?.dataSource && valueConfig?.selectedFields?.length) {
+    if (!skipInitialFetch && nodeConfig.type === 'single-value' && valueConfig?.dataSource && valueConfig?.selectedFields?.length) {
       startLoadingAnimation(addedNode);
       updateSingleNodeData({ ...nodeConfig, id: addedNode.id });
+    } else if (skipInitialFetch && nodeConfig.type === 'single-value' && valueConfig?.dataSource && valueConfig?.selectedFields?.length) {
+      startLoadingAnimation(addedNode);
     }
     return addedNode.id;
   }, [graphInstance, updateSingleNodeData, startLoadingAnimation]);
@@ -884,7 +904,12 @@ export const useGraphOperations = (
     } as TopologyNodeData;
   }
 
-  const handleNodeUpdate = useCallback(async (values: NodeConfigFormValues) => {
+  const handleNodeUpdate = useCallback(async (
+    values: NodeConfigFormValues,
+    unifiedFilterValues?: Record<string, FilterValue>,
+    filterDefinitions?: UnifiedFilterDefinition[],
+    namespaceId?: number
+  ) => {
     if (!values) return;
     const editingNode = state.editingNodeData;
     if (!editingNode || !graphInstance) return;
@@ -899,9 +924,9 @@ export const useGraphOperations = (
         updatedConfig.valueConfig?.dataSource &&
         updatedConfig.valueConfig?.selectedFields?.length
       ) {
-        node.setData({ ...node.getData(), isLoading: true, hasError: false });
+        node.setData({ ...node.getData(), isLoading: true, hasError: false }, { overwrite: true });
         startLoadingAnimation(node as Node);
-        updateSingleNodeData(updatedConfig);
+        updateSingleNodeData(updatedConfig, unifiedFilterValues, filterDefinitions, namespaceId);
       }
       state.setNodeEditVisible(false);
       state.setEditingNodeData(null);
@@ -910,27 +935,40 @@ export const useGraphOperations = (
     }
   }, [graphInstance, updateSingleNodeData, state]);
 
-  const handleViewConfigConfirm = useCallback((values: ViewConfigFormValues) => {
+  const handleViewConfigConfirm = useCallback((
+    values: ViewConfigFormValues,
+    unifiedFilterValues?: Record<string, FilterValue>,
+    filterDefinitions?: UnifiedFilterDefinition[],
+    dataSources?: DatasourceItem[],
+    namespaceId?: number
+  ) => {
     if (state.editingNodeData && graphInstance) {
       const node = graphInstance.getCellById(
         state.editingNodeData.id
       );
       if (node) {
+        const valueConfig = buildValueConfig(values);
         const updatedData = {
           ...state.editingNodeData,
           name: values.name,
-          valueConfig: {
-            chartType: values.chartType,
-            dataSource: values.dataSource,
-            dataSourceParams: values.dataSourceParams,
-          },
+          valueConfig,
           isLoading: !!values.dataSource,
           hasError: false,
         };
-        node.setData(updatedData);
+        node.setData(updatedData, { overwrite: true });
 
         if (state.editingNodeData.type === 'chart' && values.dataSource) {
-          dataOperations.loadChartNodeData(state.editingNodeData.id, updatedData.valueConfig);
+          const dataSource = dataSources?.find(
+            (ds) => ds.id === values.dataSource
+          );
+          dataOperations.loadChartNodeData(
+            state.editingNodeData.id,
+            updatedData.valueConfig,
+            unifiedFilterValues,
+            filterDefinitions,
+            dataSource,
+            namespaceId
+          );
         }
       }
     }
@@ -938,10 +976,11 @@ export const useGraphOperations = (
   }, [graphInstance, state, dataOperations]);
 
 
-  const handleAddChartNode = useCallback(async (values: ViewConfigFormValues) => {
+  const handleAddChartNode = useCallback(async (values: ViewConfigFormValues, skipInitialFetch?: boolean) => {
     if (!graphInstance) {
       return null;
     }
+    const valueConfig = buildValueConfig(values, true);
     const nodeConfig: TopologyNodeData = {
       id: `node_${uuidv4()}`,
       type: 'chart',
@@ -949,16 +988,13 @@ export const useGraphOperations = (
       description: values.description || '',
       position: state.editingNodeData.position,
       styleConfig: {},
-      valueConfig: {
-        chartType: values.chartType,
-        dataSource: typeof values.dataSource === 'string' ? parseInt(values.dataSource, 10) : values.dataSource,
-        dataSourceParams: values.dataSourceParams,
-      },
+      valueConfig,
     };
     const nodeId = addNewNode(nodeConfig);
-    if (nodeConfig.valueConfig?.dataSource && nodeId) {
+    if (!skipInitialFetch && nodeConfig.valueConfig?.dataSource && nodeId) {
       dataOperations.loadChartNodeData(nodeId, nodeConfig.valueConfig);
     }
+    return { nodeId, valueConfig: nodeConfig.valueConfig };
   }, [graphInstance, addNewNode, dataOperations]);
 
 
@@ -993,14 +1029,18 @@ export const useGraphOperations = (
   }, [state]);
 
   // 刷新所有单值节点
-  const refreshAllSingleValueNodes = useCallback(() => {
+  const refreshAllSingleValueNodes = useCallback((
+    unifiedFilterValues?: Record<string, FilterValue>,
+    filterDefinitions?: UnifiedFilterDefinition[],
+    namespaceId?: number
+  ) => {
     if (!graphInstance) return;
 
     const nodes = graphInstance.getNodes();
     nodes.forEach((node: Node) => {
       const nodeData = node.getData();
       if (nodeData.type === 'single-value' && nodeData.valueConfig?.dataSource && nodeData.valueConfig?.selectedFields?.length) {
-        updateSingleNodeData(nodeData);
+        updateSingleNodeData(nodeData, unifiedFilterValues, filterDefinitions, namespaceId);
       }
     });
   }, [graphInstance, updateSingleNodeData]);
@@ -1027,6 +1067,7 @@ export const useGraphOperations = (
     startInitialization,
     clearOperationHistory,
     refreshAllSingleValueNodes,
+    updateSingleNodeData,
     ...dataOperations,
   };
 };

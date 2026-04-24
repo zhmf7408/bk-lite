@@ -462,7 +462,9 @@ const ComTable: React.FC<ComTableProps> = ({
             current: pagination.current,
             pageSize: pagination.pageSize,
             total: pagination.total,
-            showSizeChanger: true,
+            showSizeChanger: {
+              getPopupContainer: () => document.body,
+            },
             showQuickJumper: true,
             showTotal: (total) =>
               `${t('common.total')} ${total} ${t('common.items')}`,

@@ -45,10 +45,20 @@ export const useUnifiedFilter = (
   );
 
   const setDefinitions = useCallback((newDefinitions: DashboardFilters) => {
-    setState((prev) => ({
-      ...prev,
-      definitions: newDefinitions || [],
-    }));
+    setState((prev) => {
+      const updatedValues = { ...prev.values };
+      const defs = newDefinitions || [];
+      defs.forEach((def) => {
+        if (!(def.id in updatedValues) && def.defaultValue !== undefined) {
+          updatedValues[def.id] = def.defaultValue;
+        }
+      });
+      return {
+        ...prev,
+        definitions: defs,
+        values: updatedValues,
+      };
+    });
   }, []);
 
   return {

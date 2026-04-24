@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import {
   Modal,
   Table,
@@ -168,6 +168,7 @@ const UnifiedFilterConfigModal: React.FC<UnifiedFilterConfigModalProps> = ({
   const [definitions, setDefinitions] = useState<UnifiedFilterDefinition[]>([]);
   const [optionsModalOpen, setOptionsModalOpen] = useState(false);
   const [editingFilterId, setEditingFilterId] = useState<string | null>(null);
+  const hasInitializedRef = useRef(false);
 
   const filterTypeOptions = [
     { label: t('dashboard.string'), value: 'input' },
@@ -187,7 +188,13 @@ const UnifiedFilterConfigModal: React.FC<UnifiedFilterConfigModalProps> = ({
   );
 
   useEffect(() => {
-    if (!open) return;
+    if (!open) {
+      hasInitializedRef.current = false;
+      return;
+    }
+
+    if (hasInitializedRef.current) return;
+    hasInitializedRef.current = true;
 
     const existingMap = new Map(
       initialDefinitions.map((d) => [`${d.key}__${d.type}`, d]),

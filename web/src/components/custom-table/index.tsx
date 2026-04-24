@@ -357,7 +357,7 @@ const CustomTable = <T extends object>({
       {pagination && !loading && !!pagination.total && (<div className="absolute right-0 bottom-0 flex justify-end">
         <Pagination
           total={pagination?.total}
-          showSizeChanger
+          showSizeChanger={pagination?.showSizeChanger ?? true}
           current={pagination?.current}
           pageSize={pagination?.pageSize}
           onChange={handlePageChange}

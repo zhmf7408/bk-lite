@@ -63,6 +63,8 @@ const WidgetWrapper: React.FC<WidgetWrapperProps> = ({
   const unifiedFilterValuesRef = useRef(unifiedFilterValues);
   unifiedFilterValuesRef.current = unifiedFilterValues;
 
+  const fetchIdRef = useRef(0);
+
   const invalidBindings = useMemo((): BindingValidationResult[] => {
     const bindings = config?.filterBindings;
     if (!bindings || !filterDefinitions || !dataSource?.params) {
@@ -161,6 +163,8 @@ const WidgetWrapper: React.FC<WidgetWrapperProps> = ({
       return;
     }
 
+    const currentFetchId = ++fetchIdRef.current;
+
     try {
       if (isTableChart) {
         setTableLoading(true);
@@ -182,11 +186,15 @@ const WidgetWrapper: React.FC<WidgetWrapperProps> = ({
         filterDefinitions,
       });
 
+      // Discard stale response if a newer fetch has started
+      if (currentFetchId !== fetchIdRef.current) return;
+
       setRawData(data);
 
       const validation = validateChartData(data, chartType);
       setDataValidation(validation);
     } catch (err) {
+      if (currentFetchId !== fetchIdRef.current) return;
       console.error('获取数据失败:', err);
       setRawData(null);
       setDataValidation({
@@ -194,6 +202,7 @@ const WidgetWrapper: React.FC<WidgetWrapperProps> = ({
         message: t('dashboard.dataFetchFailed'),
       });
     } finally {
+      if (currentFetchId !== fetchIdRef.current) return;
       if (isTableChart) {
         setTableLoading(false);
       } else {

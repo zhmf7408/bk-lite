@@ -1,103 +1,66 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import EllipsisWithTooltip from '@/components/ellipsis-with-tooltip';
-import type { EChartsInstance } from '@/app/ops-analysis/types/dashBoard';
 import { randomColorForLegend } from '@/app/ops-analysis/utils/randomColorForChart';
 
 interface ChartLegendProps {
-  chart?: EChartsInstance;
   data: Array<{ name: string }>;
   colors?: string[];
-  onToggleSelect?: (name: string) => void;
+  onSelectionChange?: (selected: Record<string, boolean>) => void;
 }
 
 const ChartLegend: React.FC<ChartLegendProps> = ({
-  chart,
   data = [],
   colors = randomColorForLegend(),
-  onToggleSelect,
+  onSelectionChange,
 }) => {
   const [selectedLegend, setSelectedLegend] = useState<string[]>([]);
+  const onSelectionChangeRef = useRef(onSelectionChange);
+  onSelectionChangeRef.current = onSelectionChange;
 
-  const legendData = data
-    .map((item) => item.name)
-    .filter((item): item is string => ![undefined, null, ''].includes(item));
+  const legendData = useMemo(
+    () =>
+      data
+        .map((item) => item.name)
+        .filter((item): item is string => ![undefined, null, ''].includes(item)),
+    [data]
+  );
+
+  const legendKey = legendData.join('\x00');
 
   useEffect(() => {
-    // 初始化时清空选择
     setSelectedLegend([]);
-  }, [data]);
+    onSelectionChangeRef.current?.({});
+  }, [legendKey]);
+
+  const buildSelectedMap = (active: string[]): Record<string, boolean> => {
+    if (active.length === 0) {
+      return {};
+    }
+    return Object.fromEntries(
+      legendData.map((n) => [n, active.includes(n)])
+    );
+  };
 
   const handleLegend = (item: string) => {
-    const selected = selectedLegend.includes(item);
+    const alreadySelected = selectedLegend.includes(item);
     let newSelectedLegend: string[] = [...selectedLegend];
 
-    if (selected) {
-      // 如果已选中，则取消选择
+    if (alreadySelected) {
       const index = newSelectedLegend.findIndex((r) => r === item);
       newSelectedLegend.splice(index, 1);
-
-      if (newSelectedLegend.length === 0) {
-        // 如果没有选中项，则显示全部
-        changeVisible(true);
-      } else {
-        // 隐藏当前项
-        changeVisible(false, [item]);
-      }
     } else {
-      // 如果未选中，则添加到选择
       newSelectedLegend.push(item);
-
-      if (newSelectedLegend.length === 1) {
-        // 第一次选择：隐藏其他所有项，只显示当前项
-        const unSelected = legendData.filter(
-          (row) => !newSelectedLegend.includes(row)
-        );
-        changeVisible(false, unSelected);
-        changeVisible(true, [item]);
-      } else {
-        // 累加选择：显示当前项
-        changeVisible(true, [item]);
-      }
-
-      // 如果选择了全部项，则重置为空（显示全部）
-      if (legendData.length === newSelectedLegend.length) {
+      if (newSelectedLegend.length === legendData.length) {
         newSelectedLegend = [];
-        changeVisible(true);
       }
     }
 
     setSelectedLegend(newSelectedLegend);
-  };
-
-  const changeVisible = (flag: boolean, items?: string[]) => {
-    if (!chart) return;
-
-    if (items) {
-      // 对指定项目进行显示/隐藏
-      items.forEach((item) => {
-        chart.dispatchAction({
-          type: flag ? 'legendSelect' : 'legendUnSelect',
-          name: item,
-        });
-      });
-    } else {
-      // 显示/隐藏全部
-      legendData.forEach((item) => {
-        chart.dispatchAction({
-          type: flag ? 'legendSelect' : 'legendUnSelect',
-          name: item,
-        });
-      });
-    }
-
-    // 触发外部回调
-    if (onToggleSelect) {
-      onToggleSelect(selectedLegend.join(','));
-    }
+    onSelectionChangeRef.current?.(buildSelectedMap(newSelectedLegend));
   };
 
   const isActive = (item: string) => {
-    return selectedLegend.includes(item) || selectedLegend.length === 0;
+    return selectedLegend.length === 0 || selectedLegend.includes(item);
   };
 
   const handleWheel: React.WheelEventHandler<HTMLDivElement> = (event) => {

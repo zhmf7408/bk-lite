@@ -19,18 +19,19 @@ from django.db.models.functions import (
 from django.utils import timezone
 
 import nats_client
-from apps.alerts.models.models import Alert, Event, Incident
-from apps.alerts.constants.constants import AlertStatus, EventLevel
+from apps.alerts.models.models import Alert, Event, Incident, Level
+from apps.alerts.constants.constants import AlertStatus, EventLevel, LevelType
 from apps.core.logger import alert_logger as logger
 from apps.alerts.models.alert_source import AlertSource
 from apps.alerts.common.source_adapter.base import AlertSourceAdapterFactory
 
-ALERT_LEVEL_DISPLAY_MAP = {
-    EventLevel.FATAL: "致命",
-    EventLevel.SEVERITY: "严重",
-    EventLevel.WARNING: "预警",
-    EventLevel.REMAIN: "提醒",
-}
+ALERT_LEVEL_DISPLAY_MAP = dict(EventLevel.CHOICES)
+
+
+def _get_alert_level_display_map():
+    level_map = {str(lv.level_id): lv.level_display_name for lv in Level.objects.filter(level_type=LevelType.ALERT)}
+    level_map.update({key: value for key, value in ALERT_LEVEL_DISPLAY_MAP.items() if key not in level_map})
+    return level_map
 
 
 def group_dy_date_format(group_by):
@@ -128,9 +129,7 @@ def get_alert_trend_data(*args, **kwargs) -> Dict[str, Any]:
             current += datetime.timedelta(hours=1)
     elif group_by == "day":
         num_periods = (end_dt.date() - start_dt.date()).days + 1
-        all_periods = [
-            start_dt.date() + datetime.timedelta(days=i) for i in range(num_periods)
-        ]
+        all_periods = [start_dt.date() + datetime.timedelta(days=i) for i in range(num_periods)]
     elif group_by == "week":
         current = start_dt
         while current < end_dt:
@@ -239,9 +238,7 @@ def receive_alert_events(*args, **kwargs) -> Dict[str, Any]:
             return {"result": False, "data": {}, "message": "Missing source_id."}
 
         if not events:
-            logger.warning(
-                f"Missing events from source_id: {source_id}, pusher: {pusher}"
-            )
+            logger.warning(f"Missing events from source_id: {source_id}, pusher: {pusher}")
             return {"result": False, "data": {}, "message": "Missing events."}
 
         if not pusher:
@@ -267,18 +264,12 @@ def receive_alert_events(*args, **kwargs) -> Dict[str, Any]:
         adapter = adapter_class(alert_source=event_source, secret="", events=events)
 
         # 记录推送来源信息
-        logger.info(
-            f"Processing {len(events)} events from source_id: {source_id}, "
-            f"pusher: {pusher}"
-        )
+        logger.info(f"Processing {len(events)} events from source_id: {source_id}, pusher: {pusher}")
 
         # 处理告警事件
         adapter.main()
 
-        logger.info(
-            f"Successfully processed {len(events)} events from {pusher} "
-            f"(source_id: {source_id})"
-        )
+        logger.info(f"Successfully processed {len(events)} events from {pusher} (source_id: {source_id})")
 
         return {
             "result": True,
@@ -367,7 +358,7 @@ def get_alert_level_distribution(status_filter=None, **kwargs):
             "message": ""
         }
     """
-    level_map = ALERT_LEVEL_DISPLAY_MAP
+    level_map = _get_alert_level_display_map()
 
     queryset = Alert.objects
     if status_filter == "active":
@@ -419,6 +410,9 @@ def get_active_alert_top(limit=10, **kwargs):
 
     active_alerts = Alert.objects.filter(status__in=AlertStatus.ACTIVATE_STATUS).order_by("created_at")[:limit]
 
+    level_map = _get_alert_level_display_map()
+    status_map = dict(AlertStatus.CHOICES)
+
     now = timezone.now()
     alerts_with_duration = []
     for alert in active_alerts:
@@ -427,8 +421,8 @@ def get_active_alert_top(limit=10, **kwargs):
             {
                 "alert_id": alert.alert_id,
                 "title": alert.title,
-                "level": ALERT_LEVEL_DISPLAY_MAP.get(alert.level, alert.level),
-                "status": alert.status,
+                "level": level_map.get(alert.level, alert.level),
+                "status": status_map.get(alert.status, alert.status),
                 "duration_seconds": duration_seconds,
                 "created_at": alert.created_at.strftime("%Y-%m-%d %H:%M:%S"),
                 "resource_name": alert.resource_name or "",

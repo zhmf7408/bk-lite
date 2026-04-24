@@ -4,15 +4,16 @@
  * 拓扑图数据管理核心 Hook，负责数据持久化、序列化和加载功能
  */
 
-import { useCallback, useState } from 'react';
+import { useCallback, useState, useRef } from 'react';
 import type { Graph as X6Graph, Node, Edge } from '@antv/x6';
 import { message } from 'antd';
-import { fetchWidgetData } from '@/app/ops-analysis/utils/widgetDataTransform';
+import { fetchWidgetData, buildDefaultFilterBindings } from '@/app/ops-analysis/utils/widgetDataTransform';
 import { useTranslation } from '@/utils/i18n';
 import { useTopologyApi } from '@/app/ops-analysis/api/topology';
 import { useDataSourceApi } from '@/app/ops-analysis/api/dataSource';
 import { TopologyNodeData, SerializedEdge } from '@/app/ops-analysis/types/topology';
-import type { ValueConfig } from '@/app/ops-analysis/types/dashBoard';
+import type { ValueConfig, UnifiedFilterDefinition, FilterValue } from '@/app/ops-analysis/types/dashBoard';
+import type { DatasourceItem } from '@/app/ops-analysis/types/dataSource';
 import { DirItem } from '@/app/ops-analysis/types';
 import { getEdgeStyleWithLabel } from '../utils/topologyUtils';
 import { createNodeByType } from '../utils/registerNode';
@@ -49,6 +50,8 @@ export const useGraphData = (
   const [loading, setLoading] = useState(false);
   const { saveTopology, getTopologyDetail } = useTopologyApi();
   const { getSourceDataByApiId } = useDataSourceApi();
+  
+  const tableQueryParamsRef = useRef<Map<string, Record<string, any>>>(new Map());
 
   const serializeTopologyData = useCallback((): { nodes: TopologyNodeData[]; edges: SerializedEdge[] } => {
     if (!graphInstance) return { nodes: [], edges: [] };
@@ -105,7 +108,10 @@ export const useGraphData = (
     return { nodes, edges };
   }, [graphInstance]);
 
-  const handleSaveTopology = useCallback(async (selectedTopology: DirItem) => {
+  const handleSaveTopology = useCallback(async (
+    selectedTopology: DirItem,
+    filters?: UnifiedFilterDefinition[]
+  ) => {
     if (!selectedTopology?.data_id) {
       message.error(t('topology.saveTopologySelectMsg'));
       return;
@@ -114,11 +120,12 @@ export const useGraphData = (
     setLoading(true);
     try {
       const topologyData = serializeTopologyData();
-      const saveData = {
+      const saveData: Record<string, unknown> = {
         name: selectedTopology.name,
         view_sets: {
           nodes: topologyData.nodes,
           edges: topologyData.edges,
+          ...(filters && filters.length > 0 ? { filters } : {}),
         },
       };
 
@@ -126,22 +133,45 @@ export const useGraphData = (
       handleSaveCallback?.();
       message.success(t('topology.saveTopologySuccess'));
     } catch (error) {
-      message.error(t('topology.saveTopologyFailed' + error));
+      message.error(t('topology.saveTopologyFailed') + String(error));
     } finally {
       setLoading(false);
     }
   }, [serializeTopologyData, saveTopology, handleSaveCallback]);
 
-  const loadChartNodeData = useCallback(async (nodeId: string, valueConfig: ValueConfig) => {
+  const loadChartNodeData = useCallback(async (
+    nodeId: string,
+    valueConfig: ValueConfig,
+    unifiedFilterValues?: Record<string, FilterValue>,
+    filterDefinitions?: UnifiedFilterDefinition[],
+    dataSource?: DatasourceItem,
+    namespaceId?: number,
+    tableQueryParams?: Record<string, any>
+  ) => {
     if (!graphInstance || !valueConfig.dataSource) return;
 
     const node = graphInstance.getCellById(nodeId);
     if (!node) return;
 
     try {
+      const effectiveFilterBindings = valueConfig.filterBindings || 
+        buildDefaultFilterBindings(valueConfig.dataSourceParams || [], filterDefinitions || [], undefined);
+      
+      const extraParams: Record<string, any> = {};
+      if (namespaceId !== undefined) {
+        extraParams.namespace_id = namespaceId;
+      }
+      if (tableQueryParams) {
+        Object.assign(extraParams, tableQueryParams);
+      }
+      
       const chartData = await fetchWidgetData({
         config: valueConfig,
         getSourceDataByApiId,
+        unifiedFilterValues,
+        filterBindings: effectiveFilterBindings,
+        filterDefinitions,
+        extraParams: Object.keys(extraParams).length > 0 ? extraParams : undefined,
       });
 
       if (chartData) {
@@ -151,7 +181,8 @@ export const useGraphData = (
           isLoading: false,
           rawData: chartData,
           hasError: false,
-        });
+          dataSource,
+        }, { overwrite: true });
       }
     } catch {
       const currentNodeData = node.getData();
@@ -159,15 +190,60 @@ export const useGraphData = (
         ...currentNodeData,
         isLoading: false,
         hasError: true,
-      });
+      }, { overwrite: true });
     }
   }, [graphInstance, getSourceDataByApiId]);
+
+  const handleTableQueryChange = useCallback((
+    nodeId: string,
+    queryParams: Record<string, any>,
+    unifiedFilterValues?: Record<string, FilterValue>,
+    filterDefinitions?: UnifiedFilterDefinition[],
+    dataSources?: DatasourceItem[],
+    namespaceId?: number
+  ) => {
+    if (!graphInstance) return;
+
+    const node = graphInstance.getCellById(nodeId);
+    if (!node) return;
+
+    const nodeData = node.getData();
+    if (nodeData.type !== 'chart' || nodeData.valueConfig?.chartType !== 'table') return;
+
+    tableQueryParamsRef.current.set(nodeId, queryParams);
+
+    node.setData({ ...nodeData, isLoading: true, hasError: false }, { overwrite: true });
+
+    const dataSource = dataSources?.find(
+      (ds) => ds.id === nodeData.valueConfig.dataSource
+    );
+
+    loadChartNodeData(
+      nodeId,
+      nodeData.valueConfig,
+      unifiedFilterValues,
+      filterDefinitions,
+      dataSource,
+      namespaceId,
+      queryParams
+    );
+  }, [graphInstance, loadChartNodeData]);
+
+  const createTableQueryHandler = useCallback((
+    unifiedFilterValues?: Record<string, FilterValue>,
+    filterDefinitions?: UnifiedFilterDefinition[],
+    dataSources?: DatasourceItem[],
+    namespaceId?: number
+  ) => {
+    return (nodeId: string, queryParams: Record<string, any>) => {
+      handleTableQueryChange(nodeId, queryParams, unifiedFilterValues, filterDefinitions, dataSources, namespaceId);
+    };
+  }, [handleTableQueryChange]);
 
   const loadTopologyData = useCallback((data: { nodes: TopologyNodeData[]; edges: SerializedEdge[] }) => {
     if (!graphInstance) return;
 
     graphInstance.clearCells();
-    const chartNodesToLoad: Array<{ nodeId: string; valueConfig: ValueConfig }> = [];
 
     data.nodes?.forEach((nodeConfig) => {
       let nodeData: ReturnType<typeof createNodeByType>;
@@ -182,25 +258,20 @@ export const useGraphData = (
         };
 
         nodeData = createNodeByType(chartNodeConfig);
-        if (valueConfig?.dataSource && nodeConfig.id && chartNodeConfig.valueConfig) {
-          chartNodesToLoad.push({
-            nodeId: nodeConfig.id,
-            valueConfig: chartNodeConfig.valueConfig as ValueConfig,
-          });
+      } else if (nodeConfig.type === 'single-value' && valueConfig?.dataSource && valueConfig?.selectedFields?.length) {
+        nodeData = createNodeByType(nodeConfig);
+        // Mark single-value nodes as loading; actual data fetch deferred to after filters are ready
+        graphInstance.addNode(nodeData as any);
+        const addedNode = graphInstance.getCellById(nodeConfig.id!);
+        if (addedNode && addedNode.isNode()) {
+          startLoadingAnimation(addedNode as Node);
         }
+        return;
       } else {
         nodeData = createNodeByType(nodeConfig);
       }
 
       graphInstance.addNode(nodeData as any);
-
-      if (nodeConfig.type === 'single-value' && valueConfig?.dataSource && valueConfig?.selectedFields?.length && nodeConfig.id) {
-        const addedNode = graphInstance.getCellById(nodeConfig.id);
-        if (addedNode && addedNode.isNode()) {
-          startLoadingAnimation(addedNode as Node);
-          updateSingleNodeData(nodeConfig);
-        }
-      }
     });
 
     data.edges?.forEach((edgeConfig) => {
@@ -236,14 +307,10 @@ export const useGraphData = (
         edge.setVertices(edgeConfig.vertices);
       }
     });
+  }, [graphInstance, startLoadingAnimation]);
 
-    chartNodesToLoad.forEach(({ nodeId, valueConfig }) => {
-      loadChartNodeData(nodeId, valueConfig);
-    });
-  }, [graphInstance, updateSingleNodeData, loadChartNodeData, startLoadingAnimation]);
-
-  const handleLoadTopology = useCallback(async (topologyId: string | number) => {
-    if (!graphInstance) return;
+  const handleLoadTopology = useCallback(async (topologyId: string | number): Promise<UnifiedFilterDefinition[]> => {
+    if (!graphInstance) return [];
 
     setLoading(true);
     try {
@@ -252,12 +319,59 @@ export const useGraphData = (
 
       loadTopologyData(viewSets);
       graphInstance.zoomToFit({ padding: 20, maxScale: 1 });
+
+      const rawFilters = viewSets.filters;
+      const loadedFilters: UnifiedFilterDefinition[] = Array.isArray(rawFilters) ? rawFilters : [];
+      return loadedFilters;
     } catch (error) {
       console.error('加载拓扑图失败:', error);
+      return [];
     } finally {
       setLoading(false);
     }
   }, [graphInstance, getTopologyDetail, loadTopologyData]);
+
+  const refreshAllChartNodes = useCallback((
+    unifiedFilterValues?: Record<string, FilterValue>,
+    filterDefinitions?: UnifiedFilterDefinition[],
+    dataSources?: DatasourceItem[],
+    namespaceId?: number
+  ) => {
+    if (!graphInstance) return;
+
+    const tableQueryHandler = createTableQueryHandler(
+      unifiedFilterValues,
+      filterDefinitions,
+      dataSources,
+      namespaceId
+    );
+
+    const nodes = graphInstance.getNodes();
+    nodes.forEach((node: Node) => {
+      const nodeData = node.getData();
+      if (nodeData.type === 'chart' && nodeData.valueConfig?.dataSource) {
+        node.setData({ 
+          ...nodeData, 
+          isLoading: true, 
+          hasError: false,
+          onTableQueryChange: tableQueryHandler,
+        }, { overwrite: true });
+        const dataSource = dataSources?.find(
+          (ds) => ds.id === nodeData.valueConfig.dataSource
+        );
+        const storedQueryParams = tableQueryParamsRef.current.get(node.id);
+        loadChartNodeData(
+          node.id,
+          nodeData.valueConfig,
+          unifiedFilterValues,
+          filterDefinitions,
+          dataSource,
+          namespaceId,
+          storedQueryParams
+        );
+      }
+    });
+  }, [graphInstance, loadChartNodeData, createTableQueryHandler]);
 
   return {
     loading,
@@ -265,5 +379,6 @@ export const useGraphData = (
     handleSaveTopology,
     handleLoadTopology,
     loadChartNodeData,
+    refreshAllChartNodes,
   };
 };
