@@ -570,7 +570,7 @@ async def prepare_playbook_execution(
     extra_vars = dict(payload.extra_vars or {})
 
     logger.info(
-        "[prepare_playbook] task_id=%s workspace=%s playbook_path=%s "
+        "[prepare_playbook_start] task_id=%s workspace=%s playbook_path=%s "
         "has_playbook_content=%s has_files=%s has_file_distribution=%s "
         "has_host_credentials=%s has_private_key=%s extra_vars_keys=%s timeout=%s",
         payload.task_id,
