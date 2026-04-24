@@ -1,9 +1,10 @@
 import hashlib
 import hmac
 import json
+import re
 import threading
 from base64 import b64encode
-from urllib.parse import urlparse
+from urllib.parse import unquote, urlparse
 
 import dingtalk_stream
 import requests
@@ -29,10 +30,26 @@ def is_valid_dingtalk_url(url: str) -> bool:
     if not url:
         return False
     try:
+        # 拒绝含反斜杠的 URL（urlparse 与 requests 解析不一致，可绕过域名校验）
+        if "\\" in url:
+            return False
         parsed = urlparse(url)
         if parsed.scheme not in ("https", "http"):
             return False
-        return parsed.netloc in DINGTALK_ALLOWED_DOMAINS or parsed.netloc.endswith(".dingtalk.com")
+        # 拒绝含 userinfo（@）的 URL，防止 user@host 形式的绕过
+        if "@" in (parsed.netloc or ""):
+            return False
+        hostname = parsed.hostname
+        if not hostname:
+            return False
+        # 对 hostname 解码后校验，防止 %23 %00 等编码绕过
+        decoded_hostname = unquote(hostname).lower()
+        if decoded_hostname != hostname:
+            return False
+        # hostname 只允许字母、数字、连字符、点号
+        if not re.match(r"^[a-z0-9\-\.]+$", hostname):
+            return False
+        return hostname in DINGTALK_ALLOWED_DOMAINS or hostname.endswith(".dingtalk.com")
     except Exception:
         return False
 

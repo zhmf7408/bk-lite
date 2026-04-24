@@ -9,7 +9,7 @@ export const useVectorConfig = () => {
   const pluginConfig = {
     collector: 'Vector',
     collect_type: 'file',
-    icon: 'jiaoxuerizhiPC'
+    icon: 'll-file_文件采集'
   };
 
   return {

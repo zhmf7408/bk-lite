@@ -2,6 +2,13 @@ import os
 
 install_apps = os.getenv("INSTALL_APPS", "")
 
+# 企业版：如果 apps/license_mgmt 目录存在，强制加入
+if os.path.isdir(os.path.join("apps", "license_mgmt")):
+    if install_apps:
+        apps_set = {a.strip() for a in install_apps.split(",") if a.strip()}
+        apps_set.add("license_mgmt")
+        install_apps = ",".join(apps_set)
+
 for app in os.listdir("apps"):
     if install_apps and app not in install_apps.split(","):
         continue

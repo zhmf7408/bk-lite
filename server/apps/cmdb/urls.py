@@ -5,6 +5,7 @@ from apps.cmdb.views.classification import ClassificationViewSet
 from apps.cmdb.views.instance import InstanceViewSet
 from apps.cmdb.views.model import ModelViewSet
 from apps.cmdb.views.collect import CollectModelViewSet, OidModelViewSet
+from apps.cmdb.views.config_file import ConfigFileVersionViewSet
 from apps.cmdb.views.field_group import FieldGroupViewSet
 from apps.cmdb.views.user_personal_config import UserPersonalConfigViewSet
 from apps.cmdb.views.public_enum_library import PublicEnumLibraryViewSet
@@ -16,6 +17,7 @@ router.register(r"api/model", ModelViewSet, basename="model")
 router.register(r"api/instance", InstanceViewSet, basename="instance")
 router.register(r"api/change_record", ChangeRecordViewSet, basename="change_record")
 router.register(r"api/collect", CollectModelViewSet, basename="collect")
+router.register(r"api/config_file_versions", ConfigFileVersionViewSet, basename="config_file_versions")
 router.register(r"api/oid", OidModelViewSet, basename="oid")
 router.register(r"api/field_groups", FieldGroupViewSet, basename="field_groups")
 router.register(r"api/user_configs", UserPersonalConfigViewSet, basename="user_configs")

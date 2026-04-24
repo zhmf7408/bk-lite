@@ -296,6 +296,89 @@ def get_group_users(group=None, include_children=False):
     return {"result": True, "data": list(users)}
 
 
+def _get_actor_user_scope(actor_context, include_children=False):
+    """
+    根据调用方上下文解析允许访问的组织范围。
+
+    :param actor_context: 调用方上下文，包含 username、domain、current_team、is_superuser 等字段
+    :param include_children: 是否包含当前组织下的已授权子组织
+    :return: (user_obj, authorized_groups)
+        - user_obj: 当前调用用户对象，不存在时返回 None
+        - authorized_groups: 当前调用方允许访问的组织 ID 列表
+    """
+    username = (actor_context or {}).get("username")
+    domain = (actor_context or {}).get("domain", "domain.com")
+    current_team = (actor_context or {}).get("current_team")
+    is_superuser = (actor_context or {}).get("is_superuser", False)
+
+    if not username or current_team in (None, ""):
+        return None, []
+
+    user_obj = User.objects.filter(username=username, domain=domain).first()
+    if not user_obj:
+        return None, []
+
+    try:
+        current_team = int(current_team)
+    except (TypeError, ValueError):
+        return user_obj, []
+
+    if is_superuser:
+        if include_children:
+            return user_obj, GroupUtils.get_group_with_descendants(current_team)
+        return user_obj, [current_team]
+
+    authorized_groups = GroupUtils.get_user_authorized_child_groups(
+        user_obj.group_list,
+        current_team,
+        include_children=include_children,
+    )
+    return user_obj, authorized_groups
+
+
+@nats_client.register
+def get_group_users_scoped(actor_context, group=None, include_children=False):
+    """
+    在调用方授权范围内查询组织用户列表。
+
+    :param actor_context: 调用方上下文，包含 username、domain、current_team、is_superuser 等字段
+    :param group: 可选，指定查询的组织 ID；若不传则使用调用方当前授权范围
+    :param include_children: 是否包含目标组织下的已授权子组织用户
+    :return: 标准 NATS 返回结构，data 为用户列表
+    """
+    user_obj, authorized_groups = _get_actor_user_scope(actor_context, include_children=include_children)
+    if not user_obj or not authorized_groups:
+        return {"result": True, "data": []}
+
+    if group is not None:
+        try:
+            group = int(group)
+        except (TypeError, ValueError):
+            return {"result": True, "data": []}
+        if group not in authorized_groups:
+            return {"result": True, "data": []}
+        query_groups = GroupUtils.get_user_authorized_child_groups(
+            user_obj.group_list,
+            group,
+            include_children=include_children,
+        )
+    else:
+        query_groups = authorized_groups
+
+    if not query_groups:
+        return {"result": True, "data": []}
+
+    users = User.objects.filter(group_list__overlap=query_groups).values("id", "username", "display_name")
+    return {"result": True, "data": list(users)}
+
+
+@nats_client.register
+def get_authorized_groups_scoped(actor_context, include_children=False):
+    """返回调用方在当前组织上下文下可访问的组织范围。"""
+    _user_obj, authorized_groups = _get_actor_user_scope(actor_context, include_children=include_children)
+    return {"result": True, "data": authorized_groups}
+
+
 @nats_client.register
 def get_all_users():
     data = User.objects.all().values(*User.display_fields())
@@ -487,6 +570,39 @@ def search_channel_list(channel_type="", teams=None, include_children=False):
 
 
 @nats_client.register
+def search_channel_list_scoped(actor_context, channel_type="", teams=None, include_children=False):
+    """
+    在调用方授权范围内查询通知通道列表。
+
+    :param actor_context: 调用方上下文，包含 username、domain、current_team、is_superuser 等字段
+    :param channel_type: 可选，通道类型过滤条件
+    :param teams: 可选，待查询的组织 ID 列表；最终会与调用方授权范围取交集
+    :param include_children: 是否包含当前组织下的已授权子组织
+    :return: 标准 NATS 返回结构，data 为通知通道列表
+    """
+    user_obj, authorized_groups = _get_actor_user_scope(actor_context, include_children=include_children)
+    if not user_obj or not authorized_groups:
+        return {"result": True, "data": []}
+
+    if teams:
+        normalized_teams = []
+        for team in teams:
+            try:
+                normalized_teams.append(int(team))
+            except (TypeError, ValueError):
+                continue
+        teams = [team for team in normalized_teams if team in authorized_groups]
+    else:
+        teams = authorized_groups
+
+    return search_channel_list(
+        channel_type=channel_type,
+        teams=teams,
+        include_children=False,
+    )
+
+
+@nats_client.register
 def send_msg_with_channel(channel_id, title, content, receivers, attachments=None):
     """
     通过指定通道发送消息
@@ -585,12 +701,13 @@ def _prepare_user_rules_query(group_id, username, domain, app, include_children=
     is_admin = bool(set(all_role_ids).intersection(admin_list))
 
     # 获取查询的组ID列表（包含子组）
+    query_group_ids = []
     if include_children:
         # 使用优化后的单次查询方法替代 N+1 的 get_all_child_groups
         query_group_ids = GroupUtils.get_group_with_descendants_filtered(int(group_id), group_list=user_obj.group_list)
-    else:
-        query_group_ids = [int(group_id)]
 
+    query_group_ids.append(int(group_id))
+    query_group_ids = list(set(query_group_ids))
     # 设置管理员团队
     admin_teams = query_group_ids[:]
 

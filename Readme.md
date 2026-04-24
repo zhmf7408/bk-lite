@@ -32,8 +32,12 @@ Blueking Lite 是一个 **AI First** 的**轻量版**运维产品，具有部署
       <b>交流群 2（已满）</b>
     </td>
     <td align="center">
-      <img src="./docs/resource/img/wx-2.png" width="200" alt="BKLite 交流群 2"><br>
+      <img src="./docs/resource/img/qrcode.jpg" width="200" alt="BKLite 交流群 3"><br>
       <b>交流群 3（可加入）</b>
+    </td>
+      <td align="center">
+      <img src="./docs/resource/img/wx-2.png" width="200" alt="BKLite 交流群 4"><br>
+      <b>交流群 4（可加入）</b>
     </td>
   </tr>
 </table>

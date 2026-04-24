@@ -8,7 +8,7 @@ export const useMongodbFilebeatConfig = () => {
   const pluginConfig = {
     collector: 'Filebeat',
     collect_type: 'mongodb',
-    icon: 'mongodb'
+    icon: 'mm-mongodb_Mongodb'
   };
 
   return {

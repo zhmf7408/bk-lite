@@ -13,6 +13,7 @@ from apps.core.logger import cmdb_logger as logger
 from apps.cmdb.models.collect_model import CollectModels
 from apps.cmdb.constants.constants import CollectRunStatusType
 from apps.cmdb.services.subscription_task import SubscriptionTaskService
+from apps.cmdb.constants.constants import CollectPluginTypes
 
 
 @shared_task
@@ -50,7 +51,10 @@ def sync_collect_task(instance_id):
             collect = ProtocolCollect(task=instance)
             result, format_data = collect.main()
 
-        instance.exec_status = CollectRunStatusType.SUCCESS
+        if instance.task_type == CollectPluginTypes.CONFIG_FILE and (result.get("config_file") or {}).get("status") == "pending":
+            instance.exec_status = CollectRunStatusType.RUNNING
+        else:
+            instance.exec_status = CollectRunStatusType.SUCCESS
 
     except Exception as err:
         import traceback
@@ -84,6 +88,8 @@ def sync_collect_task(instance_id):
         # 如果任务执行失败，添加错误信息提示
         if task_exec_status == CollectRunStatusType.ERROR:
             collect_digest["message"] = exec_error_message
+        elif instance.task_type == CollectPluginTypes.CONFIG_FILE and (result.get("config_file") or {}).get("status") == "pending":
+            collect_digest["message"] = "配置文件采集结果等待回传中"
         elif format_data.get("__raw_data__", []).__len__() == 0:
             collect_digest["message"] = "没有发现任何有效数据!"
             instance.exec_status = CollectRunStatusType.ERROR

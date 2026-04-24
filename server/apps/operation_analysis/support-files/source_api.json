@@ -173,7 +173,129 @@
         "name": "step",
         "type": "string",
         "value": "5m"
-      }
+        }
+     ]
+},
+{
+    "name": "监控活跃告警",
+    "desc": "查询当前用户可访问范围内最新活跃告警信息，可选按监控对象收窄",
+    "rest_api": "monitor/query_latest_active_alerts",
+    "tag": [
+        "monitor"
+    ],
+    "chart_type": [
+        "table"
+    ],
+    "field_schema": [
+        {
+            "key": "monitor_obj_id",
+            "title": "监控对象ID",
+            "value_type": "string",
+            "description": "监控对象ID"
+        },
+        {
+            "key": "monitor_object_name",
+            "title": "监控对象名称",
+            "value_type": "string",
+            "description": "监控对象名称"
+        },
+        {
+            "key": "id",
+            "title": "告警ID",
+            "value_type": "number",
+            "description": "监控告警ID"
+        },
+        {
+            "key": "policy_id",
+            "title": "策略ID",
+            "value_type": "number",
+            "description": "所属监控策略ID"
+        },
+        {
+            "key": "monitor_instance_id",
+            "title": "实例ID",
+            "value_type": "string",
+            "description": "监控对象实例ID"
+        },
+        {
+            "key": "monitor_instance_name",
+            "title": "实例名称",
+            "value_type": "string",
+            "description": "监控对象实例名称"
+        },
+        {
+            "key": "status",
+            "title": "状态",
+            "value_type": "string",
+            "description": "监控告警状态"
+        },
+        {
+            "key": "level",
+            "title": "告警级别",
+            "value_type": "string",
+            "description": "告警级别"
+        },
+        {
+            "key": "alert_type",
+            "title": "告警类型",
+            "value_type": "string",
+            "description": "alert 或 no_data"
+        },
+        {
+            "key": "content",
+            "title": "告警内容",
+            "value_type": "string",
+            "description": "告警描述内容"
+        },
+        {
+            "key": "start_event_time",
+            "title": "开始时间",
+            "value_type": "string",
+            "description": "告警开始时间"
+        },
+        {
+            "key": "created_at",
+            "title": "创建时间",
+            "value_type": "string",
+            "description": "记录创建时间"
+        }
+    ],
+    "params": [
+        {
+            "name": "monitor_obj_id",
+            "type": "string",
+            "value": "",
+            "alias_name": "监控对象ID（可选）",
+            "filterType": "params"
+        },
+        {
+            "name": "limit",
+            "type": "number",
+            "value": 10,
+            "alias_name": "返回条数",
+            "filterType": "fixed"
+        },
+        {
+            "name": "level",
+            "type": "string",
+            "value": "",
+            "alias_name": "告警级别",
+            "filterType": "params"
+        },
+        {
+            "name": "alert_type",
+            "type": "string",
+            "value": "",
+            "alias_name": "告警类型",
+            "filterType": "params"
+        },
+        {
+            "name": "instance_id",
+            "type": "string",
+            "value": "",
+            "alias_name": "实例ID",
+            "filterType": "params"
+        }
     ]
 },
 {

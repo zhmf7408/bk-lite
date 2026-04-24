@@ -19,6 +19,7 @@ MINIO_PRIVATE_BUCKETS = [
     "log-alert-raw-data",  # 日志告警原始数据存储
     "monitor-alert-raw-data",  # 监控指标原始数据存储
     "job-mgmt-private",  # 监控指标原始数据存储
+    "cmdb-config-file",
 ]
 MINIO_PUBLIC_BUCKETS = ["rewind-public", "munchkin-public"]
 MINIO_POLICY_HOOKS: List[Tuple[str, dict]] = []

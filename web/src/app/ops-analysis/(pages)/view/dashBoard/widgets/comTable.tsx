@@ -3,7 +3,6 @@ import React, {
   useState,
   useMemo,
   useCallback,
-  useRef,
 } from 'react';
 import { Input, Select, DatePicker, Tooltip } from 'antd';
 import { SearchOutlined } from '@ant-design/icons';
@@ -11,7 +10,6 @@ import type { ColumnsType } from 'antd/es/table';
 import dayjs from 'dayjs';
 import { useTranslation } from '@/utils/i18n';
 import CustomTable from '@/components/custom-table';
-import { useOpsAnalysis } from '@/app/ops-analysis/context/common';
 import type {
   ResponseFieldDefinition,
   DatasourceItem,
@@ -38,16 +36,6 @@ interface TableDataItem {
   [key: string]: any;
 }
 
-interface NamespacePagedData {
-  items?: TableDataItem[];
-  count?: number;
-}
-
-interface NamespaceGroupedItem {
-  namespace_id?: string | number;
-  data?: NamespacePagedData;
-}
-
 const ComTable: React.FC<ComTableProps> = ({
   rawData,
   loading = false,
@@ -63,7 +51,6 @@ const ComTable: React.FC<ComTableProps> = ({
   );
   const [activeKeywordFieldKey, setActiveKeywordFieldKey] =
     useState<string>('');
-  const [selectedNamespace, setSelectedNamespace] = useState<string>();
   const [queryPagination, setQueryPagination] = useState<{
     current: number;
     pageSize: number;
@@ -71,13 +58,7 @@ const ComTable: React.FC<ComTableProps> = ({
     current: 1,
     pageSize: 20,
   });
-  const lastQueryParamsRef = useRef<string>('');
-  const { namespaceList, fetchNamespaces } = useOpsAnalysis();
-
-  useEffect(() => {
-    void fetchNamespaces();
-  }, [fetchNamespaces]);
-
+  
   const { tableData, pagination } = useMemo(() => {
     const empty = {
       tableData: [],
@@ -88,69 +69,36 @@ const ComTable: React.FC<ComTableProps> = ({
       },
     };
 
-    if (!Array.isArray(rawData) || rawData.length === 0) return empty;
+    if (!rawData) return empty;
 
-    const rows: TableDataItem[] = [];
-    let total = 0;
-
-    for (const item of rawData as NamespaceGroupedItem[]) {
-      const namespaceId = item?.namespace_id || '-';
-      const paged = item?.data;
-      const records = Array.isArray(paged?.items) ? paged.items : [];
-      records.forEach((record) =>
-        rows.push({ namespace_id: namespaceId, ...record }),
-      );
-      total += Number(paged?.count) || records.length;
+    if (
+      typeof rawData === 'object' &&
+      !Array.isArray(rawData) &&
+      Array.isArray(rawData.items)
+    ) {
+      return {
+        tableData: rawData.items as TableDataItem[],
+        pagination: {
+          current: queryPagination.current,
+          pageSize: queryPagination.pageSize,
+          total: Number(rawData.count) || rawData.items.length,
+        },
+      };
     }
 
-    return {
-      tableData: rows,
-      pagination: {
-        current: queryPagination.current,
-        pageSize: queryPagination.pageSize,
-        total,
-      },
-    };
+    if (Array.isArray(rawData)) {
+      return {
+        tableData: rawData as TableDataItem[],
+        pagination: {
+          current: queryPagination.current,
+          pageSize: queryPagination.pageSize,
+          total: rawData.length,
+        },
+      };
+    }
+
+    return empty;
   }, [rawData, queryPagination.current, queryPagination.pageSize]);
-
-  const namespaceOptions = useMemo((): Array<{
-    label: string;
-    value: string;
-  }> => {
-    const configuredOptions = dataSource?.namespace_options || [];
-    if (configuredOptions.length > 0) {
-      return configuredOptions
-        .filter(
-          (item) =>
-            item &&
-            item.id !== undefined &&
-            item.id !== null &&
-            typeof item.name === 'string' &&
-            !!item.name.trim(),
-        )
-        .map((item) => ({
-          label: item.name,
-          value: String(item.id),
-        }));
-    }
-
-    const configuredNamespaceIds = (dataSource?.namespaces || [])
-      .map((id) => Number(id))
-      .filter((id) => !Number.isNaN(id));
-
-    if (configuredNamespaceIds.length === 0) {
-      return [];
-    }
-
-    const namespaceMap = new Map(
-      namespaceList.map((item) => [item.id, item.name || String(item.id)]),
-    );
-
-    return configuredNamespaceIds.map((id) => ({
-      label: namespaceMap.get(id) || String(id),
-      value: String(id),
-    }));
-  }, [dataSource?.namespace_options, dataSource?.namespaces, namespaceList]);
 
   const filterFields = useMemo<TableFilterFieldConfig[]>(() => {
     return config?.tableConfig?.filterFields || [];
@@ -186,20 +134,6 @@ const ComTable: React.FC<ComTableProps> = ({
     }
   }, [searchableFilterFields, activeKeywordFieldKey]);
 
-  useEffect(() => {
-    if (namespaceOptions.length === 0) {
-      if (selectedNamespace) {
-        setSelectedNamespace(undefined);
-      }
-      return;
-    }
-
-    const optionValues = namespaceOptions.map((opt) => opt.value);
-    if (!selectedNamespace || !optionValues.includes(selectedNamespace)) {
-      setSelectedNamespace(optionValues[0]);
-    }
-  }, [namespaceOptions, selectedNamespace]);
-
   const columnConfigs = useMemo((): TableColumnConfigItem[] => {
     const widgetColumns = config?.tableConfig?.columns;
     if (widgetColumns && widgetColumns.length > 0) {
@@ -234,79 +168,44 @@ const ComTable: React.FC<ComTableProps> = ({
   }, [config?.tableConfig?.columns, dataSource?.field_schema, tableData]);
 
   const antColumns = useMemo((): ColumnsType<TableDataItem> => {
-    const namespaceColumn: ColumnsType<TableDataItem>[number] = {
-      title: t('namespace.title'),
-      dataIndex: 'namespace_id',
-      key: 'namespace_id',
-      width: 180,
-      fixed: 'left',
-      ellipsis: { showTitle: false },
-      render: (text: any) => (
-        <Tooltip placement="topLeft" title={text?.toString()}>
-          <div
-            style={{
-              maxWidth: DEFAULT_CELL_MAX_WIDTH,
-              overflow: 'hidden',
-              textOverflow: 'ellipsis',
-              whiteSpace: 'nowrap',
-            }}
-          >
-            {text?.toString() ?? '-'}
-          </div>
-        </Tooltip>
-      ),
-    };
+    return columnConfigs.map((col) => {
+      const column: any = {
+        title: col.title,
+        dataIndex: col.key,
+        key: col.key,
+        ellipsis: { showTitle: false },
+        render: (text: any) => (
+          <Tooltip placement="topLeft" title={text?.toString()}>
+            <div
+              style={{
+                maxWidth: col.width || DEFAULT_CELL_MAX_WIDTH,
+                overflow: 'hidden',
+                textOverflow: 'ellipsis',
+                whiteSpace: 'nowrap',
+              }}
+            >
+              {text?.toString() ?? '-'}
+            </div>
+          </Tooltip>
+        ),
+      };
 
-    const dataColumns = columnConfigs
-      .filter((col) => col.key !== 'namespace_id')
-      .map((col) => {
-        const column: any = {
-          title: col.title,
-          dataIndex: col.key,
-          key: col.key,
-          ellipsis: { showTitle: false },
-          render: (text: any) => (
-            <Tooltip placement="topLeft" title={text?.toString()}>
-              <div
-                style={{
-                  maxWidth: col.width || DEFAULT_CELL_MAX_WIDTH,
-                  overflow: 'hidden',
-                  textOverflow: 'ellipsis',
-                  whiteSpace: 'nowrap',
-                }}
-              >
-                {text?.toString() ?? '-'}
-              </div>
-            </Tooltip>
-          ),
-        };
+      if (col.width) {
+        column.width = col.width;
+      }
 
-        if (col.width) {
-          column.width = col.width;
-        }
-
-        return column;
-      });
-
-    return [namespaceColumn, ...dataColumns];
-  }, [columnConfigs, t]);
+      return column;
+    });
+  }, [columnConfigs]);
 
   useEffect(() => {
     if (!onQueryChange) return;
-
-    if (namespaceOptions.length > 0 && !selectedNamespace) {
-      return;
-    }
 
     const queryParams: Record<string, any> = {
       page: queryPagination.current,
       page_size: queryPagination.pageSize,
     };
     const queryList: Array<Record<string, any>> = [];
-
-    if (namespaceOptions.length > 0 && selectedNamespace) {
-      queryParams.namespace_ids = [Number(selectedNamespace)];
-    }
 
     Object.entries(filters).forEach(([key, value]) => {
       if (value === null || value === undefined || value === '') {
@@ -345,18 +244,11 @@ const ComTable: React.FC<ComTableProps> = ({
       queryParams.query_list = queryList;
     }
 
-    const queryKey = JSON.stringify(queryParams);
-    if (lastQueryParamsRef.current === queryKey) {
-      return;
-    }
-    lastQueryParamsRef.current = queryKey;
     onQueryChange(queryParams);
   }, [
     onQueryChange,
     queryPagination,
     filters,
-    namespaceOptions,
-    selectedNamespace,
   ]);
 
   useEffect(() => {
@@ -431,49 +323,11 @@ const ComTable: React.FC<ComTableProps> = ({
 
   const renderFilters = () => {
     if (!filterFields || filterFields.length === 0) {
-      if (namespaceOptions.length === 0) {
-        return null;
-      }
-
-      return (
-        <div className="mb-3 flex items-center gap-2">
-          <span className="text-(--color-text-2) text-[13px] whitespace-nowrap">
-            {t('namespace.title')}
-          </span>
-          <Select
-            value={selectedNamespace}
-            options={namespaceOptions}
-            placeholder={t('dashboard.allNamespaces')}
-            onChange={(value) => {
-              setSelectedNamespace(value as string);
-              setQueryPagination((prev) => ({ ...prev, current: 1 }));
-            }}
-            style={{ minWidth: 220 }}
-          />
-        </div>
-      );
+      return null;
     }
 
     return (
       <div className="mb-3 flex flex-wrap gap-2">
-        {namespaceOptions.length > 0 && (
-          <div className="flex items-center gap-2">
-            <span className="text-(--color-text-2) text-[12px] whitespace-nowrap">
-              {t('namespace.title')}
-            </span>
-            <Select
-              value={selectedNamespace}
-              options={namespaceOptions}
-              placeholder={t('dashboard.allNamespaces')}
-              onChange={(value) => {
-                setSelectedNamespace(value as string);
-                setQueryPagination((prev) => ({ ...prev, current: 1 }));
-              }}
-              style={{ minWidth: 180 }}
-            />
-          </div>
-        )}
-
         {searchableFilterFields.length > 0 && (
           <div className="flex items-center">
             <Input.Group compact>
@@ -608,7 +462,9 @@ const ComTable: React.FC<ComTableProps> = ({
             current: pagination.current,
             pageSize: pagination.pageSize,
             total: pagination.total,
-            showSizeChanger: true,
+            showSizeChanger: {
+              getPopupContainer: () => document.body,
+            },
             showQuickJumper: true,
             showTotal: (total) =>
               `${t('common.total')} ${total} ${t('common.items')}`,

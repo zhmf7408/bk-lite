@@ -108,7 +108,7 @@ const CronTaskPage = () => {
       lookup_expr: 'in',
       options: [
         { id: 'script', name: t('job.scriptExecution') },
-        { id: 'playbook', name: 'Playbook' },
+        { id: 'playbook', name: t('job.playbook') },
         { id: 'file', name: t('job.fileDistribution') },
       ],
     },

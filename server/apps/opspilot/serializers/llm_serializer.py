@@ -29,6 +29,7 @@ class LLMSerializer(TeamSerializer, AuthSerializer):
     rag_score_threshold = serializers.SerializerMethodField()
     llm_model_name = serializers.SerializerMethodField()
     is_pinned = serializers.SerializerMethodField()
+    skill_params = serializers.SerializerMethodField()
 
     def __init__(self, instance=None, data=empty, **kwargs):
         super().__init__(instance=instance, data=data, **kwargs)
@@ -60,6 +61,18 @@ class LLMSerializer(TeamSerializer, AuthSerializer):
     def get_is_pinned(self, instance: LLMSkill) -> bool:
         """获取当前用户对此 LLMSkill 的置顶状态"""
         return instance.id in self.pinned_skill_ids
+
+    @staticmethod
+    def get_skill_params(instance: LLMSkill):
+        """返回技能参数列表，password 类型的 value 掩码为 '******'"""
+        params = instance.skill_params or []
+        result = []
+        for param in params:
+            item = dict(param)
+            if item.get("type") == "password":
+                item["value"] = "******"
+            result.append(item)
+        return result
 
 
 class SkillRequestLogSerializer(serializers.ModelSerializer):

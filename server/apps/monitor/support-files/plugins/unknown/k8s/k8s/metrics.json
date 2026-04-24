@@ -103,9 +103,6 @@
           "description": "Represents the ratio of actual CPU usage to the configured CPU resource limit for a Pod, expressed as a percentage. Used to evaluate CPU consumption and identify potential resource bottlenecks.",
           "query": "100 * (\n  sum(irate(prometheus_remote_write_container_cpu_usage_seconds_total{instance_type=\"k8s\",__$labels__}[5m])) by (instance_id,pod)\n  /\n  on(instance_id,pod)\n  sum(prometheus_remote_write_kube_pod_container_resource_limits{instance_type=\"k8s\", resource=\"cpu\",__$labels__}) by (instance_id,pod)\n)"
         },
-
-
-
         {
           "metric_group": "Memory",
           "name": "pod_memory_utilization",

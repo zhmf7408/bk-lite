@@ -9,6 +9,8 @@ import SNMPTask from './components/snmpTask';
 import SQLTask from './components/sqlTask';
 import CloudTask from './components/cloudTask';
 import HostTask from './components/hostTask';
+import IPMITask from './components/ipmiTask';
+import ConfigFileTask from './components/configFileTask';
 import TaskDetail from './components/taskDetail';
 import MarkdownRenderer from '@/components/markdown';
 import CustomTable from '@/components/custom-table';
@@ -62,7 +64,9 @@ const ProfessionalCollection: React.FC = () => {
   const pathname = usePathname();
   const searchParams = useSearchParams();
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  const { editingId, setEditingId, copyTaskData: _copyTaskData, setCopyTaskData } = useAssetManageStore();
+  const editingId = useAssetManageStore((state) => state.editingId);
+  const setEditingId = useAssetManageStore((state) => state.setEditingId);
+  const setCopyTaskData = useAssetManageStore((state) => state.setCopyTaskData);
   const syncStatusConfig = React.useMemo(() => getExecStatusConfig(t), [t]);
   const [drawerVisible, setDrawerVisible] = useState(false);
   const [categoryList, setCategoryList] = useState<TreeNode[]>([]);
@@ -195,12 +199,16 @@ const ProfessionalCollection: React.FC = () => {
   }, [selectedPluginId]);
 
   const getParams = (pluginId?: string) => {
-    const modelId = pluginId || stateRef.current.selectedPluginId;
+    const currentPluginId = pluginId || stateRef.current.selectedPluginId;
+    const plugin = selectedCategoryRef.current.category?.tabItems?.find(
+      (item) => item.id === currentPluginId
+    );
 
     return {
       page: stateRef.current.pagination.current,
       page_size: stateRef.current.pagination.pageSize,
-      model_id: modelId,
+      model_id: plugin?.model_id || currentPluginId,
+      ...(plugin?.type && { driver_type: plugin.type }),
       name: stateRef.current.searchText,
       ...(stateRef.current.currentExecStatus !== undefined && {
         exec_status: stateRef.current.currentExecStatus,
@@ -436,7 +444,10 @@ const ProfessionalCollection: React.FC = () => {
   const fetchPluginDoc = async (pluginId: string) => {
     try {
       setDocLoading(true);
-      const data = await collectApi.getCollectModelDoc(pluginId);
+      const plugin = selectedCategoryRef.current.category?.tabItems?.find(
+        (item) => item.id === pluginId
+      );
+      const data = await collectApi.getCollectModelDoc(plugin?.model_id || pluginId);
       setPluginDoc(data || '');
     } catch {
       setPluginDoc('');
@@ -556,16 +567,21 @@ const ProfessionalCollection: React.FC = () => {
       editId: editingId,
     };
 
-    const taskMap: Record<string, React.ComponentType<any>> = {
-      k8s: K8sTask,
-      vm: VMTask,
-      cloud: CloudTask,
-      host: HostTask,
-      db: HostTask,
-      middleware: HostTask,
-      snmp: SNMPTask,
-      protocol: SQLTask,
-    };
+      const taskMap: Record<string, React.ComponentType<any>> = {
+        k8s: K8sTask,
+        vm: VMTask,
+        cloud: CloudTask,
+        host: HostTask,
+        db: HostTask,
+        middleware: HostTask,
+        config_file: ConfigFileTask,
+        snmp: SNMPTask,
+        protocol: SQLTask,
+      };
+
+    if (currentPlugin.id === 'physcial_server_ipmi') {
+      return <IPMITask {...taskProps} />;
+    }
 
     const taskTypeKey = currentPlugin.task_type || currentPlugin.type || actualCategory.id;
     const TaskComponent = taskMap[taskTypeKey] || K8sTask;

@@ -8,7 +8,7 @@ export const useNginxFilebeatConfig = () => {
   const pluginConfig = {
     collector: 'Filebeat',
     collect_type: 'nginx',
-    icon: 'nginx'
+    icon: 'mm-nginx_Nginx'
   };
 
   return {

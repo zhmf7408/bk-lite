@@ -489,7 +489,7 @@ const EditCronTaskContent = () => {
                           color: targetSource === 'node_manager' ? 'var(--color-text-4)' : undefined,
                         }}
                       >
-                        <span>Playbook</span>
+                        <span>{t('job.playbook')}</span>
                         {targetSource === 'node_manager' && (
                           <Tooltip title={t('job.nodeManagerPlaybookNotSupported')}>
                             <span

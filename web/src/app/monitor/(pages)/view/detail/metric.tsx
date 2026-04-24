@@ -13,7 +13,7 @@ import {
   GroupInfo,
   IntegrationItem,
   MetricItem,
-  IndexViewItem,
+  IndexViewItem
 } from '@/app/monitor/types';
 import { ViewDetailProps } from '@/app/monitor/types/view';
 import { SearchParams } from '@/app/monitor/types/search';
@@ -21,9 +21,9 @@ import { useTranslation } from '@/utils/i18n';
 import {
   mergeViewQueryKeyValues,
   renderChart,
-  getRecentTimeRange,
+  getRecentTimeRange
 } from '@/app/monitor/utils/common';
-import { useObjectConfigInfo } from '@/app/monitor/hooks/integration/common/getObjectConfig';
+
 import dayjs, { Dayjs } from 'dayjs';
 import LazyMetricItem from '../lazyMetricItem';
 
@@ -32,25 +32,24 @@ const MetricViews: React.FC<ViewDetailProps> = ({
   monitorObjectName,
   instanceId,
   instanceName,
-  idValues,
+  idValues
 }) => {
   const { isLoading } = useApiClient();
   const { getMonitorPlugin, getMonitorMetrics, getMetricsGroup } =
     useMonitorApi();
   const { get } = useApiClient();
   const { t } = useTranslation();
-  const { getCollectType } = useObjectConfigInfo();
   const timerRef = useRef<NodeJS.Timeout | null>(null);
   const [loading, setLoading] = useState<boolean>(false);
   const [metricId, setMetricId] = useState<number | null>();
   const [timeValues, setTimeValues] = useState<TimeValuesProps>({
     timeRange: [],
-    originValue: 15,
+    originValue: 15
   });
   const [timeDefaultValue, setTimeDefaultValue] =
     useState<TimeSelectorDefaultValue>({
       selectValue: 15,
-      rangePickerVaule: null,
+      rangePickerVaule: null
     });
   const [frequence, setFrequence] = useState<number>(0);
   const [metricData, setMetricData] = useState<IndexViewItem[]>([]);
@@ -172,12 +171,18 @@ const MetricViews: React.FC<ViewDetailProps> = ({
   const initPage = async () => {
     setLoading(true);
     const responseData = await getMonitorPlugin({
-      monitor_object_id: monitorObjectId,
+      monitor_object_id: monitorObjectId
     });
-    const _plugins = responseData.map((item: IntegrationItem) => ({
-      label: getCollectType(monitorObjectName, item.name as string),
-      value: item.id,
-    }));
+    const _plugins = responseData
+      .sort((a: IntegrationItem, b: IntegrationItem) => {
+        const order = (item: IntegrationItem) =>
+          item.is_pre ? 0 : !item.is_custom ? 1 : 2;
+        return order(a) - order(b);
+      })
+      .map((item: IntegrationItem) => ({
+        label: item.display_name || item.name || '--',
+        value: item.id
+      }));
     setPlugins(_plugins);
     const _activeTab = _plugins[0]?.value || '';
     setActiveTab(_activeTab);
@@ -197,7 +202,7 @@ const MetricViews: React.FC<ViewDetailProps> = ({
   const getInitData = async (tab: string) => {
     const params = {
       monitor_object_id: monitorObjectId,
-      monitor_plugin_id: tab,
+      monitor_plugin_id: tab
     };
     const getGroupList = getMetricsGroup(params);
     const getMetrics = getMonitorMetrics(params);
@@ -208,7 +213,7 @@ const MetricViews: React.FC<ViewDetailProps> = ({
           const groupData = res[0].map((item: GroupInfo) => ({
             ...item,
             isLoading: false,
-            child: [],
+            child: []
           }));
           const metricData = res[1];
           metricData.forEach((metric: MetricItem) => {
@@ -218,7 +223,7 @@ const MetricViews: React.FC<ViewDetailProps> = ({
             if (target) {
               target.child.push({
                 ...metric,
-                viewData: [],
+                viewData: []
               });
             }
           });
@@ -259,8 +264,8 @@ const MetricViews: React.FC<ViewDetailProps> = ({
             .filter((item) => item.id === metricId)
             .map((item) => ({
               ...item,
-              viewData: [],
-            })),
+              viewData: []
+            }))
         }))
         .filter((item) => item.child?.find((tex) => tex.id === metricId));
     } else {
@@ -269,8 +274,8 @@ const MetricViews: React.FC<ViewDetailProps> = ({
         ...group,
         child: (group.child || []).map((item) => ({
           ...item,
-          viewData: [],
-        })),
+          viewData: []
+        }))
       }));
     }
 
@@ -290,10 +295,10 @@ const MetricViews: React.FC<ViewDetailProps> = ({
       query: (item.query || '').replace(
         /__\$labels__/g,
         mergeViewQueryKeyValues([
-          { keys: item.instance_id_keys || [], values: ids },
+          { keys: item.instance_id_keys || [], values: ids }
         ])
       ),
-      source_unit: item.unit || '',
+      source_unit: item.unit || ''
     };
     const recentTimeRange = getRecentTimeRange(timeValues);
     const startTime = recentTimeRange.at(0);
@@ -341,7 +346,7 @@ const MetricViews: React.FC<ViewDetailProps> = ({
       const params = getParams(metric, idValues);
       response = await get(`/monitor/api/metrics_instance/query_range/`, {
         params,
-        signal: abortController.signal,
+        signal: abortController.signal
       });
     } catch (error: any) {
       if (error.name === 'AbortError') {
@@ -356,8 +361,8 @@ const MetricViews: React.FC<ViewDetailProps> = ({
           instance_name: instanceName,
           instance_id_keys: metric?.instance_id_keys || [],
           dimensions: metric?.dimensions || [],
-          title: metric?.display_name || '--',
-        },
+          title: metric?.display_name || '--'
+        }
       ];
       const chartData = response?.data?.result || [];
       const displayUnit = response?.data?.unit || '';
@@ -371,10 +376,10 @@ const MetricViews: React.FC<ViewDetailProps> = ({
               ? {
                 ...item,
                 displayUnit,
-                viewData,
+                viewData
               }
               : item
-          ),
+          )
         }));
         return updatedData;
       });
@@ -387,10 +392,10 @@ const MetricViews: React.FC<ViewDetailProps> = ({
               ? {
                 ...item,
                 displayUnit,
-                viewData,
+                viewData
               }
               : item
-          ),
+          )
         }));
         return updatedData;
       });
@@ -444,7 +449,7 @@ const MetricViews: React.FC<ViewDetailProps> = ({
   const onTimeChange = (val: number[], originValue: number | null) => {
     setTimeValues({
       timeRange: val,
-      originValue,
+      originValue
     });
   };
 
@@ -481,7 +486,7 @@ const MetricViews: React.FC<ViewDetailProps> = ({
       loadedMetricIds,
       loadingMetricIds,
       cancelledMetricIds,
-      fetchSingleMetricData,
+      fetchSingleMetricData
     ]
   );
 
@@ -520,8 +525,8 @@ const MetricViews: React.FC<ViewDetailProps> = ({
             .filter((item) => item.id === val)
             .map((item) => ({
               ...item,
-              viewData: [],
-            })),
+              viewData: []
+            }))
         }))
         .filter((item) => item.child?.find((tex) => tex.id === val));
 
@@ -535,8 +540,8 @@ const MetricViews: React.FC<ViewDetailProps> = ({
         ...group,
         child: (group.child || []).map((item) => ({
           ...item,
-          viewData: [], // 清空所有指标数据，让它们重新请求
-        })),
+          viewData: [] // 清空所有指标数据，让它们重新请求
+        }))
       }));
 
       setMetricData(clearedData);
@@ -567,8 +572,8 @@ const MetricViews: React.FC<ViewDetailProps> = ({
                 ...group,
                 child: (group.child || []).map((item) => ({
                   ...item,
-                  viewData: [],
-                })),
+                  viewData: []
+                }))
               }
               : group
           )
@@ -595,12 +600,12 @@ const MetricViews: React.FC<ViewDetailProps> = ({
     setTimeDefaultValue((pre) => ({
       ...pre,
       rangePickerVaule: arr,
-      selectValue: 0,
+      selectValue: 0
     }));
     const _times = arr.map((item) => dayjs(item).valueOf());
     setTimeValues({
       timeRange: _times,
-      originValue: 0,
+      originValue: 0
     });
   };
 
@@ -608,7 +613,7 @@ const MetricViews: React.FC<ViewDetailProps> = ({
     const _row = {
       monitor_object: monitorObjectId + '',
       instance_id: instanceId as string,
-      metric_id: row.name,
+      metric_id: row.name
     };
     const queryString = new URLSearchParams(_row).toString();
     const url = `/monitor/search?${queryString}`;
@@ -621,7 +626,7 @@ const MetricViews: React.FC<ViewDetailProps> = ({
       monitorObjId: monitorObjectId + '',
       instanceId: instanceId as string,
       metricId: row.name,
-      type: 'add',
+      type: 'add'
     };
     const queryString = new URLSearchParams(_row).toString();
     const url = `/monitor/event/strategy/detail?${queryString}`;
@@ -651,8 +656,8 @@ const MetricViews: React.FC<ViewDetailProps> = ({
             title: item.name,
             options: (item.child || []).map((tex) => ({
               label: tex.display_name,
-              value: tex.id,
-            })),
+              value: tex.id
+            }))
           }))}
           onChange={handleMetricIdChange}
         ></Select>

@@ -4,11 +4,11 @@
 # @Author: windyzhao
 from rest_framework import serializers
 
-from apps.cmdb.constants.constants import PERMISSION_TASK
+from apps.cmdb.constants.constants import CollectDriverTypes, CollectPluginTypes, PERMISSION_TASK
 from apps.cmdb.models.collect_model import CollectModels, OidMapping
 from apps.cmdb.services.encrypt_collect_password import get_collect_model_passwords
+from apps.cmdb.utils.config_file_path import validate_absolute_path
 from apps.core.utils.serializers import UsernameSerializer, AuthSerializer
-
 
 class CollectModelSerializer(AuthSerializer):
     permission_key = PERMISSION_TASK
@@ -21,12 +21,48 @@ class CollectModelSerializer(AuthSerializer):
             # "task_type": {"required": True},
         }
 
+    def validate(self, attrs):
+        task_type = attrs.get("task_type")
+        if task_type is None and self.instance is not None:
+            task_type = self.instance.task_type
+
+        if task_type != CollectPluginTypes.CONFIG_FILE:
+            return attrs
+
+        raw_params = attrs.get("params")
+        if raw_params is None and self.instance is not None:
+            raw_params = self.instance.params
+
+        params = dict(raw_params or {})
+        file_path = (params.get("config_file_path") or "").strip()
+        if not validate_absolute_path(file_path):
+            raise serializers.ValidationError({"params": "请输入有效的配置文件完整绝对路径，不能填写目录"})
+
+        params.update(
+            {
+                "config_file_path": file_path,
+            }
+        )
+
+        raw_instances = attrs.get("instances")
+        if raw_instances is None and self.instance is not None:
+            raw_instances = self.instance.instances
+
+        if not raw_instances:
+            raise serializers.ValidationError("请选择主机")
+
+        attrs["ip_range"] = ""
+
+        attrs["params"] = params
+        attrs["driver_type"] = CollectDriverTypes.JOB
+        return attrs
+
     def to_representation(self, instance):
         """重写序列化输出"""
         representation = super().to_representation(instance)
         # 对返回的凭据中的密码字段进行脱敏处理
         credential = instance.credential
-        encrypted_fields = get_collect_model_passwords(collect_model_id=instance.model_id)
+        encrypted_fields = get_collect_model_passwords(collect_model_id=instance.model_id, driver_type=instance.driver_type)
         for encrypted_field in encrypted_fields:
             if encrypted_field in credential:
                 credential[encrypted_field] = "******"

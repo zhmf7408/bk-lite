@@ -1,10 +1,10 @@
-import ast
 import re
 
 import pandas as pd
 
 from apps.monitor.models.monitor_metrics import Metric
 from apps.monitor.models.monitor_object import MonitorObject
+from apps.monitor.utils.dimension import parse_instance_id
 from apps.monitor.utils.unit_converter import UnitConverter
 from apps.monitor.utils.victoriametrics_api import VictoriaMetricsAPI
 
@@ -24,9 +24,7 @@ class Metrics:
         start = int(start) / 1000  # Convert milliseconds to seconds
         end = int(end) / 1000  # Convert milliseconds to seconds
         resp = VictoriaMetricsAPI().query_range(query, start, end, step)
-        Metrics.fill_missing_points(
-            start, end, step_seconds, resp.get("data", {}).get("result", [])
-        )
+        Metrics.fill_missing_points(start, end, step_seconds, resp.get("data", {}).get("result", []))
         return resp
 
     @staticmethod
@@ -90,9 +88,7 @@ class Metrics:
 
             # Convert original values to DataFrame
             original_df = pd.DataFrame(values, columns=["timestamp", "value"])
-            original_df["timestamp"] = pd.to_datetime(
-                original_df["timestamp"].astype(float), unit="s"
-            )
+            original_df["timestamp"] = pd.to_datetime(original_df["timestamp"].astype(float), unit="s")
             original_df.set_index("timestamp", inplace=True)
 
             # Create complete time range DataFrame (start and end are now in seconds)
@@ -106,9 +102,7 @@ class Metrics:
 
             # Concatenate and sort all timestamps
             all_df = pd.concat([original_df, full_df])
-            all_df = all_df[
-                ~all_df.index.duplicated(keep="first")
-            ]  # Keep original values for duplicates
+            all_df = all_df[~all_df.index.duplicated(keep="first")]  # Keep original values for duplicates
             all_df.sort_index(inplace=True)
 
             # Convert back to the original `values` format
@@ -124,9 +118,7 @@ class Metrics:
             item["values"] = result_values
 
     @staticmethod
-    def query_metric_by_instance(
-        metric_query: str, instance_id: str, instance_id_keys: list, dimensions: list
-    ):
+    def query_metric_by_instance(metric_query: str, instance_id: str, instance_id_keys: list, dimensions: list):
         """
         根据实例ID查询指标，按维度分组
 
@@ -137,12 +129,7 @@ class Metrics:
         :return: 查询结果
         """
         # 解析 instance_id 字符串元组
-        try:
-            instance_id_values = ast.literal_eval(instance_id)
-            if not isinstance(instance_id_values, tuple):
-                instance_id_values = (instance_id_values,)
-        except (ValueError, SyntaxError):
-            instance_id_values = (instance_id,)
+        instance_id_values = parse_instance_id(instance_id)
 
         # 构建标签过滤条件: name="aa", id="bb"
         label_conditions = []
@@ -155,9 +142,7 @@ class Metrics:
 
         # 兼容两种 dimensions 格式: [{"name": "xxx"}] 或 ["xxx"]
         if dimensions:
-            dimension_names = [
-                d["name"] if isinstance(d, dict) else d for d in dimensions
-            ]
+            dimension_names = [d["name"] if isinstance(d, dict) else d for d in dimensions]
         else:
             dimension_names = []
         group_by = ", ".join(dimension_names) if dimension_names else ""
@@ -188,9 +173,7 @@ class Metrics:
 
         indicator_names = monitor_obj.supplementary_indicators
 
-        metrics = Metric.objects.filter(
-            monitor_object_id=monitor_object_id, name__in=indicator_names
-        ).values("name", "unit", "data_type")
+        metrics = Metric.objects.filter(monitor_object_id=monitor_object_id, name__in=indicator_names).values("name", "unit", "data_type")
         metric_unit_map = {m["name"]: m["unit"] for m in metrics}
         metric_data_type_map = {m["name"]: m["data_type"] for m in metrics}
 
@@ -220,9 +203,7 @@ class Metrics:
             if not values:
                 continue
 
-            converted_values, target_unit = UnitConverter.auto_convert(
-                values, source_unit
-            )
+            converted_values, target_unit = UnitConverter.auto_convert(values, source_unit)
             display_unit = UnitConverter.get_display_unit(target_unit)
 
             for i, idx in enumerate(valid_indices):

@@ -656,7 +656,6 @@ class Sidecar:
 
                     if update_fields:
                         existing_pre_configuration.save(update_fields=update_fields)
-                        cache.delete(f"configuration_etag_{existing_pre_configuration.id}")
                         logger.info(f"Node {node.id} updated default configuration for collector {collector_obj.name}.")
                     else:
                         logger.info(f"Node {node.id} default configuration for collector {collector_obj.name} is up to date.")

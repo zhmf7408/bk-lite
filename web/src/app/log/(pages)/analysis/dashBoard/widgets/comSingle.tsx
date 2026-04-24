@@ -10,7 +10,7 @@ interface ComSingleProps {
 const ComSingle: React.FC<ComSingleProps> = ({
   rawData,
   loading = false,
-  config,
+  config
 }) => {
   const [displayValue, setDisplayValue] = useState<number>();
   const [fontSize, setFontSize] = useState<number>(100);
@@ -19,7 +19,18 @@ const ComSingle: React.FC<ComSingleProps> = ({
   // 处理数据
   useEffect(() => {
     if (!loading && rawData) {
-      const value = config?.getData?.(rawData);
+      let value = config?.getData?.(rawData);
+      // fallback: 没有 getData 时，通过 displayMaps 从 rawData 中提取值
+      if (value === undefined && config?.displayMaps?.value) {
+        const field = config.displayMaps.value;
+        if (Array.isArray(rawData) && rawData.length > 0) {
+          const parsed = parseFloat(rawData[0][field]);
+          value = isNaN(parsed) ? undefined : parsed;
+        } else if (rawData && typeof rawData === 'object' && !Array.isArray(rawData)) {
+          const parsed = parseFloat(rawData[field]);
+          value = isNaN(parsed) ? undefined : parsed;
+        }
+      }
       setDisplayValue(value);
     }
   }, [rawData, loading]);
@@ -30,10 +41,16 @@ const ComSingle: React.FC<ComSingleProps> = ({
       if (containerRef.current) {
         const containerWidth = containerRef.current.clientWidth;
         const containerHeight = containerRef.current.clientHeight;
+        const digits = String(displayValue ?? '').length || 1;
 
-        // 根据容器大小计算合适的字体大小
-        const minDimension = Math.min(containerWidth, containerHeight);
-        const calculatedSize = Math.max(50, Math.min(minDimension * 0.6, 300));
+        // 高度约束：确保文本不超出容器高度（lineHeight=1.2）
+        const maxByHeight = containerHeight / 1.2;
+        // 宽度约束：每个数字约 0.65em 宽
+        const maxByWidth = containerWidth / (digits * 0.65);
+        const calculatedSize = Math.max(
+          24,
+          Math.min(maxByHeight, maxByWidth, 300)
+        );
         setFontSize(calculatedSize);
       }
     };
@@ -80,7 +97,7 @@ const ComSingle: React.FC<ComSingleProps> = ({
         style={{
           fontSize: `${fontSize}px`,
           color: config?.color || 'var(--color-primary)',
-          lineHeight: 1.2,
+          lineHeight: 1.2
         }}
       >
         {displayValue}

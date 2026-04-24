@@ -13,16 +13,24 @@ from apps.core.logger import cmdb_logger as logger
 class BaseNodeParams(metaclass=ABCMeta):
     PLUGIN_MAP = {}  # 插件名称映射
     plugin_name = None
+    # registry key = (model_id, driver_type)
+    # 同一个 model（例如 physcial_server）可以同时存在 SSH/job 和 IPMI/protocol 两条下发链路。
     _registry = {}  # 自动收集支持的 model_id 对应的子类
     interval = 300  # 默认的采集间隔时间（秒）
+
+    @classmethod
+    def build_registry_key(cls, model_id, driver_type=None):
+        return model_id, driver_type
 
     def __init_subclass__(cls, **kwargs):
         super().__init_subclass__(**kwargs)
         plugin_name = getattr(cls, "plugin_name", None)
         model_id = getattr(cls, "supported_model_id", None)
+        driver_type = getattr(cls, "supported_driver_type", None)
         if model_id and plugin_name:
-            BaseNodeParams._registry[model_id] = cls
-            BaseNodeParams.PLUGIN_MAP.update({model_id: plugin_name})
+            registry_key = cls.build_registry_key(model_id, driver_type)
+            BaseNodeParams._registry[registry_key] = cls
+            BaseNodeParams.PLUGIN_MAP.update({registry_key: plugin_name})
         else:
             logger.warning(
                 f"子类 {cls.__name__} 未正确设置 'supported_model_id' 或 'plugin_name' 属性，将不会被注册到 BaseNodeParams 中。"
@@ -56,10 +64,15 @@ class BaseNodeParams(metaclass=ABCMeta):
         """
         获取插件名称，如果找不到则抛出异常
         """
+        registry_key = self.build_registry_key(self.model_id, self.instance.driver_type)
         try:
-            return self.PLUGIN_MAP[self.model_id]
+            return self.PLUGIN_MAP[registry_key]
         except KeyError:
-            raise KeyError(f"未在 PLUGIN_MAP 中找到对应 {self.model_id} 的插件配置")
+            # 向后兼容：旧的 NodeParams 只按 model_id 注册，没有显式 driver_type。
+            try:
+                return self.PLUGIN_MAP[self.build_registry_key(self.model_id)]
+            except KeyError as err:
+                raise KeyError(f"未在 PLUGIN_MAP 中找到对应 {self.model_id} / {self.instance.driver_type} 的插件配置") from err
 
     @abstractmethod
     def set_credential(self, *args, **kwargs):

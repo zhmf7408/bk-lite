@@ -36,20 +36,23 @@ class SearchService:
         return float(ratio.quantize(Decimal("0.0001"), rounding=ROUND_HALF_UP))
 
     @staticmethod
-    def field_values(start_time, end_time, field, limit=100):
+    def field_values(start_time, end_time, field, limit=100, query="*", log_groups=None):
         """获取字段值列表"""
+        value_filter_query = SearchService._append_filter(query, f"{field}:*")
+        final_query, _ = LogGroupQueryBuilder.build_query_with_groups(value_filter_query, log_groups)
+
         # Create an instance of the VictoriaMetricsAPI
         vm_api = VictoriaMetricsAPI()
 
         # Perform the field values query
-        response = vm_api.field_values(start_time, end_time, field, limit)
+        response = vm_api.field_values(start_time, end_time, field, limit, query=final_query)
 
         return response
 
     @staticmethod
-    def field_names(start_time, end_time, field, limit=100):
+    def field_names(start_time, end_time, field, limit=100, query="*", log_groups=None):
         """兼容旧命名，内部转发到字段值查询"""
-        return SearchService.field_values(start_time, end_time, field, limit)
+        return SearchService.field_values(start_time, end_time, field, limit, query=query, log_groups=log_groups)
 
     @staticmethod
     def all_field_names(query, start_time, end_time, log_groups=None):

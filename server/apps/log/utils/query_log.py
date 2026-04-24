@@ -1,5 +1,7 @@
 import json
 import asyncio
+import re
+from decimal import Decimal, InvalidOperation
 import requests
 import requests.adapters
 import time
@@ -11,12 +13,62 @@ from apps.core.logger import log_logger as logger
 
 
 class VictoriaMetricsAPI:
+    REQUEST_TIMEOUT = 10
+
     def __init__(self):
         self.host = VictoriaLogsConstants.HOST
         self.username = VictoriaLogsConstants.USER or ""
         self.password = VictoriaLogsConstants.PWD or ""
         self.ssl_verify = VictoriaLogsConstants.SSL_VERIFY
-        self.auth = HTTPBasicAuth(self.username, self.password)
+        self.auth = self._build_auth()
+
+    def _build_auth(self):
+        if not self.username and not self.password:
+            return None
+        return HTTPBasicAuth(self.username, self.password)
+
+    @staticmethod
+    def _build_url(host: str, path: str) -> str:
+        normalized_host = (host or "").rstrip("/")
+        if not normalized_host:
+            raise ValueError("VictoriaLogs host is not configured")
+        return f"{normalized_host}{path}"
+
+    @staticmethod
+    def _extract_metric_value(metrics_text: str, metric_name: str, metric_type: str) -> int:
+        sample_pattern = re.compile(
+            r"^(?P<name>[a-zA-Z_:][a-zA-Z0-9_:]*)(?:\{(?P<labels>[^}]*)\})?\s+"
+            r"(?P<value>[^\s]+)(?:\s+(?P<timestamp>[^\s]+))?$"
+        )
+        label_pattern = re.compile(r'(\w+)="((?:\\.|[^"])*)"')
+
+        for raw_line in metrics_text.splitlines():
+            line = raw_line.strip()
+            if not line or line.startswith("#"):
+                continue
+
+            matched = sample_pattern.match(line)
+            if not matched or matched.group("name") != metric_name:
+                continue
+
+            labels_str = matched.group("labels") or ""
+            labels = {key: value.replace(r"\"", '"').replace(r"\\", "\\") for key, value in label_pattern.findall(labels_str)}
+            if labels.get("type") != metric_type:
+                continue
+
+            value = matched.group("value")
+
+            try:
+                decimal_value = Decimal(value)
+            except (InvalidOperation, ValueError) as exc:
+                raise ValueError(f"指标 {metric_name}[type={metric_type}] 的值非法: {value}") from exc
+
+            if decimal_value != decimal_value.to_integral_value():
+                raise ValueError(f"指标 {metric_name}[type={metric_type}] 的值不是整数: {value}")
+
+            return int(decimal_value)
+
+        raise ValueError(f"未找到指标 {metric_name}[type={metric_type}]")
 
     def all_field_names(self, query, start, end):
         data = {
@@ -26,38 +78,43 @@ class VictoriaMetricsAPI:
             "ignore_pipes": 1,
         }
         response = requests.get(
-            f"{self.host}/select/logsql/field_names",
+            self._build_url(self.host, "/select/logsql/field_names"),
             params=data,
             auth=self.auth,
             verify=self.ssl_verify,
+            timeout=self.REQUEST_TIMEOUT,
         )
         response.raise_for_status()
         return response.json()
 
-    def field_values(self, start, end, field, limit=100):
+    def field_values(self, start, end, field, limit=100, query=None):
+        limit = VictoriaLogsConstants.normalize_field_values_limit(limit, default=100, clamp=True)
         data = {
-            "query": f"{field}:*",
+            "query": query or f"{field}:*",
             "field": field,
             "start": start,
             "end": end,
             "limit": limit,
         }
         response = requests.get(
-            f"{self.host}/select/logsql/field_values",
+            self._build_url(self.host, "/select/logsql/field_values"),
             params=data,
             auth=self.auth,
             verify=self.ssl_verify,
+            timeout=self.REQUEST_TIMEOUT,
         )
         response.raise_for_status()
         return response.json()
 
     def query(self, query, start, end, limit=10):
+        limit = VictoriaLogsConstants.normalize_query_limit(limit, default=10, clamp=True)
         data = {"query": query, "start": start, "end": end, "limit": limit}
         response = requests.post(
-            f"{self.host}/select/logsql/query",
+            self._build_url(self.host, "/select/logsql/query"),
             params=data,
             auth=self.auth,
             verify=self.ssl_verify,
+            timeout=self.REQUEST_TIMEOUT,
         )
         response.raise_for_status()
         result = []
@@ -102,6 +159,7 @@ class VictoriaMetricsAPI:
         return result
 
     def hits(self, query, start, end, field, fields_limit=5, step="5m"):
+        fields_limit = VictoriaLogsConstants.normalize_hits_fields_limit(fields_limit, default=5, clamp=True)
         data = {
             "query": query,
             "start": start,
@@ -112,13 +170,61 @@ class VictoriaMetricsAPI:
         }
 
         response = requests.post(
-            f"{self.host}/select/logsql/hits",
+            self._build_url(self.host, "/select/logsql/hits"),
             params=data,
             auth=self.auth,
             verify=self.ssl_verify,
+            timeout=self.REQUEST_TIMEOUT,
         )
         response.raise_for_status()
         return response.json()
+
+    def get_disk_usage(self):
+        try:
+            response = requests.get(
+                self._build_url(self.host, "/metrics"),
+                auth=self.auth,
+                verify=self.ssl_verify,
+                timeout=self.REQUEST_TIMEOUT,
+            )
+            response.raise_for_status()
+
+            metrics_text = response.text
+            storage_bytes = self._extract_metric_value(metrics_text, "vl_data_size_bytes", "storage")
+            indexdb_bytes = self._extract_metric_value(metrics_text, "vl_data_size_bytes", "indexdb")
+            used_bytes = storage_bytes + indexdb_bytes
+            used_gb = round(used_bytes / (1024**3), 2)
+
+            logger.info(
+                "获取VictoriaLogs磁盘占用成功",
+                extra={
+                    "host": self.host,
+                    "storage_bytes": storage_bytes,
+                    "indexdb_bytes": indexdb_bytes,
+                    "used_bytes": used_bytes,
+                    "used_gb": used_gb,
+                },
+            )
+
+            return {
+                "used_gb": used_gb,
+                "used_bytes": used_bytes,
+                "storage_bytes": storage_bytes,
+                "indexdb_bytes": indexdb_bytes,
+                "unit": "GB",
+            }
+        except requests.RequestException as exc:
+            logger.error(
+                "获取VictoriaLogs磁盘占用失败",
+                extra={"host": self.host, "error": str(exc), "error_type": type(exc).__name__},
+            )
+            raise
+        except ValueError as exc:
+            logger.error(
+                "解析VictoriaLogs磁盘占用指标失败",
+                extra={"host": self.host, "error": str(exc), "error_type": type(exc).__name__},
+            )
+            raise
 
     async def tail_async(self, query) -> AsyncIterator[str]:
         """异步版本的tail方法，ASGI兼容实现"""
@@ -139,7 +245,7 @@ class VictoriaMetricsAPI:
 
             def _make_request():
                 response = requests.post(
-                    f"{self.host}/select/logsql/tail",
+                    self._build_url(self.host, "/select/logsql/tail"),
                     params=data,
                     auth=self.auth,
                     verify=self.ssl_verify,

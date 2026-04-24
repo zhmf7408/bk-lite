@@ -1,6 +1,7 @@
 import json
 import logging
 import os
+from copy import deepcopy
 
 from django.core.management import BaseCommand
 
@@ -22,6 +23,7 @@ class Command(BaseCommand):
                     try:
                         with open(file_path, "r", encoding="utf-8") as f:
                             menu_data = json.load(f)
+                            menu_data = extend_menus_by_install_apps(menu_data, get_install_apps())
                             MENUS.append(menu_data)
                     except Exception as e:
                         logger.error(f"Error reading {file_path}: {e}")
@@ -46,6 +48,34 @@ class Command(BaseCommand):
             print(f"create {app_obj['client_id']} roles success")
         Group.objects.get_or_create(name="Default", parent_id=0, defaults={"description": "Default group"})
         Group.objects.get_or_create(name="Guest", parent_id=0, defaults={"description": "Guest group"})
+
+
+def get_install_apps() -> set[str]:
+    apps = {item.strip() for item in os.getenv("INSTALL_APPS", "").split(",") if item.strip()}
+    # 企业版：如果 apps/license_mgmt 目录存在，强制加入
+    from django.conf import settings
+
+    license_mgmt_path = os.path.join(settings.BASE_DIR, "apps", "license_mgmt")
+    if os.path.isdir(license_mgmt_path):
+        apps.add("license_mgmt")
+    return apps
+
+
+def extend_menus_by_install_apps(menu_data: dict, install_apps: set[str]) -> dict:
+    result = deepcopy(menu_data)
+    if result.get("client_id") != "system-manager" or "license_mgmt" not in install_apps:
+        return result
+
+    setting_menu = next((item for item in result.get("menus", []) if item.get("name") == "Setting"), None)
+    if not setting_menu:
+        return result
+
+    children = setting_menu.setdefault("children", [])
+    if any(child.get("id") == "license_mgmt" for child in children):
+        return result
+
+    children.append({"id": "license_mgmt", "name": "License", "operation": ["View", "Add", "Edit", "Delete"]})
+    return result
 
 
 def create_resource(app_inst: App, menus):

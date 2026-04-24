@@ -4,6 +4,7 @@ import {
   OrderParam,
   NodeConfigParam,
   InstanceInfo,
+  SnmpCollectTemplateDoc,
 } from '@/app/monitor/types/integration';
 import { AxiosRequestConfig } from 'axios';
 
@@ -170,6 +171,19 @@ const useIntegrationApi = () => {
     return await get(`/monitor/api/monitor_plugin/${pluginId}/ui_template/`);
   };
 
+  const getSnmpCollectTemplate = async (
+    pluginId: React.Key
+  ): Promise<SnmpCollectTemplateDoc> => {
+    return await get(`/monitor/api/monitor_plugin/${pluginId}/collect_template/`);
+  };
+
+  const updateSnmpCollectTemplate = async (
+    pluginId: React.Key,
+    data: { content: string }
+  ): Promise<SnmpCollectTemplateDoc> => {
+    return await put(`/monitor/api/monitor_plugin/${pluginId}/collect_template/`, data);
+  };
+
   const getInstanceListByPrimaryObject = async (
     params: {
       id?: React.Key;
@@ -252,6 +266,8 @@ const useIntegrationApi = () => {
     checkCollectStatus,
     getUiTemplateByParams,
     getUiTemplateByPlugin,
+    getSnmpCollectTemplate,
+    updateSnmpCollectTemplate,
   };
 };
 

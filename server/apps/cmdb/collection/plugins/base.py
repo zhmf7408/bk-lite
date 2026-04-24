@@ -1,5 +1,29 @@
+import inspect
+
 from apps.cmdb.collection.collect_plugin.base import CollectBase
 from apps.cmdb.collection.plugins.registry import CollectionPluginRegistry
+
+
+def _bind_collection_callable(instance, value):
+    if inspect.ismethod(value):
+        return value
+
+    if not callable(value) or not hasattr(value, "__get__"):
+        return value
+
+    func_name = getattr(value, "__name__", "")
+    if not func_name:
+        return value
+
+    for cls in instance.__class__.__mro__:
+        descriptor = inspect.getattr_static(cls, func_name, None)
+        if descriptor is None:
+            continue
+        if isinstance(descriptor, staticmethod):
+            return value
+        return value.__get__(instance, instance.__class__)
+
+    return value
 
 
 def bind_collection_mapping(instance, mapping):
@@ -7,13 +31,12 @@ def bind_collection_mapping(instance, mapping):
     for field, value in mapping.items():
         if isinstance(value, tuple):
             func, *rest = value
-            if callable(func) and hasattr(func, "__get__"):
-                func = func.__get__(instance, instance.__class__)
+            func = _bind_collection_callable(instance, func)
             bound_mapping[field] = (func, *rest)
             continue
 
-        if callable(value) and hasattr(value, "__get__"):
-            bound_mapping[field] = value.__get__(instance, instance.__class__)
+        if callable(value):
+            bound_mapping[field] = _bind_collection_callable(instance, value)
             continue
 
         bound_mapping[field] = value

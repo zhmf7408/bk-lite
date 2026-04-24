@@ -210,14 +210,11 @@ class MonitorPolicyScan:
             )
             return False
 
-        try:
-            self._execute_step(
-                "Set monitor instance key",
-                self.metric_query_service.set_monitor_obj_instance_key,
-                critical=True,
-            )
-        except Exception:
-            return False
+        self._execute_step(
+            "Set monitor instance key",
+            self.metric_query_service.set_monitor_obj_instance_key,
+            critical=True,
+        )
 
         return True
 
@@ -227,7 +224,9 @@ class MonitorPolicyScan:
 
         if AlertConstants.THRESHOLD in self.policy.enable_alerts:
             success, result = self._execute_step(
-                "Process threshold alerts", self._process_threshold_alerts
+                "Process threshold alerts",
+                self._process_threshold_alerts,
+                critical=True,
             )
             if success and result is not None:
                 alert_events, info_events = result
@@ -237,7 +236,9 @@ class MonitorPolicyScan:
 
         if AlertConstants.NO_DATA in self.policy.enable_alerts:
             success, result = self._execute_step(
-                "Process no-data alerts", self._process_no_data_alerts
+                "Process no-data alerts",
+                self._process_no_data_alerts,
+                critical=True,
             )
             if success and result is not None:
                 no_data_events = result

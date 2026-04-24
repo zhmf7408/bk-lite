@@ -1,18 +1,16 @@
+import importlib
+import logging
 import os
 
 from config.components.locale import TIME_ZONE
-from apps.alerts.config import CELERY_BEAT_SCHEDULE as ALERTS_CELERY_BEAT_SCHEDULE
-from apps.cmdb.config import CELERY_BEAT_SCHEDULE as CMDB_CELERY_BEAT_SCHEDULE
-from apps.monitor.config import CELERY_BEAT_SCHEDULE as MONITOR_CELERY_BEAT_SCHEDULE
-from apps.node_mgmt.config import CELERY_BEAT_SCHEDULE as NODE_CELERY_BEAT_SCHEDULE
+
+logger = logging.getLogger("celery_config")
 
 IS_USE_CELERY = os.getenv("ENABLE_CELERY", "False").lower() == "true"
 # celery
 CELERY_IMPORTS = ()
 CELERY_TIMEZONE = TIME_ZONE  # celery 时区问题
-CELERY_BROKER_URL = os.getenv(
-    "CELERY_BROKER_URL", "amqp://admin:password@rabbitmq.lite/"
-)
+CELERY_BROKER_URL = os.getenv("CELERY_BROKER_URL", "amqp://admin:password@rabbitmq.lite/")
 
 if IS_USE_CELERY:
     INSTALLED_APPS = locals().get("INSTALLED_APPS", [])
@@ -32,31 +30,14 @@ if IS_USE_CELERY:
     DJANGO_CELERY_BEAT_TZ_AWARE = True
 
     CELERY_BEAT_SCHEDULE = {}
-    CELERY_BEAT_SCHEDULE.update(ALERTS_CELERY_BEAT_SCHEDULE)
-    CELERY_BEAT_SCHEDULE.update(CMDB_CELERY_BEAT_SCHEDULE)
-    CELERY_BEAT_SCHEDULE.update(MONITOR_CELERY_BEAT_SCHEDULE)
-    CELERY_BEAT_SCHEDULE.update(NODE_CELERY_BEAT_SCHEDULE)
-
-    # # 整合各个 app 的 CELERY_BEAT_SCHEDULE 配置
-    # CELERY_BEAT_SCHEDULE = {}
-    #
-    # # 加载 alerts app 的配置
-    # try:
-    #     from apps.alerts.config import CELERY_BEAT_SCHEDULE as _schedule
-    #     CELERY_BEAT_SCHEDULE.update(_schedule)
-    # except ImportError:
-    #     pass
-    #
-    # # 加载 cmdb app 的配置
-    # try:
-    #     from apps.cmdb.config import CELERY_BEAT_SCHEDULE as _schedule
-    #     CELERY_BEAT_SCHEDULE.update(_schedule)
-    # except ImportError:
-    #     pass
-    #
-    # # 加载 monitor app 的配置
-    # try:
-    #     from apps.monitor.config import CELERY_BEAT_SCHEDULE as _schedule
-    #     CELERY_BEAT_SCHEDULE.update(_schedule)
-    # except ImportError:
-    #     pass
+    for app_label in INSTALLED_APPS:
+        config_module = f"{app_label}.config"
+        try:
+            mod = importlib.import_module(config_module)
+            app_schedule = getattr(mod, "CELERY_BEAT_SCHEDULE", None)
+            if app_schedule:
+                CELERY_BEAT_SCHEDULE.update(app_schedule)
+        except ImportError:
+            pass
+        except Exception:
+            logger.exception("Failed to load CELERY_BEAT_SCHEDULE from %s", config_module)

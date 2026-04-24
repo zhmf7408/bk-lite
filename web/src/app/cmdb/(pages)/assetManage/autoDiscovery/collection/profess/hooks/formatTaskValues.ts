@@ -22,14 +22,11 @@ interface CredentialConfig {
 export const formatTaskValues = ({
   values,
   baseRef,
-  selectedNode,
   modelItem,
   modelId,
   formatCycleValue,
 }: FormatTaskValuesOptions) => {
-  const driverType = selectedNode.tabItems?.find(
-    (item) => item.model_id === modelId
-  )?.type;
+  const driverType = modelItem.type;
 
   const accessPoint = baseRef.current?.accessPoints.find(
     (item: any) => item.value === values.accessPointId

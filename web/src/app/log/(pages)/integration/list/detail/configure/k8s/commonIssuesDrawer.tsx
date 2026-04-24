@@ -33,6 +33,15 @@ const CommonIssuesDrawer = forwardRef<DrawerRef>((_, ref) => {
         t('log.integration.k8s.commonIssueNatsSolution2'),
       ],
     },
+    {
+      id: 3,
+      title: t('log.integration.k8s.commonIssueMountTitle'),
+      reason: t('log.integration.k8s.commonIssueMountReason'),
+      solutions: [
+        t('log.integration.k8s.commonIssueMountSolution1'),
+        t('log.integration.k8s.commonIssueMountSolution2'),
+      ],
+    },
   ];
 
   return (

@@ -1,4 +1,56 @@
 import dayjs from 'dayjs';
+import type {
+  FilterValue,
+  FilterBindings,
+  UnifiedFilterDefinition,
+} from '@/app/ops-analysis/types/dashBoard';
+import type { ParamItem } from '@/app/ops-analysis/types/dataSource';
+
+export type BindableParamType = 'string' | 'timeRange';
+
+export const getFilterDefinitionId = (
+  key: string,
+  type: BindableParamType,
+): string => `${key}__${type}`;
+
+export const getBindableFilterParams = (
+  params?: ParamItem[],
+): Array<ParamItem & { type: BindableParamType }> =>
+  (params || []).filter(
+    (param): param is ParamItem & { type: BindableParamType } =>
+      param.filterType === 'filter' &&
+      (param.type === 'string' || param.type === 'timeRange'),
+  );
+
+export const buildDefaultFilterBindings = (
+  params: ParamItem[] | undefined,
+  definitions: UnifiedFilterDefinition[],
+  existingBindings?: FilterBindings,
+): FilterBindings | undefined => {
+  const bindableParams = getBindableFilterParams(params);
+  if (!bindableParams.length || !definitions.length) {
+    return existingBindings;
+  }
+
+  const autoBindings = definitions.reduce<FilterBindings>((acc, definition) => {
+    const matched = bindableParams.some(
+      (param) => param.name === definition.key && param.type === definition.type,
+    );
+    if (matched) {
+      acc[definition.id] = true;
+    }
+    return acc;
+  }, {});
+
+  if (!Object.keys(autoBindings).length) {
+    return existingBindings;
+  }
+
+  return {
+    ...autoBindings,
+    ...(existingBindings || {}),
+  };
+};
 
 export const formatTimeRange = (timeParams: any): string[] => {
   let startTime, endTime;
@@ -12,9 +64,15 @@ export const formatTimeRange = (timeParams: any): string[] => {
     startTime = timeParams[0];
     endTime = timeParams[1];
   } else if (timeParams && timeParams.start && timeParams.end) {
-    // 对象类型：{ start, end }
-    startTime = timeParams.start;
-    endTime = timeParams.end;
+    // 对象类型：{ start, end, selectValue? }
+    if (timeParams.selectValue && timeParams.selectValue > 0) {
+      // 有快捷选项时，基于当前时间重新计算相对时间
+      endTime = dayjs().valueOf();
+      startTime = dayjs().subtract(timeParams.selectValue, 'minute').valueOf();
+    } else {
+      startTime = timeParams.start;
+      endTime = timeParams.end;
+    }
   } else {
     // 默认时间范围：最近7天
     endTime = dayjs().valueOf();
@@ -30,15 +88,19 @@ export const formatTimeRange = (timeParams: any): string[] => {
 export const fetchWidgetData = async ({
   config,
   dataSource,
-  globalTimeRange,
   extraParams,
   getSourceDataByApiId,
+  unifiedFilterValues,
+  filterBindings,
+  filterDefinitions,
 }: {
   config: any;
-    dataSource?: any;
-  globalTimeRange?: any;
-    extraParams?: Record<string, any>;
+  dataSource?: any;
+  extraParams?: Record<string, any>;
   getSourceDataByApiId: (dataSource: any, params: any) => Promise<any>;
+  unifiedFilterValues?: Record<string, FilterValue>;
+  filterBindings?: FilterBindings;
+  filterDefinitions?: UnifiedFilterDefinition[];
 }) => {
   if (!config?.dataSource) {
     return null;
@@ -50,7 +112,7 @@ export const fetchWidgetData = async ({
         ? config.dataSourceParams
         : dataSource?.params) || [];
 
-    const userParams: any = {};
+    const userParams: Record<string, unknown> = {};
     sourceParams.forEach((param: any) => {
       userParams[param.name] = param.value;
     });
@@ -58,7 +120,9 @@ export const fetchWidgetData = async ({
     const requestParams = processDataSourceParams({
       sourceParams,
       userParams,
-      globalTimeRange
+      unifiedFilterValues,
+      filterBindings,
+      filterDefinitions,
     });
 
     const finalRequestParams = {
@@ -77,41 +141,122 @@ export const fetchWidgetData = async ({
 export const processDataSourceParams = ({
   sourceParams,
   userParams = {},
-  globalTimeRange
+  unifiedFilterValues,
+  filterBindings,
+  filterDefinitions,
 }: {
   sourceParams: any;
   userParams?: Record<string, any>;
-  globalTimeRange?: any;
+  unifiedFilterValues?: Record<string, FilterValue>;
+  filterBindings?: FilterBindings;
+  filterDefinitions?: UnifiedFilterDefinition[];
 }) => {
 
   if (!sourceParams || !Array.isArray(sourceParams)) {
     return userParams;
   }
 
-  const processedParams = { ...userParams };
+  const processedParams: Record<string, unknown> = { ...userParams };
+
+  // 构建统一筛选定义映射：filterId -> definition
+  const definitionsMap = new Map(
+    (filterDefinitions || []).map((d) => [d.id, d]),
+  );
+
+  // 构建参数名到绑定的统一筛选ID的映射
+  // 返回值：
+  // - hasBinding: 组件是否绑定了统一筛选
+  // - bindingDisabled: 绑定的统一筛选是否被禁用
+  // - value: 统一筛选的当前值
+  const getUnifiedFilterValue = (
+    paramName: string,
+    paramType: string,
+  ): { hasBinding: boolean; bindingDisabled: boolean; value: FilterValue | undefined } => {
+    if (!filterBindings || !unifiedFilterValues) {
+      return { hasBinding: false, bindingDisabled: false, value: undefined };
+    }
+
+    // 查找绑定到该参数的统一筛选
+    for (const [filterId, isEnabled] of Object.entries(filterBindings)) {
+      const def = definitionsMap.get(filterId);
+      // 严格匹配 key 和 type
+      if (def && def.key === paramName && def.type === paramType) {
+        // 组件配置的 filterBindings 开关关闭：不传该参数
+        if (!isEnabled) {
+          return { hasBinding: true, bindingDisabled: true, value: undefined };
+        }
+        // 头部筛选配置的 enabled 开关关闭：不传该参数
+        if (!def.enabled) {
+          return { hasBinding: true, bindingDisabled: true, value: undefined };
+        }
+        const value = unifiedFilterValues[filterId];
+        return { hasBinding: true, bindingDisabled: false, value };
+      }
+    }
+    return { hasBinding: false, bindingDisabled: false, value: undefined };
+  };
 
   sourceParams.forEach((param: any) => {
     const { name, filterType, value: defaultValue, type } = param;
-    let finalValue;
 
+    // 优先级：fixed > 统一筛选 > params > 默认值
     switch (filterType) {
       case 'fixed':
-        finalValue = defaultValue;
+        // 固定参数：直接使用配置值
+        processedParams[name] = (type === 'timeRange')
+          ? formatTimeRange(defaultValue)
+          : defaultValue;
         break;
-      case 'filter':
-        // filter 类型：时间范围使用全局时间，非时间范围使用默认值
-        finalValue = (type === 'timeRange' && globalTimeRange) ? globalTimeRange : defaultValue;
-        break;
-      case 'params':
-        finalValue = processedParams[name];
-        break;
-      default:
-        finalValue = defaultValue;
-    }
 
-    processedParams[name] = (type === 'timeRange')
-      ? formatTimeRange(finalValue)
-      : finalValue;
+      case 'filter': {
+        // 筛选参数：检查统一筛选绑定
+        const { hasBinding, bindingDisabled, value: unifiedValue } = getUnifiedFilterValue(name, type);
+        
+        if (hasBinding) {
+          if (bindingDisabled) {
+            // 绑定的统一筛选被禁用：不传该参数
+            delete processedParams[name];
+          } else if (unifiedValue !== null && unifiedValue !== undefined && unifiedValue !== '') {
+            // 有绑定且有值：使用统一筛选值
+            processedParams[name] = (type === 'timeRange')
+              ? formatTimeRange(unifiedValue)
+              : unifiedValue;
+          } else {
+            // 有绑定但无值：不传该参数
+            delete processedParams[name];
+          }
+        } else {
+          // 无绑定：使用默认值
+          if (defaultValue !== null && defaultValue !== undefined && defaultValue !== '') {
+            processedParams[name] = (type === 'timeRange')
+              ? formatTimeRange(defaultValue)
+              : defaultValue;
+          }
+        }
+        break;
+      }
+
+      case 'params':
+        // 私有参数：使用用户传入的参数值
+        if (processedParams[name] !== undefined) {
+          processedParams[name] = (type === 'timeRange')
+            ? formatTimeRange(processedParams[name])
+            : processedParams[name];
+        } else if (defaultValue !== undefined) {
+          processedParams[name] = (type === 'timeRange')
+            ? formatTimeRange(defaultValue)
+            : defaultValue;
+        }
+        break;
+
+      default:
+        // 默认：使用配置的默认值
+        if (defaultValue !== undefined) {
+          processedParams[name] = (type === 'timeRange')
+            ? formatTimeRange(defaultValue)
+            : defaultValue;
+        }
+    }
   });
 
   return processedParams;

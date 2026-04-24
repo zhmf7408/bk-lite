@@ -8,7 +8,7 @@ export const usePostgresqlFilebeatConfig = () => {
   const pluginConfig = {
     collector: 'Filebeat',
     collect_type: 'postgresql',
-    icon: 'postgresql'
+    icon: 'mm-postgresql_Postgresql'
   };
 
   return {

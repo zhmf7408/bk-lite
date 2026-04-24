@@ -3,6 +3,12 @@ import path from 'path';
 import fs from 'fs/promises';
 
 const INSTALL_APPS = (process.env.NEXTAPI_INSTALL_APP || 'example').split(',').map(app => app.trim());
+const ENTERPRISE_WEB_ROOT = process.env.ENTERPRISE_WEB_ROOT || '';
+const APP_ROOTS = [path.resolve(process.cwd(), 'src', 'app')];
+
+if (ENTERPRISE_WEB_ROOT) {
+  APP_ROOTS.push(path.join(ENTERPRISE_WEB_ROOT, 'src', 'app'));
+}
 
 interface NestedMessages {
   [key: string]: string | NestedMessages;
@@ -34,8 +40,6 @@ const deepMerge = (target: any, source: any) => {
 };
 
 const getMergedMessages = async () => {
-  const localesDir = path.resolve(process.cwd(), 'src', 'app');
-
   const baseEnMessages = JSON.parse(await fs.readFile(path.resolve(process.cwd(), 'src', 'locales', 'en.json'), 'utf8'));
   const baseZhMessages = JSON.parse(await fs.readFile(path.resolve(process.cwd(), 'src', 'locales', 'zh.json'), 'utf8'));
 
@@ -51,19 +55,20 @@ const getMergedMessages = async () => {
     zh: { ...baseMessages.zh },
   };
 
-  // 遍历所有配置的安装应用
-  for (const app of INSTALL_APPS) {
-    const appLocalesDir = path.join(localesDir, app, 'locales');
+  for (const appRoot of APP_ROOTS) {
+    for (const app of INSTALL_APPS) {
+      const appLocalesDir = path.join(appRoot, app, 'locales');
 
-    for (const locale of ['en', 'zh']) {
-      try {
-        const filePath = path.join(appLocalesDir, `${locale}.json`);
-        await fs.access(filePath);
+      for (const locale of ['en', 'zh']) {
+        try {
+          const filePath = path.join(appLocalesDir, `${locale}.json`);
+          await fs.access(filePath);
 
-        const messages = flattenMessages(JSON.parse(await fs.readFile(filePath, 'utf8')));
-        mergedMessages[locale as Locale] = deepMerge(mergedMessages[locale as Locale], messages);
-      } catch {
-        // Silently skip if locale file doesn't exist for this app
+          const messages = flattenMessages(JSON.parse(await fs.readFile(filePath, 'utf8')));
+          mergedMessages[locale as Locale] = deepMerge(mergedMessages[locale as Locale], messages);
+        } catch {
+          // Silently skip if locale file doesn't exist for this app
+        }
       }
     }
   }

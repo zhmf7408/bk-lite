@@ -1,4 +1,5 @@
 from datetime import timedelta
+import json
 import re
 import uuid
 
@@ -18,6 +19,8 @@ class K8sLogCollectService:
     REQUEST_TIMEOUT = 30
     TOKEN_CACHE_PREFIX = "log_k8s_install_token"
     CLUSTER_NAME_PATTERN = re.compile(r"^[A-Za-z0-9_-]+$")
+    RUNTIME_PROFILES = {"standard", "docker", "custom"}
+    PATH_UNSAFE_PATTERN = re.compile(r"[\r\n']")
 
     @classmethod
     def _build_cache_key(cls, token: str) -> str:
@@ -29,6 +32,47 @@ class K8sLogCollectService:
             raise BaseAppException("集群名称不能为空")
         if not cls.CLUSTER_NAME_PATTERN.fullmatch(cluster_name):
             raise BaseAppException("集群名称格式不正确，仅支持字母、数字、下划线和中划线")
+
+    @classmethod
+    def validate_host_path(cls, path: str, field_name: str):
+        if not path:
+            raise BaseAppException(f"{field_name} 不能为空")
+        if not isinstance(path, str):
+            raise BaseAppException(f"{field_name} 格式不正确")
+
+        normalized_path = path.strip()
+        if not normalized_path.startswith("/"):
+            raise BaseAppException(f"{field_name} 必须为绝对路径")
+        if cls.PATH_UNSAFE_PATTERN.search(normalized_path):
+            raise BaseAppException(f"{field_name} 包含非法字符")
+        return normalized_path
+
+    @classmethod
+    def normalize_render_options(
+        cls,
+        runtime_profile: str | None = None,
+        host_log_path: str | None = None,
+        docker_container_log_path: str | None = None,
+    ) -> dict:
+        normalized_profile = (runtime_profile or "standard").strip().lower()
+        if normalized_profile not in cls.RUNTIME_PROFILES:
+            raise BaseAppException("日志运行环境配置不正确")
+
+        normalized_host_log_path = None
+        normalized_docker_container_log_path = None
+        if normalized_profile == "custom":
+            normalized_host_log_path = cls.validate_host_path(host_log_path, "节点 Pod 日志根目录")
+            if docker_container_log_path:
+                normalized_docker_container_log_path = cls.validate_host_path(
+                    docker_container_log_path,
+                    "Docker 容器日志目录",
+                )
+
+        return {
+            "runtime_profile": normalized_profile,
+            "host_log_path": normalized_host_log_path,
+            "docker_container_log_path": normalized_docker_container_log_path,
+        }
 
     @staticmethod
     def get_collect_type(collect_type_id):
@@ -129,7 +173,14 @@ class K8sLogCollectService:
         return env_vars
 
     @classmethod
-    def generate_install_command(cls, instance_id: str, cloud_region_id: str) -> str:
+    def generate_install_command(
+        cls,
+        instance_id: str,
+        cloud_region_id: str,
+        runtime_profile: str | None = None,
+        host_log_path: str | None = None,
+        docker_container_log_path: str | None = None,
+    ) -> str:
         instance = CollectInstance.objects.filter(id=instance_id, collect_type__name="kubernetes").first()
         if not instance:
             raise BaseAppException("Kubernetes 日志接入实例不存在")
@@ -137,14 +188,38 @@ class K8sLogCollectService:
         env_vars = cls.get_cloud_region_envconfig(cloud_region_id)
         server_url = env_vars.get("NODE_SERVER_URL")
         token = cls.generate_install_token(instance.id, str(cloud_region_id))
+        render_options = cls.normalize_render_options(
+            runtime_profile,
+            host_log_path,
+            docker_container_log_path,
+        )
         api_url = f"{server_url.rstrip('/')}/api/v1/log/open_api/k8s/render/"
-        return f"curl -sSLk -X POST -H 'Content-Type: application/json' {api_url} -d '{{\"token\":\"{token}\"}}' | kubectl apply -f -"
+        payload = json.dumps(
+            {
+                "token": token,
+                **render_options,
+            },
+            ensure_ascii=False,
+        )
+        return f"curl -sSLk -X POST -H 'Content-Type: application/json' {api_url} -d '{payload}' | kubectl apply -f -"
 
     @classmethod
-    def render_config_from_cloud_region(cls, cluster_name: str, cloud_region_id: str) -> str:
+    def render_config_from_cloud_region(
+        cls,
+        cluster_name: str,
+        cloud_region_id: str,
+        runtime_profile: str | None = None,
+        host_log_path: str | None = None,
+        docker_container_log_path: str | None = None,
+    ) -> str:
         env_vars = cls.get_cloud_region_envconfig(cloud_region_id)
         webhook_server_url = env_vars.get("WEBHOOK_SERVER_URL")
         api_url = f"{webhook_server_url.rstrip('/')}/infra/kubernetes"
+        render_options = cls.normalize_render_options(
+            runtime_profile,
+            host_log_path,
+            docker_container_log_path,
+        )
 
         try:
             response = requests.post(
@@ -156,6 +231,7 @@ class K8sLogCollectService:
                     "nats_username": env_vars.get("NATS_USERNAME"),
                     "nats_password": env_vars.get("NATS_PASSWORD"),
                     "nats_ca": env_vars.get("NATS_TLS_CA"),
+                    **render_options,
                 },
                 headers={"Content-Type": "application/json"},
                 timeout=cls.REQUEST_TIMEOUT,

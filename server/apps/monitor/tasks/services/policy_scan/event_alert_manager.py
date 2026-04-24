@@ -40,24 +40,20 @@ class EventAlertManager:
                     value=event["value"],
                     level=event["level"],
                     content=event["content"],
-                    notice_result=True,
+                    notice_result=[],
                     event_time=self.policy.last_run_time,
                 )
             )
             if event.get("raw_data"):
-                events_with_raw_data.append(
-                    {"event_id": event_id, "raw_data": event["raw_data"]}
-                )
+                events_with_raw_data.append({"event_id": event_id, "raw_data": event["raw_data"]})
 
-        event_objs = MonitorEvent.objects.bulk_create(
-            create_events, batch_size=DatabaseConstants.BULK_CREATE_BATCH_SIZE
-        )
+        event_objs = MonitorEvent.objects.bulk_create(create_events, batch_size=DatabaseConstants.BULK_CREATE_BATCH_SIZE)
 
         if not event_objs or not hasattr(event_objs[0], "id"):
             event_objs = list(
-                MonitorEvent.objects.filter(
-                    policy_id=self.policy.id, event_time=self.policy.last_run_time
-                ).order_by("-created_at")[: len(create_events)]
+                MonitorEvent.objects.filter(policy_id=self.policy.id, event_time=self.policy.last_run_time).order_by("-created_at")[
+                    : len(create_events)
+                ]
             )
 
         if events_with_raw_data:
@@ -71,20 +67,13 @@ class EventAlertManager:
         raw_data_objects = []
         for event_info in events_with_raw_data:
             event_id = event_info["event_id"]
-            if (
-                event_id in event_obj_map
-                or MonitorEvent.objects.filter(id=event_id).exists()
-            ):
-                raw_data_objects.append(
-                    MonitorEventRawData(event_id=event_id, data=event_info["raw_data"])
-                )
+            if event_id in event_obj_map or MonitorEvent.objects.filter(id=event_id).exists():
+                raw_data_objects.append(MonitorEventRawData(event_id=event_id, data=event_info["raw_data"]))
 
         if raw_data_objects:
             for raw_data_obj in raw_data_objects:
                 raw_data_obj.save()
-            logger.info(
-                f"Created {len(raw_data_objects)} raw data records for policy {self.policy.id}"
-            )
+            logger.info(f"Created {len(raw_data_objects)} raw data records for policy {self.policy.id}")
 
     def create_events_and_alerts(self, events):
         if not events:
@@ -94,14 +83,14 @@ class EventAlertManager:
         existing_alert_events = []
 
         active_alerts_map = {
-            self._get_alert_metric_instance_id(alert): alert
-            for alert in self.active_alerts
+            self._build_alert_key(self._get_alert_metric_instance_id(alert), alert.alert_type): alert for alert in self.active_alerts
         }
 
         for event in events:
             metric_instance_id = event.get("metric_instance_id", "")
-            if metric_instance_id in active_alerts_map:
-                alert = active_alerts_map[metric_instance_id]
+            alert_key = self._build_alert_key(metric_instance_id, self._get_event_alert_type(event))
+            if alert_key in active_alerts_map:
+                alert = active_alerts_map[alert_key]
                 event["alert_id"] = alert.id
                 event["_alert_obj"] = alert
                 existing_alert_events.append(event)
@@ -113,27 +102,24 @@ class EventAlertManager:
             new_alerts = self._create_alerts_from_events(new_alert_events)
 
             if len(new_alerts) != len(new_alert_events):
-                logger.error(
-                    f"Alert creation mismatch: expected {len(new_alert_events)}, "
-                    f"got {len(new_alerts)} for policy {self.policy.id}"
-                )
+                logger.error(f"Alert creation mismatch: expected {len(new_alert_events)}, got {len(new_alerts)} for policy {self.policy.id}")
 
-            alert_map = {alert.metric_instance_id: alert for alert in new_alerts}
+            alert_map = {self._build_alert_key(alert.metric_instance_id, alert.alert_type): alert for alert in new_alerts}
             for event in new_alert_events:
-                alert = alert_map.get(event.get("metric_instance_id", ""))
+                alert = alert_map.get(
+                    self._build_alert_key(
+                        event.get("metric_instance_id", ""),
+                        self._get_event_alert_type(event),
+                    )
+                )
                 if alert:
                     event["alert_id"] = alert.id
                     event["_alert_obj"] = alert
                 else:
-                    logger.error(
-                        f"Failed to get alert for event metric_instance {event.get('metric_instance_id')} "
-                        f"in policy {self.policy.id}"
-                    )
+                    logger.error(f"Failed to get alert for event metric_instance {event.get('metric_instance_id')} in policy {self.policy.id}")
                     event["alert_id"] = None
 
-        valid_events = [
-            e for e in (new_alert_events + existing_alert_events) if e.get("alert_id")
-        ]
+        valid_events = [e for e in (new_alert_events + existing_alert_events) if e.get("alert_id")]
 
         if len(valid_events) != len(new_alert_events) + len(existing_alert_events):
             logger.warning(
@@ -160,6 +146,12 @@ class EventAlertManager:
             return alert.metric_instance_id
         return str((alert.monitor_instance_id,))
 
+    def _get_event_alert_type(self, event) -> str:
+        return "no_data" if event.get("level") == "no_data" else "alert"
+
+    def _build_alert_key(self, metric_instance_id: str, alert_type: str) -> tuple:
+        return metric_instance_id, alert_type
+
     def _create_alerts_from_events(self, events):
         if not events:
             return []
@@ -171,13 +163,7 @@ class EventAlertManager:
             metric_instance_id = event.get("metric_instance_id", "")
             dimensions = event.get("dimensions", {})
 
-            instance_name = self.instances_map.get(
-                monitor_instance_id, monitor_instance_id
-            )
-            dimension_str = self._format_dimension_str(dimensions)
-            # display_name = (
-            #     f"{instance_name} - {dimension_str}" if dimension_str else instance_name
-            # )
+            instance_name = self.instances_map.get(monitor_instance_id, monitor_instance_id)
 
             if event["level"] != "no_data":
                 alert_type = "alert"
@@ -208,14 +194,10 @@ class EventAlertManager:
                 )
             )
 
-        new_alerts = MonitorAlert.objects.bulk_create(
-            create_alerts, batch_size=DatabaseConstants.BULK_CREATE_BATCH_SIZE
-        )
+        new_alerts = MonitorAlert.objects.bulk_create(create_alerts, batch_size=DatabaseConstants.BULK_CREATE_BATCH_SIZE)
 
         if not new_alerts or not hasattr(new_alerts[0], "id"):
-            metric_instance_ids = [
-                event.get("metric_instance_id", "") for event in events
-            ]
+            metric_instance_ids = [event.get("metric_instance_id", "") for event in events]
             new_alerts = list(
                 MonitorAlert.objects.filter(
                     policy_id=self.policy.id,
@@ -240,9 +222,7 @@ class EventAlertManager:
         for event_data in event_data_list:
             alert = event_data.get("_alert_obj")
             if not alert:
-                logger.warning(
-                    f"Event data missing _alert_obj: {event_data.get('metric_instance_id')}"
-                )
+                logger.warning(f"Event data missing _alert_obj: {event_data.get('metric_instance_id')}")
                 continue
 
             if event_data.get("level") == "no_data":
@@ -257,9 +237,7 @@ class EventAlertManager:
                 alert.value = event_data.get("value")
                 alert.content = event_data.get("content")
                 alert_level_updates.append(alert)
-                logger.debug(
-                    f"Upgrading alert {alert.id} level from {alert.level} to {event_level}"
-                )
+                logger.debug(f"Upgrading alert {alert.id} level from {alert.level} to {event_level}")
 
         if alert_level_updates:
             MonitorAlert.objects.bulk_update(
@@ -267,33 +245,25 @@ class EventAlertManager:
                 ["level", "value", "content"],
                 batch_size=DatabaseConstants.BULK_UPDATE_BATCH_SIZE,
             )
-            logger.info(
-                f"Updated {len(alert_level_updates)} alerts with higher severity levels"
-            )
+            logger.info(f"Updated {len(alert_level_updates)} alerts with higher severity levels")
 
     def send_notice(self, event_obj):
         title = f"告警通知：{self.policy.name}"
         content = f"告警内容：{event_obj.content}"
 
         try:
-            send_result = SystemMgmtUtils.send_msg_with_channel(
-                self.policy.notice_type_id, title, content, self.policy.notice_users
-            )
+            send_result = SystemMgmtUtils.send_msg_with_channel(self.policy.notice_type_id, title, content, self.policy.notice_users)
             if send_result.get("result") is False:
-                logger.error(
-                    f"send notice failed for policy {self.policy.name}: {send_result.get('message', 'Unknown error')}"
-                )
+                logger.error(f"send notice failed for policy {self.policy.name}: {send_result.get('message', 'Unknown error')}")
             else:
-                logger.info(
-                    f"send notice success for policy {self.policy.name}: {send_result}"
-                )
+                logger.info(f"send notice success for policy {self.policy.name}: {send_result}")
+            return [send_result]
         except Exception as e:
             logger.error(
                 f"send notice exception for policy {self.policy.name}: {e}",
                 exc_info=True,
             )
-
-        return []
+            return [{"result": False, "message": str(e)}]
 
     def notify_events(self, event_objs):
         events_to_notify = []
@@ -301,15 +271,22 @@ class EventAlertManager:
         for event in event_objs:
             if event.level == "info":
                 continue
-            if event.level == "no_data" and self.policy.no_data_alert <= 0:
-                continue
             events_to_notify.append(event)
 
         if not events_to_notify:
             return
 
         if self._is_alert_center:
-            self._push_to_alert_center(events_to_notify)
+            notice_results = self._push_to_alert_center(events_to_notify)
+            # 告警中心走批量推送，当前渠道只返回整批发送结果，而不是逐事件回执。
+            # 因此这里将同一批次结果写回到每个事件，便于审计时保留真实下游返回值。
+            for event in events_to_notify:
+                event.notice_result = notice_results
+            MonitorEvent.objects.bulk_update(
+                events_to_notify,
+                ["notice_result"],
+                batch_size=DatabaseConstants.BULK_UPDATE_BATCH_SIZE,
+            )
         else:
             for event in events_to_notify:
                 notice_results = self.send_notice(event)
@@ -329,17 +306,12 @@ class EventAlertManager:
         channel = Channel.objects.filter(id=self.policy.notice_type_id).first()
         if not channel:
             return False
-        return (
-            channel.channel_type == "nats"
-            and channel.config.get("method_name") == "receive_alert_events"
-        )
+        return channel.channel_type == "nats" and channel.config.get("method_name") == "receive_alert_events"
 
     def _push_to_alert_center(self, events_to_notify):
         alert_events = []
         for event in events_to_notify:
-            start_time = (
-                str(int(event.event_time.timestamp())) if event.event_time else None
-            )
+            start_time = str(int(event.event_time.timestamp())) if event.event_time else None
             alert_events.append(
                 {
                     "external_id": event.id,
@@ -351,9 +323,7 @@ class EventAlertManager:
                     "action": "created",
                     "start_time": start_time,
                     "resource_id": event.monitor_instance_id,
-                    "resource_name": self.instances_map.get(
-                        event.monitor_instance_id, ""
-                    ),
+                    "resource_name": self.instances_map.get(event.monitor_instance_id, ""),
                     "tags": event.dimensions,
                     "labels": {
                         "policy_name": self.policy.name,
@@ -369,24 +339,18 @@ class EventAlertManager:
             "events": alert_events,
         }
         try:
-            send_result = SystemMgmtUtils.send_msg_with_channel(
-                self.policy.notice_type_id, "", content, []
-            )
+            send_result = SystemMgmtUtils.send_msg_with_channel(self.policy.notice_type_id, "", content, [])
             if send_result.get("result") is False:
-                logger.error(
-                    f"Push to alert center failed for policy {self.policy.name}: "
-                    f"{send_result.get('message', 'Unknown error')}"
-                )
+                logger.error(f"Push to alert center failed for policy {self.policy.name}: {send_result.get('message', 'Unknown error')}")
             else:
-                logger.info(
-                    f"Push to alert center success for policy {self.policy.name}: "
-                    f"{len(alert_events)} events"
-                )
+                logger.info(f"Push to alert center success for policy {self.policy.name}: {len(alert_events)} events")
+            return [send_result]
         except Exception as e:
             logger.error(
                 f"Push to alert center exception for policy {self.policy.name}: {e}",
                 exc_info=True,
             )
+            return [{"result": False, "message": str(e)}]
 
     def _map_level_to_alert_center(self, level):
         """映射告警级别到告警中心格式: 0-致命, 1-错误, 2-预警, 3-提醒"""

@@ -1,9 +1,90 @@
 """Kubernetes工具的通用辅助函数"""
-import io
 
+import base64
+import io
+import os
+
+import yaml
 from kubernetes import config
 
 from apps.core.logger import opspilot_logger as logger
+
+
+def _resolve_file_to_inline_data(obj, file_key, data_key, base64_encode=True):
+    """将 kubeconfig 中的文件路径引用转换为 inline data 字段。
+
+    Args:
+        obj: kubeconfig 中的 cluster 或 user 字典
+        file_key: 文件路径字段名，如 'certificate-authority'
+        data_key: inline data 字段名，如 'certificate-authority-data'
+        base64_encode: 是否对文件内容进行 base64 编码
+    """
+    if not obj or file_key not in obj:
+        return
+    if data_key in obj:
+        # inline data 已存在，优先使用，删除文件路径引用
+        del obj[file_key]
+        return
+
+    file_path = obj[file_key]
+    if not os.path.isfile(file_path):
+        logger.warning("kubeconfig 引用的文件不存在: %s", file_path)
+        return
+
+    try:
+        if base64_encode:
+            with open(file_path, "rb") as f:
+                obj[data_key] = base64.standard_b64encode(f.read()).decode("utf-8")
+        else:
+            with open(file_path, "r", encoding="utf-8") as f:
+                obj[data_key] = f.read().strip()
+        del obj[file_key]
+    except Exception as e:
+        logger.warning("读取 kubeconfig 引用文件 %s 失败: %s", file_path, e)
+
+
+def _preprocess_kubeconfig(kubeconfig_data):
+    """预处理 kubeconfig YAML，将文件路径引用转换为 inline data。
+
+    处理以下字段：
+    - clusters[].cluster.certificate-authority → certificate-authority-data (base64)
+    - users[].user.client-certificate → client-certificate-data (base64)
+    - users[].user.client-key → client-key-data (base64)
+    - users[].user.tokenFile → token (明文，strip 换行)
+
+    Args:
+        kubeconfig_data: kubeconfig YAML 字符串
+
+    Returns:
+        str: 预处理后的 kubeconfig YAML 字符串
+    """
+    try:
+        kube_cfg = yaml.safe_load(kubeconfig_data)
+    except yaml.YAMLError as e:
+        logger.warning("kubeconfig YAML 解析失败，跳过预处理: %s", e)
+        return kubeconfig_data
+
+    if not isinstance(kube_cfg, dict):
+        return kubeconfig_data
+
+    # 处理 clusters
+    for cluster_entry in kube_cfg.get("clusters", []) or []:
+        cluster = cluster_entry.get("cluster", {})
+        if cluster:
+            _resolve_file_to_inline_data(cluster, "certificate-authority", "certificate-authority-data", base64_encode=True)
+
+    # 处理 users
+    for user_entry in kube_cfg.get("users", []) or []:
+        user = user_entry.get("user", {})
+        if not user:
+            continue
+        # client 证书
+        _resolve_file_to_inline_data(user, "client-certificate", "client-certificate-data", base64_encode=True)
+        _resolve_file_to_inline_data(user, "client-key", "client-key-data", base64_encode=True)
+        # tokenFile → token (明文，不做 base64)
+        _resolve_file_to_inline_data(user, "tokenFile", "token", base64_encode=False)
+
+    return yaml.dump(kube_cfg, default_flow_style=False)
 
 
 def prepare_context(cfg):
@@ -20,6 +101,8 @@ def prepare_context(cfg):
             # 处理可能的转义换行符
             if isinstance(kubeconfig_data, str):
                 kubeconfig_data = kubeconfig_data.replace("\\n", "\n")
+            # 预处理：将文件路径引用转换为 inline data
+            kubeconfig_data = _preprocess_kubeconfig(kubeconfig_data)
             # 将配置内容写入 IO 对象
             kubeconfig_io = io.StringIO(kubeconfig_data)
             config.load_kube_config(config_file=kubeconfig_io)

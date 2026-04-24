@@ -1,0 +1,232 @@
+{
+  "object_name": "Etcd",
+  "instance_type": "etcd",
+  "collect_type": "bkpull",
+  "config_type": ["etcd"],
+  "collector": "Telegraf",
+  "instance_id": "{{cloud_region}}_{{host}}_{{port}}",
+  "form_fields": [
+    {
+      "name": "scheme",
+      "label": "协议",
+      "type": "select",
+      "required": true,
+      "default_value": "http",
+      "description": "用于访问 etcd metrics 接口的协议",
+      "widget_props": {
+        "placeholder": "请选择协议",
+        "options": [
+          {
+            "label": "HTTP",
+            "value": "http"
+          },
+          {
+            "label": "HTTPS",
+            "value": "https"
+          }
+        ]
+      },
+      "transform_on_edit": {
+        "origin_path": "child.content.config.urls[0]",
+        "to_form": {
+          "regex": "^(https?)://"
+        }
+      }
+    },
+    {
+      "name": "host",
+      "label": "主机",
+      "type": "input",
+      "required": true,
+      "visible_in": "edit",
+      "editable": false,
+      "description": "与设备进行通信的主机",
+      "widget_props": {
+        "placeholder": "主机地址"
+      },
+      "transform_on_edit": {
+        "origin_path": "child.content.config.urls[0]",
+        "to_form": {
+          "regex": "https?://([^:/]+)"
+        }
+      }
+    },
+    {
+      "name": "port",
+      "label": "端口",
+      "type": "inputNumber",
+      "required": true,
+      "visible_in": "edit",
+      "editable": false,
+      "description": "与设备进行通信的端口",
+      "widget_props": {
+        "min": 1,
+        "precision": 0,
+        "placeholder": "端口"
+      },
+      "transform_on_edit": {
+        "origin_path": "child.content.config.urls[0]",
+        "to_form": {
+          "regex": "https?://[^:]+:(\\d+)"
+        }
+      }
+    },
+    {
+      "name": "metrics_path",
+      "label": "指标路径",
+      "type": "input",
+      "required": true,
+      "default_value": "/metrics",
+      "description": "etcd 暴露 Prometheus 指标的路径",
+      "widget_props": {
+        "placeholder": "/metrics"
+      },
+      "transform_on_edit": {
+        "origin_path": "child.content.config.urls[0]",
+        "to_form": {
+          "regex": "https?://[^/]+(/.*)$"
+        }
+      }
+    },
+    {
+      "name": "interval",
+      "label": "间隔",
+      "type": "inputNumber",
+      "required": true,
+      "default_value": 10,
+      "description": "监控数据的采集时间间隔（单位：秒）",
+      "widget_props": {
+        "min": 1,
+        "precision": 0,
+        "placeholder": "间隔",
+        "addonAfter": "s"
+      },
+      "transform_on_edit": {
+        "origin_path": "child.content.config.interval",
+        "to_form": {
+          "regex": "^(\\d+)s$"
+        },
+        "to_api": {
+          "suffix": "s"
+        }
+      }
+    },
+    {
+      "name": "tls_ca",
+      "label": "CA证书路径",
+      "type": "input",
+      "required": false,
+      "editable": false,
+      "description": "HTTPS 访问时使用的 CA 证书路径",
+      "widget_props": {
+        "placeholder": "/etc/ssl/ca.pem"
+      },
+      "transform_on_edit": {
+        "origin_path": "child.content.config.tls_ca"
+      }
+    },
+    {
+      "name": "tls_cert",
+      "label": "客户端证书路径",
+      "type": "input",
+      "required": false,
+      "editable": false,
+      "description": "HTTPS 双向认证时使用的客户端证书路径",
+      "widget_props": {
+        "placeholder": "/etc/ssl/client.pem"
+      },
+      "transform_on_edit": {
+        "origin_path": "child.content.config.tls_cert"
+      }
+    },
+    {
+      "name": "tls_key",
+      "label": "客户端密钥路径",
+      "type": "input",
+      "required": false,
+      "editable": false,
+      "description": "HTTPS 双向认证时使用的客户端密钥路径",
+      "widget_props": {
+        "placeholder": "/etc/ssl/client-key.pem"
+      },
+      "transform_on_edit": {
+        "origin_path": "child.content.config.tls_key"
+      }
+    },
+    {
+      "name": "insecure_skip_verify",
+      "label": "跳过证书校验",
+      "type": "switch",
+      "required": false,
+      "default_value": false,
+      "description": "HTTPS 场景下是否跳过服务端证书校验",
+      "widget_props": {},
+      "transform_on_edit": {
+        "origin_path": "child.content.config.insecure_skip_verify"
+      }
+    }
+  ],
+  "table_columns": [
+    {
+      "name": "node_ids",
+      "label": "节点",
+      "type": "select",
+      "required": true,
+      "widget_props": {
+        "placeholder": "请选择节点"
+      },
+      "enable_row_filter": false
+    },
+    {
+      "name": "host",
+      "label": "主机",
+      "type": "input",
+      "required": true,
+      "widget_props": {
+        "placeholder": "主机"
+      },
+      "change_handler": {
+        "type": "combine",
+        "source_fields": ["host", "port"],
+        "target_field": "instance_name",
+        "separator": ":"
+      }
+    },
+    {
+      "name": "port",
+      "label": "端口",
+      "type": "inputNumber",
+      "required": true,
+      "widget_props": {
+        "min": 1,
+        "precision": 0,
+        "placeholder": "端口"
+      },
+      "change_handler": {
+        "type": "combine",
+        "source_fields": ["host", "port"],
+        "target_field": "instance_name",
+        "separator": ":"
+      }
+    },
+    {
+      "name": "instance_name",
+      "label": "实例名称",
+      "type": "input",
+      "required": true,
+      "widget_props": {
+        "placeholder": "实例名称"
+      }
+    },
+    {
+      "name": "group_ids",
+      "label": "组",
+      "type": "group_select",
+      "required": false,
+      "widget_props": {
+        "placeholder": "请选择组"
+      }
+    }
+  ],
+  "extra_edit_fields": {}
+}

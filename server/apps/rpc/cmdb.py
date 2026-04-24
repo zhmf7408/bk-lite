@@ -46,3 +46,11 @@ class CMDB(object):
         """
         return_data = self.client.run("sync_display_fields", **kwargs)
         return return_data
+
+    def model_inst_count(self, **kwargs):
+        """
+        获取模型实例数量
+        :return: 模型实例数量
+        """
+        return_data = self.client.run("model_inst_count", **kwargs)
+        return return_data

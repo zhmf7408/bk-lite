@@ -1,10 +1,9 @@
-import ast
-
 from apps.core.exceptions.base_app_exception import BaseAppException
 from apps.monitor.models import MonitorInstance, MonitorInstanceOrganization, MonitorObject
 from apps.monitor.services.infra import InfraService
 from apps.monitor.services.node_mgmt import InstanceConfigService
 from apps.monitor.services.monitor_object import MonitorObjectService
+from apps.monitor.utils.dimension import parse_instance_id
 from apps.monitor.utils.victoriametrics_api import VictoriaMetricsAPI
 
 
@@ -16,10 +15,7 @@ class ManualCollectService:
         """
 
         # 实例ID格式转换
-        try:
-            _instance_id = ast.literal_eval(instance_id)[0]
-        except (ValueError, SyntaxError, IndexError):
-            _instance_id = instance_id
+        _instance_id = parse_instance_id(instance_id)[0]
 
         monitor_object = MonitorObject.objects.filter(id=object_id).first()
         if not monitor_object:
@@ -85,10 +81,7 @@ class ManualCollectService:
         :return: kubectl apply 命令字符串
         """
 
-        try:
-            cluster_name = ast.literal_eval(instance_id)[0]
-        except (ValueError, SyntaxError, IndexError):
-            cluster_name = instance_id
+        cluster_name = parse_instance_id(instance_id)[0]
 
         # 通过 RPC 获取云区域环境变量
         from apps.rpc.node_mgmt import NodeMgmt

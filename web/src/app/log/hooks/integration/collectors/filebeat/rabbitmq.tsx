@@ -8,7 +8,7 @@ export const useRabbitmqFilebeatConfig = () => {
   const pluginConfig = {
     collector: 'Filebeat',
     collect_type: 'rabbitmq',
-    icon: 'rabbitmq'
+    icon: 'mm-rabbitmq_Rabbitmq'
   };
 
   return {

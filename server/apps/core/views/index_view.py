@@ -390,6 +390,12 @@ def get_client(request):
                         for tag in i["tags"]:
                             translated_tags.append(loader.get(tag, tag))
                         i["tags"] = translated_tags
+            # EE: 根据 license 过滤未授权的模块
+            try:
+                mod = __import__("apps.core.enterprise.license_filter", fromlist=["filter_clients_by_license"])
+                return_data["data"] = mod.filter_clients_by_license(return_data["data"])
+            except (ImportError, ModuleNotFoundError):
+                pass
         return JsonResponse(return_data)
     except Exception as e:
         logger.error(f"Error retrieving client info: {e}")

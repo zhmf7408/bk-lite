@@ -245,3 +245,60 @@ class CmdbPermissionMixin:
             )
 
         return None
+
+    def require_model_view_permission(
+        self,
+        request,
+        model_info: dict,
+        default_group_id: Optional[int] = None,
+        error_message: Optional[str] = None,
+        permissions_map: Optional[dict] = None,
+    ):
+        """
+        Check model VIEW permission and return error response if denied.
+
+        Unlike require_model_permission(), this helper allows Default-group
+        models to bypass direct group intersection before evaluating VIEW
+        permission. Non-Default models still require direct group overlap to
+        preserve existing cross-organization restrictions.
+
+        Args:
+            request: The HTTP request object
+            model_info: The model dict
+            default_group_id: The default group ID for special VIEW handling
+            error_message: Custom error message (optional)
+            permissions_map: Optional precomputed permission map
+
+        Returns:
+            None if permission granted, or WebUtils.response_error if denied
+        """
+        model_id = model_info["model_id"]
+        is_default_group_model = default_group_id in model_info.get("group", [])
+        if not is_default_group_model:
+            organizations = self.get_user_organizations(request, model_info, "group")
+            if not organizations:
+                return WebUtils.response_error(
+                    error_message or "抱歉！您没有此模型的权限",
+                    status_code=status.HTTP_403_FORBIDDEN,
+                )
+
+        permissions_map = permissions_map or CmdbRulesFormatUtil.format_user_groups_permissions(
+            request=request,
+            model_id=model_id,
+            permission_type=PERMISSION_MODEL,
+        )
+
+        if not CmdbRulesFormatUtil.has_object_permission(
+            obj_type=PERMISSION_MODEL,
+            operator=VIEW,
+            model_id=model_id,
+            permission_instances_map=permissions_map,
+            instance=model_info,
+            default_group_id=default_group_id,
+        ):
+            return WebUtils.response_error(
+                error_message or "抱歉！您没有此模型的权限",
+                status_code=status.HTTP_403_FORBIDDEN,
+            )
+
+        return None

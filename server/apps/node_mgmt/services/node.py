@@ -380,3 +380,51 @@ class NodeService:
         serializer = NodeSerializer(nodes, many=True)
         node_data = serializer.data
         return dict(count=count, nodes=node_data)
+
+    @staticmethod
+    def get_authorized_nodes_by_ids(node_ids, permission_data=None):
+        if not node_ids:
+            return []
+
+        permission_data = permission_data or {}
+        normalized_node_ids = list({str(node_id) for node_id in node_ids if node_id not in (None, "")})
+        if not normalized_node_ids:
+            return []
+
+        if permission_data:
+            user_obj = User(username=permission_data["username"], domain=permission_data["domain"])
+            from apps.core.utils.permission_utils import permission_filter
+
+            include_children = permission_data.get("include_children", False)
+            permission = get_permission_rules(
+                user_obj,
+                permission_data["current_team"],
+                "node_mgmt",
+                NodeConstants.MODULE,
+                include_children=include_children,
+            )
+            qs = permission_filter(
+                Node,
+                permission,
+                team_key="nodeorganization__organization__in",
+                id_key="id__in",
+            )
+        else:
+            qs = Node.objects.all()
+
+        nodes = qs.filter(id__in=normalized_node_ids).distinct().prefetch_related("nodeorganization_set")
+        return [
+            {
+                "id": node.id,
+                "organization_ids": [rel.organization for rel in node.nodeorganization_set.all()],
+            }
+            for node in nodes
+        ]
+
+    @staticmethod
+    def get_node_names_by_ids(node_ids):
+        normalized_node_ids = list({str(node_id) for node_id in node_ids if node_id not in (None, "")})
+        if not normalized_node_ids:
+            return []
+
+        return list(Node.objects.filter(id__in=normalized_node_ids).values("id", "name"))

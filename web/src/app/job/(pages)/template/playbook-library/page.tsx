@@ -49,6 +49,7 @@ const PlaybookLibraryPage = () => {
     deletePlaybook,
     upgradePlaybook,
     downloadPlaybook,
+    downloadPlaybookTemplate,
   } = useJobApi();
 
   const [form] = Form.useForm();
@@ -255,7 +256,7 @@ const PlaybookLibraryPage = () => {
       const detail = await getPlaybookDetail(record.id);
       setViewingPlaybook(detail);
     } catch {
-      message.error('Failed to load playbook detail');
+      message.error(t('job.loadPlaybookDetailFailed'));
       setViewModalOpen(false);
     } finally {
       setViewLoading(false);
@@ -270,6 +271,22 @@ const PlaybookLibraryPage = () => {
       const link = document.createElement('a');
       link.href = url;
       link.setAttribute('download', record.file_name || `${record.name}.zip`);
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      window.URL.revokeObjectURL(url);
+    } catch {
+      message.error(t('job.downloadFailed'));
+    }
+  };
+
+  const handleDownloadTemplate = async () => {
+    try {
+      const blob = await downloadPlaybookTemplate();
+      const url = window.URL.createObjectURL(new Blob([blob]));
+      const link = document.createElement('a');
+      link.href = url;
+      link.setAttribute('download', 'playbook-template.zip');
       document.body.appendChild(link);
       link.click();
       link.remove();
@@ -628,30 +645,36 @@ const PlaybookLibraryPage = () => {
         width={600}
       >
         <Form form={uploadForm} layout="vertical" colon={false}>
-          <Form.Item label={t('job.uploadFile')}>
+          <div className="flex items-center justify-between mb-2">
+            <span className="font-medium" style={{ color: 'var(--color-text-1)' }}>{t('job.uploadFile')}</span>
+            <Button icon={<DownloadOutlined />} onClick={handleDownloadTemplate}>
+              {t('job.downloadPlaybookTemplate')}
+            </Button>
+          </div>
+          <Form.Item>
             <Dragger
-              accept=".zip,.tar.gz,.tgz"
-              maxCount={1}
-              fileList={uploadFile ? [{ uid: '-1', name: uploadFile.name, status: 'done' as const }] : []}
-              beforeUpload={(file) => {
-                const isValid = file.name.endsWith('.zip') || file.name.endsWith('.tar.gz') || file.name.endsWith('.tgz');
-                if (!isValid) {
-                  message.error(t('job.onlyZipAllowed'));
-                  return Upload.LIST_IGNORE;
-                }
-                setUploadFile(file);
-                return false;
-              }}
-              onRemove={() => {
-                setUploadFile(null);
-              }}
-            >
-              <p className="ant-upload-drag-icon">
-                <InboxOutlined />
-              </p>
-              <p className="ant-upload-text">{t('job.dragUploadText')}</p>
-              <p className="ant-upload-hint">{t('job.dragUploadHint')}</p>
-            </Dragger>
+                accept=".zip,.tar.gz,.tgz"
+                maxCount={1}
+                fileList={uploadFile ? [{ uid: '-1', name: uploadFile.name, status: 'done' as const }] : []}
+                beforeUpload={(file) => {
+                  const isValid = file.name.endsWith('.zip') || file.name.endsWith('.tar.gz') || file.name.endsWith('.tgz');
+                  if (!isValid) {
+                    message.error(t('job.onlyZipAllowed'));
+                    return Upload.LIST_IGNORE;
+                  }
+                  setUploadFile(file);
+                  return false;
+                }}
+                onRemove={() => {
+                  setUploadFile(null);
+                }}
+              >
+                <p className="ant-upload-drag-icon">
+                  <InboxOutlined />
+                </p>
+                <p className="ant-upload-text">{t('job.dragUploadText')}</p>
+                <p className="ant-upload-hint">{t('job.dragUploadHint')}</p>
+              </Dragger>
           </Form.Item>
 
           <Form.Item

@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useCallback, useState } from 'react';
 import { Form, message } from 'antd';
 import { useTranslation } from '@/utils/i18n';
 import { useCollectApi } from '@/app/cmdb/api';
@@ -47,7 +47,7 @@ export const useTaskForm = ({
   const [loading, setLoading] = useState(false);
   const [submitLoading, setSubmitLoading] = useState(false);
 
-  const formatCycleValue = (values: any) => {
+  const formatCycleValue = useCallback((values: any) => {
     const { cycle } = values;
     if (cycle === CYCLE_OPTIONS.ONCE) {
       return { value_type: 'close', value: '' };
@@ -63,9 +63,9 @@ export const useTaskForm = ({
       };
     }
     return { value_type: 'close', value: '' };
-  };
+  }, []);
 
-  const fetchTaskDetail = async (id: number) => {
+  const fetchTaskDetail = useCallback(async (id: number) => {
     try {
       setLoading(true);
       const data = await collectApi.getCollectDetail(id.toString());
@@ -89,9 +89,9 @@ export const useTaskForm = ({
     } finally {
       setLoading(false);
     }
-  };
+  }, [collectApi, form]);
 
-  const onFinish = async (values: any) => {
+  const onFinish = useCallback(async (values: any) => {
     try {
       setSubmitLoading(true);
       const params = formatValues(values);
@@ -116,7 +116,7 @@ export const useTaskForm = ({
     } finally {
       setSubmitLoading(false);
     }
-  };
+  }, [collectApi, editId, formatValues, onClose, onSuccess, t]);
 
   return {
     form,

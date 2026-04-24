@@ -19,14 +19,14 @@ from apps.cmdb.serializers.field_group import (
 from apps.cmdb.services.field_group import FieldGroupService
 from apps.cmdb.services.model import ModelManage
 from apps.cmdb.utils.base import get_default_group_id
-from apps.cmdb.utils.permission_util import CmdbRulesFormatUtil
+from apps.cmdb.views.mixins import CmdbPermissionMixin
 from apps.core.decorators.api_permission import HasPermission
 from apps.core.exceptions.base_app_exception import BaseAppException
 from apps.core.utils.web_utils import WebUtils
 from config.drf.pagination import CustomPageNumberPagination
 
 
-class FieldGroupViewSet(viewsets.ModelViewSet):
+class FieldGroupViewSet(CmdbPermissionMixin, viewsets.ModelViewSet):
     """字段分组管理视图集"""
 
     queryset = FieldGroup.objects.all().order_by("model_id", "order")
@@ -222,25 +222,14 @@ class FieldGroupViewSet(viewsets.ModelViewSet):
         if not model_info:
             return WebUtils.response_error("模型不存在", status_code=status.HTTP_404_NOT_FOUND)
 
-        permissions_map = CmdbRulesFormatUtil.format_user_groups_permissions(request=request,
-                                                                             model_id=model_info["model_id"],
-                                                                             permission_type=PERMISSION_MODEL)
-
-        user_groups = {i["id"] for i in request.user.group_list}
-        organizations = list(set(model_info["group"]) & user_groups)
-        # 再次确认用户所在的组织
-        if not organizations:
-            return WebUtils.response_error("抱歉！您没有此模型的查询权限", status_code=status.HTTP_403_FORBIDDEN)
-
-        default_group_id = get_default_group_id()[0]
-        has_permission = CmdbRulesFormatUtil.has_object_permission(obj_type=PERMISSION_MODEL,
-                                                                   operator=VIEW,
-                                                                   model_id=model_id,
-                                                                   permission_instances_map=permissions_map,
-                                                                   instance=model_info,
-                                                                   default_group_id=default_group_id)
-        if not has_permission:
-            return WebUtils.response_error("抱歉！您没有此模型的查询权限", status_code=status.HTTP_403_FORBIDDEN)
+        permission_error = self.require_model_view_permission(
+            request,
+            model_info,
+            default_group_id=get_default_group_id()[0],
+            error_message="抱歉！您没有此模型的查询权限",
+        )
+        if permission_error:
+            return permission_error
 
         try:
             data = FieldGroupService.get_model_with_groups(

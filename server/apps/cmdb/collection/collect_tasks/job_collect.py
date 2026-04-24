@@ -3,6 +3,7 @@
 # @Time: 2025/11/12 15:09
 # @Author: windyzhao
 from apps.cmdb.collection.collect_tasks.databases import DBCollect
+from apps.cmdb.collection.collect_tasks.config_file_collect import ConfigFileCollect
 from apps.cmdb.collection.collect_tasks.host import HostCollect
 from apps.cmdb.collection.collect_tasks.middleware import MiddlewareCollect
 from apps.cmdb.constants.constants import CollectPluginTypes
@@ -18,7 +19,8 @@ class JobCollect(object):
         result = {
             CollectPluginTypes.HOST: self.collect_host,
             CollectPluginTypes.DB: self.collect_db,
-            CollectPluginTypes.MIDDLEWARE: self.collect_middleware
+            CollectPluginTypes.MIDDLEWARE: self.collect_middleware,
+            CollectPluginTypes.CONFIG_FILE: self.collect_config_file,
         }
         return result
 
@@ -36,6 +38,9 @@ class JobCollect(object):
 
     def collect_db(self):
         return DBCollect(self.task.id)()
+
+    def collect_config_file(self):
+        return ConfigFileCollect(self.task.id)()
 
     def main(self):
         return self.collect_manage[self.task.task_type]()

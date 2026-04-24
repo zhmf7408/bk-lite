@@ -1,0 +1,126 @@
+from apps.log.constants.victoriametrics import VictoriaLogsConstants
+from apps.log.nats.log import _normalize_bounded_int, log_search
+from apps.log.serializers.search import LogFieldValuesSerializer, LogHitsSerializer, LogSearchSerializer
+from apps.log.utils.query_log import VictoriaMetricsAPI
+
+
+def test_log_search_serializer_rejects_oversized_limit():
+    serializer = LogSearchSerializer(data={"query": "*", "limit": VictoriaLogsConstants.QUERY_LIMIT_MAX + 1})
+
+    assert not serializer.is_valid()
+    assert "limit" in serializer.errors
+
+
+def test_log_hits_serializer_rejects_oversized_fields_limit():
+    serializer = LogHitsSerializer(
+        data={
+            "query": "*",
+            "field": "_stream",
+            "fields_limit": VictoriaLogsConstants.HITS_FIELDS_LIMIT_MAX + 1,
+        }
+    )
+
+    assert not serializer.is_valid()
+    assert "fields_limit" in serializer.errors
+
+
+def test_log_field_values_serializer_rejects_oversized_limit():
+    serializer = LogFieldValuesSerializer(
+        data={
+            "filed": "_stream",
+            "limit": VictoriaLogsConstants.FIELD_VALUES_LIMIT_MAX + 1,
+        }
+    )
+
+    assert not serializer.is_valid()
+    assert "limit" in serializer.errors
+
+
+def test_log_nats_search_rejects_oversized_limit_without_vm_query(monkeypatch):
+    class FakeVictoriaMetricsAPI:
+        def query(self, *args, **kwargs):
+            raise AssertionError("VMLogs query should not be called")
+
+    monkeypatch.setattr("apps.log.nats.log.VictoriaMetricsAPI", FakeVictoriaMetricsAPI)
+
+    result = log_search(
+        "*",
+        ("2026-04-22 00:00:00", "2026-04-22 00:01:00"),
+        limit=VictoriaLogsConstants.QUERY_LIMIT_MAX + 1,
+    )
+
+    assert result["result"] is False
+    assert "limit" in result["message"]
+
+
+def test_normalize_bounded_int_accepts_default():
+    assert _normalize_bounded_int("", "limit", 10, 1000) == 10
+
+
+def test_vmlogs_query_clamps_oversized_limit(monkeypatch):
+    captured = {}
+
+    class FakeResponse:
+        def raise_for_status(self):
+            return None
+
+        def iter_lines(self, decode_unicode=True):
+            return iter(())
+
+    def fake_post(url, params, **kwargs):
+        captured.update(params)
+        return FakeResponse()
+
+    monkeypatch.setattr("apps.log.utils.query_log.requests.post", fake_post)
+
+    api = VictoriaMetricsAPI()
+    api.host = "http://victorialogs.example"
+    api.query("*", "start", "end", VictoriaLogsConstants.QUERY_LIMIT_MAX + 50)
+
+    assert captured["limit"] == VictoriaLogsConstants.QUERY_LIMIT_MAX
+
+
+def test_vmlogs_field_values_clamps_oversized_limit(monkeypatch):
+    captured = {}
+
+    class FakeResponse:
+        def raise_for_status(self):
+            return None
+
+        def json(self):
+            return {"values": []}
+
+    def fake_get(url, params, **kwargs):
+        captured.update(params)
+        return FakeResponse()
+
+    monkeypatch.setattr("apps.log.utils.query_log.requests.get", fake_get)
+
+    api = VictoriaMetricsAPI()
+    api.host = "http://victorialogs.example"
+    api.field_values("start", "end", "_stream", VictoriaLogsConstants.FIELD_VALUES_LIMIT_MAX + 25)
+
+    assert captured["limit"] == VictoriaLogsConstants.FIELD_VALUES_LIMIT_MAX
+
+
+def test_vmlogs_hits_clamps_oversized_fields_limit(monkeypatch):
+    captured = {}
+
+    class FakeResponse:
+        def raise_for_status(self):
+            return None
+
+        def json(self):
+            return {"hits": []}
+
+    def fake_post(url, params, **kwargs):
+        captured.update(params)
+        return FakeResponse()
+
+    monkeypatch.setattr("apps.log.utils.query_log.requests.post", fake_post)
+
+    api = VictoriaMetricsAPI()
+    api.host = "http://victorialogs.example"
+    api.hits("*", "start", "end", "_stream", VictoriaLogsConstants.HITS_FIELDS_LIMIT_MAX + 5)
+
+    assert captured["fields_limit"] == VictoriaLogsConstants.HITS_FIELDS_LIMIT_MAX

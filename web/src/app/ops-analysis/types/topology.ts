@@ -1,6 +1,6 @@
 import { DirItem } from './index';
 import type { ParamItem } from './dataSource';
-import type { TableConfig } from './dashBoard';
+import type { ValueConfig, UnifiedFilterDefinition, TableConfig } from './dashBoard';
 import type { Graph as X6Graph, Cell, Node, Edge } from '@antv/x6';
 
 // 基础几何类型
@@ -57,13 +57,7 @@ export interface TopologyNodeData {
   isPlaceholder?: boolean;
   isNewNode?: boolean; 
   // 值配置 - 包含数据源相关配置
-  valueConfig?: {
-    chartType?: string;
-    dataSource?: number;
-    dataSourceParams?: ParamItem[];
-    selectedFields?: string[];
-    tableConfig?: TableConfig;
-  };
+  valueConfig?: ValueConfig;
   // 样式配置
   styleConfig?: {
     width?: number;
@@ -284,6 +278,8 @@ export interface ToolbarProps {
   canRedo?: boolean;
   onRefresh?: () => void;
   onFrequencyChange?: (frequency: number) => void;
+  onCancel?: () => void;
+  onFilterConfig?: () => void;
 }
 
 // ViewConfig 表单值类型
@@ -293,6 +289,15 @@ export interface ViewConfigFormValues {
   chartType?: string;
   dataSource?: number | string;
   dataSourceParams?: ParamItem[];
+  selectedFields?: string[];
+  unit?: string;
+  conversionFactor?: number;
+  decimalPlaces?: number;
+  thresholdColors?: Array<{
+    value: string;
+    color: string;
+  }>;
+  tableConfig?: TableConfig;
 }
 
 // 节点配置表单值类型
@@ -362,4 +367,14 @@ export interface CreatedNodeConfig extends BaseNodeData {
   height?: number;
   attrs?: NodeAttrs;
   ports?: any;
+}
+
+export interface TopologySaveData {
+  name: string;
+  desc?: string;
+  view_sets: {
+    nodes: TopologyNodeData[];
+    edges: SerializedEdge[];
+    filters?: UnifiedFilterDefinition[];
+  };
 }

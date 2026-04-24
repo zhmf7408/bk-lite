@@ -8,7 +8,7 @@ export const useVectorConfig = () => {
   const pluginConfig = {
     collector: 'Vector',
     collect_type: 'docker',
-    icon: 'docker-run-to-docker-compose'
+    icon: 'mm-docker_Docker'
   };
 
   return {

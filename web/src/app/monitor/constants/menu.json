@@ -76,6 +76,12 @@
               "icon": "guanli",
               "url": "/monitor/integration/list/detail/metric",
               "name": "integration_metric"
+            },
+            {
+              "title": "采集",
+              "icon": "caijiqi",
+              "url": "/monitor/integration/list/detail/collect",
+              "name": "integration_collect"
             }
           ]
         },
@@ -177,6 +183,12 @@
               "icon": "guanli",
               "url": "/monitor/integration/list/detail/metric",
               "name": "integration_metric"
+            },
+            {
+              "title": "Collect",
+              "icon": "caijiqi",
+              "url": "/monitor/integration/list/detail/collect",
+              "name": "integration_collect"
             }
           ]
         },

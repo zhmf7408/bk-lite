@@ -1,4 +1,3 @@
-import ast
 from datetime import datetime, timezone
 
 from rest_framework import viewsets, mixins
@@ -15,6 +14,7 @@ from apps.core.utils.permission_utils import (
 )
 from apps.core.utils.web_utils import WebUtils
 from apps.monitor.constants.permission import PermissionConstants
+from apps.monitor.utils.dimension import parse_instance_id
 from apps.monitor.models import (
     MonitorAlert,
     MonitorEvent,
@@ -158,10 +158,7 @@ class MonitorAlertViewSet(
 
             # 补充instance_id_values
 
-            try:
-                alert["instance_id_values"] = [i for i in ast.literal_eval(alert["monitor_instance_id"])]
-            except (ValueError, SyntaxError):
-                alert["instance_id_values"] = [alert["monitor_instance_id"]]
+            alert["instance_id_values"] = list(parse_instance_id(alert["monitor_instance_id"]))
             # 在 results 字典中添加完整的 policy 和 monitor_instance 信息
             alert["policy"] = MonitorPolicySerializer(policy_dict.get(alert["policy_id"])).data if alert["policy_id"] else None
 

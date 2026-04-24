@@ -6,12 +6,13 @@ import {
 } from '@/app/log/types/search';
 import useApiClient from '@/utils/request';
 import React from 'react';
+import { AxiosRequestConfig } from 'axios';
 
 const useSearchApi = () => {
   const { post, get, del } = useApiClient();
 
-  const getLogs = async (data: SearchParams) => {
-    return await post(`/log/search/search/`, data);
+  const getLogs = async (data: SearchParams, config?: AxiosRequestConfig) => {
+    return await post(`/log/search/search/`, data, config);
   };
 
   const getHits = async (data: SearchParams) => {

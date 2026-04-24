@@ -2,6 +2,7 @@ from rest_framework import viewsets
 from rest_framework.decorators import action
 from django.db import ProgrammingError
 
+from apps.core.decorators.api_permission import HasPermission
 from apps.core.exceptions.base_app_exception import BaseAppException
 from apps.core.utils.loader import LanguageLoader
 from apps.core.utils.web_utils import WebUtils
@@ -9,6 +10,7 @@ from apps.monitor.constants.language import LanguageConstants
 from apps.monitor.filters.plugin import MonitorPluginFilter
 from apps.monitor.models import MonitorPlugin, MonitorPluginUITemplate
 from apps.monitor.serializers.plugin import MonitorPluginSerializer
+from apps.monitor.services.custom_snmp_plugin import CustomSnmpPluginService
 from apps.monitor.services.plugin import MonitorPluginService
 from apps.monitor.services.template_access_guide import TemplateAccessGuideService
 from config.drf.pagination import CustomPageNumberPagination
@@ -40,7 +42,7 @@ class MonitorPluginViewSet(viewsets.ModelViewSet):
 
     def destroy(self, request, *args, **kwargs):
         plugin = self.get_object()
-        if plugin.template_type in {"api", "pull"}:
+        if plugin.template_type in {"api", "pull", "snmp"}:
             try:
                 plugin.delete()
             except ProgrammingError as exc:
@@ -100,3 +102,20 @@ class MonitorPluginViewSet(viewsets.ModelViewSet):
 
         ui_template = MonitorPluginService.get_ui_template_by_params(collector, collect_type, monitor_object_id)
         return WebUtils.response_success(ui_template)
+
+    @action(methods=["get", "put"], detail=True, url_path="collect_template")
+    @HasPermission("integration_collect-View,integration_configure-Add")
+    def collect_template(self, request, pk=None):
+        plugin = self.get_object()
+        if plugin.template_type != "snmp":
+            return WebUtils.response_error(error_message="当前模板不是自建 SNMP 模板")
+
+        if request.method.lower() == "get":
+            data = CustomSnmpPluginService.get_collect_template(plugin)
+            return WebUtils.response_success(data)
+
+        data = CustomSnmpPluginService.update_collect_template(
+            plugin,
+            request.data.get("content", ""),
+        )
+        return WebUtils.response_success(data)

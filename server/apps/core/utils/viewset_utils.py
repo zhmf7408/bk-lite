@@ -6,6 +6,7 @@ from rest_framework import viewsets
 from rest_framework.response import Response
 
 from apps.core.utils.loader import LanguageLoader
+from apps.core.utils.user_group import normalize_user_group_ids
 from apps.core.utils.permission_utils import delete_instance_rules, get_permission_rules
 
 logger = logging.getLogger(__name__)
@@ -31,7 +32,7 @@ class GenericViewSetFun(object):
 
     def get_has_permission(self, user, instance, current_team, is_list=False, is_check=False, include_children=False):
         """获取规则实例ID"""
-        user_groups = [int(i["id"]) for i in user.group_list]
+        user_groups = normalize_user_group_ids(getattr(user, "group_list", []))
         if include_children:
             group_tree = getattr(user, "group_tree", [])
             child_groups = self.extract_child_group_ids(group_tree, current_team)

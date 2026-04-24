@@ -6,6 +6,7 @@
 NATS 推送辅助工具
 处理指标数据推送到 NATS（InfluxDB Line Protocol 格式）
 """
+
 import json
 import os
 import traceback
@@ -13,13 +14,35 @@ from typing import Dict, Any
 from sanic.log import logger
 from influxdb_client import Point, WritePrecision
 from core.nats import NATSClient, NATSConfig
+from core.nats_utils import nats_publish
+
+
+async def publish_callback_to_nats(
+    result: Dict[str, Any], params: Dict[str, Any], task_id: str
+):
+    callback_subject = params.get("callback_subject")
+    if not callback_subject:
+        logger.warning(f"[NATS Helper] callback_subject missing for task {task_id}")
+        return
+
+    payload = dict(result or {})
+    if payload.get("collect_task_id") in (None, ""):
+        payload["collect_task_id"] = params.get("collect_task_id")
+    nats_namespace = os.getenv("NATS_NAMESPACE", "bklite")
+    subject = f"{nats_namespace}.{callback_subject}"
+
+    try:
+        await nats_publish(subject, payload)
+        logger.info(f"[NATS Helper] Published callback to {subject} for task {task_id}")
+    except Exception as err:
+        logger.error(
+            f"[NATS Helper] Failed to publish callback for task {task_id}: {err}\n{traceback.format_exc()}"
+        )
+        raise
 
 
 async def publish_metrics_to_nats(
-    ctx: Dict,
-    metrics_data: str,
-    params: Dict[str, Any],
-    task_id: str
+    ctx: Dict, metrics_data: str, params: Dict[str, Any], task_id: str
 ):
     """
     将采集结果推送到 NATS 的 metrics 主题
@@ -35,61 +58,63 @@ async def publish_metrics_to_nats(
     """
     try:
         # 获取 NATS Metric Topic 前缀（从环境变量读取，默认为 metrics）
-        metric_topic_prefix = os.getenv('NATS_METRIC_TOPIC', 'metrics')
+        metric_topic_prefix = os.getenv("NATS_METRIC_TOPIC", "metrics")
 
         # 获取任务类型（monitor_type 或 plugin_name）
-        task_type = params.get('monitor_type') or params.get(
-            'plugin_name', params.get("model_id", "unknown"))
+        task_type = params.get("monitor_type") or params.get(
+            "plugin_name", params.get("model_id", "unknown")
+        )
 
         # 构建 subject: {prefix}.{task_type}
         # 例如: metrics.vmware, metrics.mysql, metrics.host 等
         subject = f"{metric_topic_prefix}.{task_type}"
 
-        logger.info(
-            f"[NATS Helper] Preparing to publish to subject: {subject}")
+        logger.info(f"[NATS Helper] Preparing to publish to subject: {subject}")
         # 将 Prometheus 格式转换为 InfluxDB Line Protocol 格式
         influx_lines = convert_prometheus_to_influx(metrics_data, params)
 
         if not influx_lines:
-            logger.warning(
-                f"[NATS Helper] No data to publish for task {task_id}")
+            logger.warning(f"[NATS Helper] No data to publish for task {task_id}")
             return
 
         # 统计信息
         total_lines = len(influx_lines)
-        total_bytes = sum(len(line.encode('utf-8')) for line in influx_lines)
+        total_bytes = sum(len(line.encode("utf-8")) for line in influx_lines)
 
         logger.info(
-            f"[NATS Helper] Converted {len(metrics_data)} bytes Prometheus data to {total_lines} lines ({total_bytes} bytes)")
+            f"[NATS Helper] Converted {len(metrics_data)} bytes Prometheus data to {total_lines} lines ({total_bytes} bytes)"
+        )
 
         # 打印前3行指标数据预览
         preview_count = min(3, len(influx_lines))
         if preview_count > 0:
-            logger.info(
-                f"[NATS Helper] Metrics preview (first {preview_count} lines):")
+            logger.info(f"[NATS Helper] Metrics preview (first {preview_count} lines):")
             for i, line in enumerate(influx_lines[:preview_count], 1):
                 logger.info(
-                    f"[NATS Helper]   {i}. {line[:150]}{'...' if len(line) > 150 else ''}")
+                    f"[NATS Helper]   {i}. {line[:150]}{'...' if len(line) > 150 else ''}"
+                )
             if total_lines > preview_count:
                 logger.info(
-                    f"[NATS Helper] ... and {total_lines - preview_count} more lines")
+                    f"[NATS Helper] ... and {total_lines - preview_count} more lines"
+                )
 
         # 创建 NATS 配置
         nats_config = NATSConfig.from_env()
         logger.info(
-            f"[NATS Helper] NATS config: servers={nats_config.servers}, tls_enabled={nats_config.tls_enabled}, user={nats_config.user}")
+            f"[NATS Helper] NATS config: servers={nats_config.servers}, tls_enabled={nats_config.tls_enabled}, user={nats_config.user}"
+        )
 
         # 使用 async with 自动管理连接
         try:
             logger.info(f"[NATS Helper] Attempting to connect to NATS...")
             async with NATSClient(nats_config) as nats_client:
                 logger.info(
-                    f"[NATS Helper] NATS client connected: {nats_client.is_connected}")
+                    f"[NATS Helper] NATS client connected: {nats_client.is_connected}"
+                )
 
                 # 检查连接状态
                 if not nats_client.nc:
-                    raise ConnectionError(
-                        "NATS client nc is None after connect")
+                    raise ConnectionError("NATS client nc is None after connect")
 
                 if nats_client.nc.is_closed:
                     raise ConnectionError("NATS connection is closed")
@@ -98,30 +123,35 @@ async def publish_metrics_to_nats(
                 success_count = 0
                 for line in influx_lines:
                     try:
-                        await nats_client.nc.publish(subject, line.encode('utf-8'))
+                        await nats_client.nc.publish(subject, line.encode("utf-8"))
                         success_count += 1
                     except Exception as pub_err:
                         logger.error(
-                            f"[NATS Helper] Failed to publish line: {line[:100]}, error: {pub_err}")
+                            f"[NATS Helper] Failed to publish line: {line[:100]}, error: {pub_err}"
+                        )
 
                 logger.info(
-                    f"[NATS Helper] Successfully published {success_count}/{total_lines} metrics to '{subject}' for task {task_id}")
+                    f"[NATS Helper] Successfully published {success_count}/{total_lines} metrics to '{subject}' for task {task_id}"
+                )
 
                 if success_count < total_lines:
                     logger.warning(
-                        f"[NATS Helper] Failed to publish {total_lines - success_count} metrics")
+                        f"[NATS Helper] Failed to publish {total_lines - success_count} metrics"
+                    )
 
         except ConnectionError as ce:
             logger.error(f"[NATS Helper] Connection error: {ce}")
             raise
         except Exception as conn_err:
             logger.error(
-                f"[NATS Helper] Failed to connect to NATS: {conn_err}\n{traceback.format_exc()}")
+                f"[NATS Helper] Failed to connect to NATS: {conn_err}\n{traceback.format_exc()}"
+            )
             raise
 
     except Exception as e:
         logger.error(
-            f"[NATS Helper] Failed to publish metrics: {e}\n{traceback.format_exc()}")
+            f"[NATS Helper] Failed to publish metrics: {e}\n{traceback.format_exc()}"
+        )
 
 
 def convert_prometheus_to_influx(prometheus_data: str, params: Dict[str, Any]) -> list:
@@ -163,19 +193,19 @@ def convert_prometheus_to_influx(prometheus_data: str, params: Dict[str, Any]) -
     # 预处理：合并多行数据（处理标签值中的换行符 \n）
     prometheus_lines = []
     current_line = ""
-    for line in prometheus_data.split('\n'):
+    for line in prometheus_data.split("\n"):
         line = line.strip()
         if not line:
             continue
 
         # 如果是注释行或新的指标行（不以 \ 开头），则保存之前的行
-        if line.startswith('#') or (current_line and not line.startswith('\\')):
+        if line.startswith("#") or (current_line and not line.startswith("\\")):
             if current_line:
                 prometheus_lines.append(current_line)
             current_line = line
         else:
             # 续行：拼接到当前行
-            current_line += ' ' + line
+            current_line += " " + line
 
     # 添加最后一行
     if current_line:
@@ -183,7 +213,7 @@ def convert_prometheus_to_influx(prometheus_data: str, params: Dict[str, Any]) -
 
     for line in prometheus_lines:
         # 解析 TYPE 注释，提取指标类型
-        if line.startswith('# TYPE '):
+        if line.startswith("# TYPE "):
             # 格式: # TYPE metric_name gauge|counter|histogram|summary
             parts = line.split()
             if len(parts) >= 4:
@@ -194,18 +224,18 @@ def convert_prometheus_to_influx(prometheus_data: str, params: Dict[str, Any]) -
             continue
 
         # 跳过其他注释（HELP 等）
-        if line.startswith('#'):
+        if line.startswith("#"):
             continue
 
         try:
             # 解析 Prometheus 格式
             # 格式: metric_name{labels} value timestamp
-            if '{' in line:
+            if "{" in line:
                 # 有 labels
-                metric_name = line[:line.index('{')]
-                rest = line[line.index('{') + 1:]
-                labels_part = rest[:rest.rindex('}')]
-                value_part = rest[rest.index('}') + 1:].strip()
+                metric_name = line[: line.index("{")]
+                rest = line[line.index("{") + 1 :]
+                labels_part = rest[: rest.rindex("}")]
+                value_part = rest[rest.index("}") + 1 :].strip()
             else:
                 # 无 labels
                 parts = line.split()
@@ -213,7 +243,7 @@ def convert_prometheus_to_influx(prometheus_data: str, params: Dict[str, Any]) -
                     continue
                 metric_name = parts[0]
                 labels_part = ""
-                value_part = ' '.join(parts[1:])
+                value_part = " ".join(parts[1:])
 
             # 解析 value 和 timestamp
             value_parts = value_part.split()
@@ -224,9 +254,8 @@ def convert_prometheus_to_influx(prometheus_data: str, params: Dict[str, Any]) -
                 continue
 
             # 跳过特殊值（NaN, Inf）
-            if value_str in ['NaN', 'Inf', '+Inf', '-Inf']:
-                logger.debug(
-                    f"[NATS Helper] Skipping special value: {value_str}")
+            if value_str in ["NaN", "Inf", "+Inf", "-Inf"]:
+                logger.debug(f"[NATS Helper] Skipping special value: {value_str}")
                 continue
 
             # 创建 Point 对象
@@ -243,8 +272,6 @@ def convert_prometheus_to_influx(prometheus_data: str, params: Dict[str, Any]) -
                     cleaned_val = _decode_prometheus_value(raw_val)
                     all_tags[key] = cleaned_val
 
-
-
             # 2. 再覆盖 common_tags（高优先级，已清理特殊字符）
             for tag_key, tag_value in common_tags.items():
                 if tag_value:  # 跳过空值
@@ -256,11 +283,12 @@ def convert_prometheus_to_influx(prometheus_data: str, params: Dict[str, Any]) -
 
             # 确定 field 名称（从 TYPE 注释中提取）
             field_name = metric_types.get(
-                metric_name, current_type if current_type else "value")
+                metric_name, current_type if current_type else "value"
+            )
 
             # 添加 field（Point 会自动处理类型：int -> i 后缀，float 保持原样，str 加引号）
             try:
-                if '.' in value_str or 'e' in value_str.lower():
+                if "." in value_str or "e" in value_str.lower():
                     # 浮点数
                     point.field(field_name, float(value_str))
                 else:
@@ -286,14 +314,13 @@ def convert_prometheus_to_influx(prometheus_data: str, params: Dict[str, Any]) -
                     else:
                         # 其他长度的时间戳，尝试标准化
                         if ts > 9999999999999:  # 大于13位
-                            ts_ns = int(str(ts)[:19].ljust(19, '0'))
+                            ts_ns = int(str(ts)[:19].ljust(19, "0"))
                         else:
                             ts_ns = ts * 1000000
 
                     point.time(ts_ns, WritePrecision.NS)
                 except ValueError:
-                    logger.warning(
-                        f"[NATS Helper] Invalid timestamp: {timestamp_str}")
+                    logger.warning(f"[NATS Helper] Invalid timestamp: {timestamp_str}")
 
             # 生成 Line Protocol（Point 自动处理转义和格式化）
             line_protocol = point.to_line_protocol()
@@ -301,7 +328,8 @@ def convert_prometheus_to_influx(prometheus_data: str, params: Dict[str, Any]) -
 
         except Exception as e:
             logger.debug(
-                f"[NATS Helper] Failed to parse line: {line[:100]}, error: {e}")
+                f"[NATS Helper] Failed to parse line: {line[:100]}, error: {e}"
+            )
             continue
 
     return lines
@@ -318,14 +346,14 @@ def _parse_prometheus_labels(label_str: str) -> Dict[str, str]:
 
     while idx < length:
         # Skip commas or spaces between pairs
-        while idx < length and label_str[idx] in {',', ' ', '\t'}:
+        while idx < length and label_str[idx] in {",", " ", "\t"}:
             idx += 1
 
         if idx >= length:
             break
 
         key_start = idx
-        while idx < length and label_str[idx] not in {'=', ' ', '\t'}:
+        while idx < length and label_str[idx] not in {"=", " ", "\t"}:
             idx += 1
         key = label_str[key_start:idx].strip()
 
@@ -333,12 +361,13 @@ def _parse_prometheus_labels(label_str: str) -> Dict[str, str]:
             break
 
         # Move to '='
-        while idx < length and label_str[idx] != '=':
+        while idx < length and label_str[idx] != "=":
             idx += 1
 
-        if idx >= length or label_str[idx] != '=':
+        if idx >= length or label_str[idx] != "=":
             logger.debug(
-                f"[NATS Helper] Incomplete label segment near key '{key}' in '{label_str}'")
+                f"[NATS Helper] Incomplete label segment near key '{key}' in '{label_str}'"
+            )
             break
 
         idx += 1  # skip '='
@@ -349,7 +378,8 @@ def _parse_prometheus_labels(label_str: str) -> Dict[str, str]:
 
         if idx >= length or label_str[idx] != '"':
             logger.debug(
-                f"[NATS Helper] Missing opening quote for key '{key}' in '{label_str}'")
+                f"[NATS Helper] Missing opening quote for key '{key}' in '{label_str}'"
+            )
             break
 
         idx += 1  # skip opening quote
@@ -357,7 +387,7 @@ def _parse_prometheus_labels(label_str: str) -> Dict[str, str]:
 
         while idx < length:
             ch = label_str[idx]
-            if ch == '\\':
+            if ch == "\\":
                 # Preserve escape sequence to let decoder handle it later
                 if idx + 1 < length:
                     value_chars.append(ch)
@@ -373,12 +403,12 @@ def _parse_prometheus_labels(label_str: str) -> Dict[str, str]:
             value_chars.append(ch)
             idx += 1
 
-        labels[key] = ''.join(value_chars)
+        labels[key] = "".join(value_chars)
 
         # Skip trailing whitespaces after value and optional comma
         while idx < length and label_str[idx].isspace():
             idx += 1
-        if idx < length and label_str[idx] == ',':
+        if idx < length and label_str[idx] == ",":
             idx += 1
 
     return labels
@@ -392,10 +422,10 @@ def _decode_prometheus_value(raw_value: str) -> str:
     try:
         decoded = json.loads(f'"{raw_value}"')
     except json.JSONDecodeError:
-        cleaned = raw_value.replace('\\n', ' ').replace('  ', ' ').strip()
+        cleaned = raw_value.replace("\\n", " ").replace("  ", " ").strip()
         return cleaned
 
-    return decoded.replace('\n', ' ').strip()
+    return decoded.replace("\n", " ").strip()
 
 
 def _build_common_tags(params: Dict[str, Any]) -> Dict[str, str]:
@@ -419,20 +449,19 @@ def _build_common_tags(params: Dict[str, Any]) -> Dict[str, str]:
         tags 字典
     """
     # 从 API 传递的 tags
-    api_tags = params.get('tags', {})
+    api_tags = params.get("tags", {})
 
     # 获取基础参数用于生成默认值
-    host = params.get('host', params.get('node_id', 'unknown'))
-    monitor_type = params.get(
-        'monitor_type', params.get('plugin_name', 'unknown'))
+    host = params.get("host", params.get("node_id", "unknown"))
+    monitor_type = params.get("monitor_type", params.get("plugin_name", "unknown"))
 
     # 构建 tags：优先使用用户传递的值，没有的用默认值
     tags = {
-        'agent_id': api_tags.get('agent_id') or f"stargazer-{host}",
-        'instance_id': api_tags.get('instance_id') or host,
-        'instance_type': api_tags.get('instance_type') or monitor_type,
-        'collect_type': api_tags.get('collect_type') or 'monitor',
-        'config_type': api_tags.get('config_type') or 'auto',
+        "agent_id": api_tags.get("agent_id") or f"stargazer-{host}",
+        "instance_id": api_tags.get("instance_id") or host,
+        "instance_type": api_tags.get("instance_type") or monitor_type,
+        "collect_type": api_tags.get("collect_type") or "monitor",
+        "config_type": api_tags.get("config_type") or "auto",
     }
 
     # 清理 tags 中的特殊字符
@@ -440,8 +469,7 @@ def _build_common_tags(params: Dict[str, Any]) -> Dict[str, str]:
     for k, v in tags.items():
         if v:  # 只保留非空值
             # InfluxDB tags 不能包含空格、逗号、等号
-            cleaned_value = str(v).replace(
-                ' ', '_').replace(',', '_').replace('=', '_')
+            cleaned_value = str(v).replace(" ", "_").replace(",", "_").replace("=", "_")
             cleaned_tags[k] = cleaned_value
 
     return cleaned_tags

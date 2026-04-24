@@ -284,7 +284,7 @@ const MetricModal = forwardRef<ModalRef, ModalProps>(
               name="metric_group"
               rules={[{ required: true, message: t('common.required') }]}
             >
-              <Select>
+              <Select showSearch optionFilterProp="children">
                 {groupList.map((item) => (
                   <Option key={item.id} value={item.id}>
                     {item.display_name}

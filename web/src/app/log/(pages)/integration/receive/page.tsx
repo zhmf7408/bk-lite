@@ -471,9 +471,9 @@ const Asset = () => {
         showAllMenu
         defaultSelectedKey="all"
         onNodeSelect={handleObjectChange}
-        style={{ width: 230 }}
+        style={{ width: 236, height: 'calc(100vh - 146px)' }}
       />
-      <div className="w-[calc(100vw-230px)] min-w-[1040px] bg-[var(--color-bg-1)] p-[20px]">
+      <div className="w-[calc(100vw-236px)] min-w-[1040px] bg-[var(--color-bg-1)] p-[20px]">
         <div className="flex justify-between items-center mb-[10px]">
           <Input
             allowClear

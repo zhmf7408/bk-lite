@@ -19,10 +19,19 @@ from django.db.models.functions import (
 from django.utils import timezone
 
 import nats_client
-from apps.alerts.models.models import Alert
+from apps.alerts.models.models import Alert, Event, Incident, Level
+from apps.alerts.constants.constants import AlertStatus, EventLevel, LevelType
 from apps.core.logger import alert_logger as logger
 from apps.alerts.models.alert_source import AlertSource
 from apps.alerts.common.source_adapter.base import AlertSourceAdapterFactory
+
+ALERT_LEVEL_DISPLAY_MAP = dict(EventLevel.CHOICES)
+
+
+def _get_alert_level_display_map():
+    level_map = {str(lv.level_id): lv.level_display_name for lv in Level.objects.filter(level_type=LevelType.ALERT)}
+    level_map.update({key: value for key, value in ALERT_LEVEL_DISPLAY_MAP.items() if key not in level_map})
+    return level_map
 
 
 def group_dy_date_format(group_by):
@@ -120,9 +129,7 @@ def get_alert_trend_data(*args, **kwargs) -> Dict[str, Any]:
             current += datetime.timedelta(hours=1)
     elif group_by == "day":
         num_periods = (end_dt.date() - start_dt.date()).days + 1
-        all_periods = [
-            start_dt.date() + datetime.timedelta(days=i) for i in range(num_periods)
-        ]
+        all_periods = [start_dt.date() + datetime.timedelta(days=i) for i in range(num_periods)]
     elif group_by == "week":
         current = start_dt
         while current < end_dt:
@@ -231,9 +238,7 @@ def receive_alert_events(*args, **kwargs) -> Dict[str, Any]:
             return {"result": False, "data": {}, "message": "Missing source_id."}
 
         if not events:
-            logger.warning(
-                f"Missing events from source_id: {source_id}, pusher: {pusher}"
-            )
+            logger.warning(f"Missing events from source_id: {source_id}, pusher: {pusher}")
             return {"result": False, "data": {}, "message": "Missing events."}
 
         if not pusher:
@@ -259,18 +264,12 @@ def receive_alert_events(*args, **kwargs) -> Dict[str, Any]:
         adapter = adapter_class(alert_source=event_source, secret="", events=events)
 
         # 记录推送来源信息
-        logger.info(
-            f"Processing {len(events)} events from source_id: {source_id}, "
-            f"pusher: {pusher}"
-        )
+        logger.info(f"Processing {len(events)} events from source_id: {source_id}, pusher: {pusher}")
 
         # 处理告警事件
         adapter.main()
 
-        logger.info(
-            f"Successfully processed {len(events)} events from {pusher} "
-            f"(source_id: {source_id})"
-        )
+        logger.info(f"Successfully processed {len(events)} events from {pusher} (source_id: {source_id})")
 
         return {
             "result": True,
@@ -299,3 +298,135 @@ def alert_test(*args, **kwargs):
     """
     logger.info("=== alert_test ===, args={}, kwargs={}".format(args, kwargs))
     return {"result": True, "data": "alert_test success", "message": ""}
+
+
+@nats_client.register
+def get_alert_statistics(**kwargs):
+    """
+    获取告警统计数据
+
+    Returns:
+        {
+            "result": True,
+            "data": {
+                "total_count": 500,
+                "active_count": 45,
+                "pending_count": 20,
+                "processing_count": 25,
+                "event_count": 1200,
+                "incident_count": 8
+            },
+            "message": ""
+        }
+    """
+    total_count = Alert.objects.count()
+    active_count = Alert.objects.filter(status__in=AlertStatus.ACTIVATE_STATUS).count()
+    pending_count = Alert.objects.filter(status=AlertStatus.PENDING).count()
+    processing_count = Alert.objects.filter(status=AlertStatus.PROCESSING).count()
+    event_count = Event.objects.count()
+    incident_count = Incident.objects.count()
+
+    return {
+        "result": True,
+        "data": {
+            "total_count": total_count,
+            "active_count": active_count,
+            "pending_count": pending_count,
+            "processing_count": processing_count,
+            "event_count": event_count,
+            "incident_count": incident_count,
+        },
+        "message": "",
+    }
+
+
+@nats_client.register
+def get_alert_level_distribution(status_filter=None, **kwargs):
+    """
+    获取告警等级分布（饼状图用）
+
+    Args:
+        status_filter: "active" | None - 可选，仅统计活跃告警
+
+    Returns:
+        {
+            "result": True,
+            "data": [
+                {"name": "致命", "value": 10},
+                {"name": "严重", "value": 25}
+            ],
+            "message": ""
+        }
+    """
+    level_map = _get_alert_level_display_map()
+
+    queryset = Alert.objects
+    if status_filter == "active":
+        queryset = queryset.filter(status__in=AlertStatus.ACTIVATE_STATUS)
+
+    level_counts = queryset.values("level").annotate(count=Count("id"))
+
+    result_data = []
+    for item in level_counts:
+        level = item["level"]
+        display_name = level_map.get(level, level)
+        result_data.append({"name": display_name, "value": item["count"]})
+
+    result_data.sort(key=lambda x: x["value"], reverse=True)
+
+    return {"result": True, "data": result_data, "message": ""}
+
+
+@nats_client.register
+def get_active_alert_top(limit=10, **kwargs):
+    """
+    获取活跃告警持续时间 TOP N
+
+    Args:
+        limit: int - 返回数量，默认 10
+
+    Returns:
+        {
+            "result": True,
+            "data": [
+                {
+                    "alert_id": "ALERT-ABC123",
+                    "title": "CPU使用率过高",
+                    "level": "严重",
+                    "status": "pending",
+                    "duration_seconds": 86400,
+                    "created_at": "2026-04-19 10:00:00",
+                    "resource_name": "web-server-01"
+                }
+            ],
+            "message": ""
+        }
+    """
+    limit = int(limit) if limit else 10
+    if limit <= 0:
+        limit = 10
+    if limit > 100:
+        limit = 100
+
+    active_alerts = Alert.objects.filter(status__in=AlertStatus.ACTIVATE_STATUS).order_by("created_at")[:limit]
+
+    level_map = _get_alert_level_display_map()
+    status_map = dict(AlertStatus.CHOICES)
+
+    now = timezone.now()
+    alerts_with_duration = []
+    for alert in active_alerts:
+        duration_seconds = int((now - alert.created_at).total_seconds())
+        alerts_with_duration.append(
+            {
+                "alert_id": alert.alert_id,
+                "title": alert.title,
+                "level": level_map.get(alert.level, alert.level),
+                "status": status_map.get(alert.status, alert.status),
+                "duration_seconds": duration_seconds,
+                "created_at": alert.created_at.strftime("%Y-%m-%d %H:%M:%S"),
+                "resource_name": alert.resource_name or "",
+            }
+        )
+
+    return {"result": True, "data": alerts_with_duration, "message": ""}

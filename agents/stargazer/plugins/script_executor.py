@@ -40,6 +40,7 @@ class SSHPlugin:
         """
         self.node_id = params["node_id"]
         self.host = params.get("host", "")
+        self.connect_ip = params.get("connect_ip") or self.host
         script_path = params.get("script_path")
         self.username = params.get("username")
         self.password = params.get("password")
@@ -108,7 +109,7 @@ class SSHPlugin:
         # 如果不是本地执行，需要 SSH 凭据
         if not self.node_info:
             exec_params.update({
-                "host": self.host,
+                "host": self.connect_ip,
                 "user": self.username,
                 "username": self.username,
                 "password": self.password,

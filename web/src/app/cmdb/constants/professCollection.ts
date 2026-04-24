@@ -166,6 +166,12 @@ export const HOST_FORM_INITIAL_VALUES = {
   cleanupDays: 3,
 };
 
+export const CONFIG_FILE_FORM_INITIAL_VALUES = {
+  ...HOST_FORM_INITIAL_VALUES,
+  intervalValue: 10,
+  configFilePath: '',
+};
+
 export const validateCycleTime = (
   type: string,
   value: any,

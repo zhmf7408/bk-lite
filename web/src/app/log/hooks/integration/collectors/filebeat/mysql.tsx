@@ -8,7 +8,7 @@ export const useMysqlFilebeatConfig = () => {
   const pluginConfig = {
     collector: 'Filebeat',
     collect_type: 'mysql',
-    icon: 'mysql'
+    icon: 'mm-mysql_Mysql'
   };
 
   return {

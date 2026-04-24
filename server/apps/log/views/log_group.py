@@ -1,7 +1,8 @@
 from rest_framework.viewsets import ModelViewSet
+from apps.core.utils.permission_utils import get_instance_permission_map
 from apps.core.utils.web_utils import WebUtils
-from apps.core.utils.permission_utils import get_permission_rules, permission_filter
 from apps.log.models.log_group import LogGroup, LogGroupOrganization
+from apps.log.services.access_scope import LogAccessScopeService
 from apps.log.serializers.log_group import LogGroupSerializer
 from apps.log.filters.log_group import LogGroupFilter
 from apps.log.constants.permission import PermissionConstants
@@ -12,28 +13,51 @@ class LogGroupViewSet(ModelViewSet):
     serializer_class = LogGroupSerializer
     filterset_class = LogGroupFilter
 
+    def get_queryset(self):
+        try:
+            queryset, _ = LogAccessScopeService.get_accessible_group_queryset(self.request)
+            return queryset
+        except ValueError:
+            return LogGroup.objects.none()
+
     def _attach_item_permissions(self, items, permission):
         """为日志分组列表补充实例权限字段。"""
-        instance_permissions = (
-            permission.get("instance", []) if isinstance(permission, dict) else []
-        )
+        instance_permissions = permission.get("instance", []) if isinstance(permission, dict) else []
         instance_permission_map = {}
         if isinstance(instance_permissions, list):
             for item in instance_permissions:
                 if not isinstance(item, dict) or "id" not in item:
                     continue
-                instance_permission_map[str(item["id"])] = (
-                    item.get("permission") or PermissionConstants.DEFAULT_PERMISSION
-                )
+                instance_permission_map[str(item["id"])] = item.get("permission") or PermissionConstants.DEFAULT_PERMISSION
 
         for item in items:
-            item["permission"] = instance_permission_map.get(
-                str(item.get("id")), PermissionConstants.DEFAULT_PERMISSION
-            )
+            item["permission"] = instance_permission_map.get(str(item.get("id")), PermissionConstants.DEFAULT_PERMISSION)
 
         return items
 
+    def _authorize_write(self, request, instance=None):
+        try:
+            _, permission = LogAccessScopeService.get_accessible_group_queryset(request)
+        except ValueError as exc:
+            return WebUtils.response_error(error_message=str(exc), status_code=400)
+
+        if instance is None:
+            if not permission.get("team"):
+                return WebUtils.response_error(error_message="当前用户无权限创建日志分组", status_code=403)
+            return None
+
+        instance_permission_map = get_instance_permission_map(permission)
+        explicit_permissions = instance_permission_map.get(str(instance.id))
+        if explicit_permissions is not None and "Operate" not in explicit_permissions:
+            return WebUtils.response_403("当前用户无权限操作该日志分组")
+
+        return None
+
     def create(self, request, *args, **kwargs):
+        error_response = self._authorize_write(request)
+        if error_response:
+            return error_response
+
         serializer = self.get_serializer(data=request.data)
         serializer.is_valid(raise_exception=True)
 
@@ -45,23 +69,10 @@ class LogGroupViewSet(ModelViewSet):
         return WebUtils.response_success({"id": log_group.id, "name": log_group.name})
 
     def list(self, request, *args, **kwargs):
-        # 获取权限规则
-        include_children = request.COOKIES.get("include_children", "0") == "1"
-        permission = get_permission_rules(
-            request.user,
-            request.COOKIES.get("current_team"),
-            "log",
-            PermissionConstants.LOG_GROUP_MODULE,
-            include_children=include_children,
-        )
-
-        # 应用权限过滤
-        queryset = permission_filter(
-            LogGroup,
-            permission,
-            team_key="loggrouporganization__organization__in",
-            id_key="id__in",
-        )
+        try:
+            queryset, permission = LogAccessScopeService.get_accessible_group_queryset(request)
+        except ValueError as exc:
+            return WebUtils.response_error(error_message=str(exc), status_code=400)
 
         # 应用过滤器
         queryset = self.filter_queryset(queryset)
@@ -88,6 +99,9 @@ class LogGroupViewSet(ModelViewSet):
     def update(self, request, *args, **kwargs):
         partial = kwargs.pop("partial", False)
         instance = self.get_object()
+        error_response = self._authorize_write(request, instance)
+        if error_response:
+            return error_response
         serializer = self.get_serializer(instance, data=request.data, partial=partial)
         serializer.is_valid(raise_exception=True)
 
@@ -100,6 +114,9 @@ class LogGroupViewSet(ModelViewSet):
 
     def destroy(self, request, *args, **kwargs):
         instance = self.get_object()
+        error_response = self._authorize_write(request, instance)
+        if error_response:
+            return error_response
         log_group_name = instance.name
 
         # 删除相关的组织关联

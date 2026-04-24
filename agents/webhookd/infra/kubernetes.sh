@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # webhookd infra render script
-# 接收 JSON: {"cluster_name": "xxx", "type": "metric|log|resource", "nats_url": "nats://x.x.x.x:4222", "nats_username": "user", "nats_password": "pass", "nats_ca": "..."}
+# 接收 JSON: {"cluster_name": "xxx", "type": "metric|log|resource", "nats_url": "nats://x.x.x.x:4222", "nats_username": "user", "nats_password": "pass", "nats_ca": "...", "runtime_profile": "standard|docker|custom", "host_log_path": "/var/log/pods", "docker_container_log_path": "/var/lib/docker/containers"}
 # 渲染出 K8s 配置 YAML
 set -euo pipefail
 
@@ -78,6 +78,9 @@ NATS_URL=$(echo "$JSON_DATA" | jq -r '.nats_url // empty')
 NATS_USERNAME=$(echo "$JSON_DATA" | jq -r '.nats_username // empty')
 NATS_PASSWORD=$(echo "$JSON_DATA" | jq -r '.nats_password // empty')
 NATS_CA=$(echo "$JSON_DATA" | jq -r '.nats_ca // empty')
+RUNTIME_PROFILE=$(echo "$JSON_DATA" | jq -r '.runtime_profile // "standard"')
+HOST_LOG_PATH=$(echo "$JSON_DATA" | jq -r '.host_log_path // empty')
+DOCKER_CONTAINER_LOG_PATH=$(echo "$JSON_DATA" | jq -r '.docker_container_log_path // empty')
 
 # 验证必填字段
 validate_cluster_name() {
@@ -86,6 +89,15 @@ validate_cluster_name() {
 
 validate_type() {
     [[ "$1" == "metric" || "$1" == "log" || "$1" == "resource" ]]
+}
+
+validate_runtime_profile() {
+    [[ "$1" == "standard" || "$1" == "docker" || "$1" == "custom" ]]
+}
+
+validate_absolute_path() {
+    local value="$1"
+    [[ "$value" == /* ]] && [[ "$value" != *$'\n'* ]] && [[ "$value" != *$'\r'* ]] && [[ "$value" != *\'* ]]
 }
 
 require_field() {
@@ -104,8 +116,115 @@ require_field "nats_url" "$NATS_URL"
 require_field "nats_username" "$NATS_USERNAME"
 require_field "nats_password" "$NATS_PASSWORD"
 require_field "nats_ca" "$NATS_CA"
+validate_runtime_profile "$RUNTIME_PROFILE" || { json_error "$CLUSTER_NAME" "Invalid runtime_profile: must be 'standard', 'docker' or 'custom'"; exit 1; }
 
-# TODO: 渲染 K8s 配置 YAML
+if [ "$TYPE" == "log" ] && [ "$RUNTIME_PROFILE" == "custom" ]; then
+    require_field "host_log_path" "$HOST_LOG_PATH"
+    validate_absolute_path "$HOST_LOG_PATH" || { json_error "$CLUSTER_NAME" "Invalid host_log_path: must be an absolute path"; exit 1; }
+
+    if [ -n "$DOCKER_CONTAINER_LOG_PATH" ]; then
+        validate_absolute_path "$DOCKER_CONTAINER_LOG_PATH" || { json_error "$CLUSTER_NAME" "Invalid docker_container_log_path: must be an absolute path"; exit 1; }
+    fi
+fi
+
+build_log_mount_block() {
+    local runtime_profile="$1"
+    local host_log_path="$2"
+    local docker_container_log_path="$3"
+
+    local normalized_host_log_path="${host_log_path:-/var/log}"
+    local normalized_docker_container_log_path="${docker_container_log_path:-/var/lib/docker/containers}"
+
+    case "$runtime_profile" in
+        standard)
+            cat <<'EOF'
+            - name: var-log
+              mountPath: /var/log
+              readOnly: true
+EOF
+            ;;
+        docker)
+            cat <<'EOF'
+            - name: var-log
+              mountPath: /var/log
+              readOnly: true
+            - name: runtime-container-logs
+              mountPath: /var/lib/docker/containers
+              readOnly: true
+EOF
+            ;;
+        custom)
+            cat <<EOF
+            - name: pod-log-dir
+              mountPath: /var/log/pods
+              readOnly: true
+EOF
+            if [ -n "$docker_container_log_path" ]; then
+                cat <<EOF
+            - name: docker-container-logs
+              mountPath: ${normalized_docker_container_log_path}
+              readOnly: true
+EOF
+            fi
+            ;;
+    esac
+}
+
+build_log_volume_block() {
+    local runtime_profile="$1"
+    local host_log_path="$2"
+    local docker_container_log_path="$3"
+
+    local normalized_host_log_path="${host_log_path:-/var/log}"
+    local normalized_docker_container_log_path="${docker_container_log_path:-/var/lib/docker/containers}"
+
+    case "$runtime_profile" in
+        standard)
+            cat <<'EOF'
+        - name: var-log
+          hostPath:
+            path: /var/log
+EOF
+            ;;
+        docker)
+            cat <<'EOF'
+        - name: var-log
+          hostPath:
+            path: /var/log
+        - name: runtime-container-logs
+          hostPath:
+            path: /var/lib/docker/containers
+EOF
+            ;;
+        custom)
+            cat <<EOF
+        - name: pod-log-dir
+          hostPath:
+            path: ${normalized_host_log_path}
+EOF
+            if [ -n "$docker_container_log_path" ]; then
+                cat <<EOF
+        - name: docker-container-logs
+          hostPath:
+            path: ${normalized_docker_container_log_path}
+EOF
+            fi
+            ;;
+    esac
+}
+
+replace_placeholder() {
+    local content="$1"
+    local placeholder="$2"
+    local replacement="$3"
+
+    CONTENT="$content" PLACEHOLDER="$placeholder" REPLACEMENT="$replacement" python -c 'import os
+content = os.environ["CONTENT"]
+placeholder = os.environ["PLACEHOLDER"]
+replacement = os.environ["REPLACEMENT"]
+print(content.replace(placeholder, replacement), end="")'
+}
+
 render_k8s_config() {
     local cluster_name="$1"
     local nats_url="$2"
@@ -113,6 +232,9 @@ render_k8s_config() {
     local nats_password="$4"
     local nats_ca="$5"
     local type="$6"
+    local runtime_profile="$7"
+    local host_log_path="$8"
+    local docker_container_log_path="$9"
     
     # 根据类型选择模板
     local template
@@ -122,6 +244,15 @@ render_k8s_config() {
         template="$RESOURCE_TEMPLATE"
     else
         template="$METRIC_TEMPLATE"
+    fi
+
+    if [ "$type" == "log" ]; then
+        local log_mounts
+        local log_volumes
+        log_mounts=$(build_log_mount_block "$runtime_profile" "$host_log_path" "$docker_container_log_path")
+        log_volumes=$(build_log_volume_block "$runtime_profile" "$host_log_path" "$docker_container_log_path")
+        template=$(replace_placeholder "$template" "__LOG_VOLUME_MOUNTS__" "$log_mounts")
+        template=$(replace_placeholder "$template" "__LOG_VOLUMES__" "$log_volumes")
     fi
     
     # Base64 编码
@@ -145,7 +276,7 @@ render_k8s_config() {
 }
 
 # 执行渲染
-K8S_CONFIG=$(render_k8s_config "$CLUSTER_NAME" "$NATS_URL" "$NATS_USERNAME" "$NATS_PASSWORD" "$NATS_CA" "$TYPE")
+K8S_CONFIG=$(render_k8s_config "$CLUSTER_NAME" "$NATS_URL" "$NATS_USERNAME" "$NATS_PASSWORD" "$NATS_CA" "$TYPE" "$RUNTIME_PROFILE" "$HOST_LOG_PATH" "$DOCKER_CONTAINER_LOG_PATH")
 
 # 返回成功响应，YAML 内容放在 yaml 字段中
 json_success "$CLUSTER_NAME" "K8s configuration rendered successfully" "yaml" "$K8S_CONFIG"

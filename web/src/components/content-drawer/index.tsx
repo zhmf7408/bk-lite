@@ -5,11 +5,13 @@ import { useTranslation } from '@/utils/i18n';
 interface ContentDrawerProps {
   visible: boolean;
   onClose: () => void;
-  content: string;
+  content?: string;
   title?: string;
+  width?: number;
+  children?: React.ReactNode;
 }
 
-const ContentDrawer: React.FC<ContentDrawerProps> = ({ visible, onClose, content, title }) => {
+const ContentDrawer: React.FC<ContentDrawerProps> = ({ visible, onClose, content, title, width, children }) => {
   const { t } = useTranslation();
 
   const formatContent = (text: string) => {
@@ -27,11 +29,13 @@ const ContentDrawer: React.FC<ContentDrawerProps> = ({ visible, onClose, content
       placement="right"
       onClose={onClose}
       open={visible}
-      width={600}
+      width={width || 600}
     >
-      <div className="whitespace-pre-wrap leading-6">
-        {formatContent(content)}
-      </div>
+      {children ? children : (
+        <div className="whitespace-pre-wrap leading-6">
+          {content ? formatContent(content) : null}
+        </div>
+      )}
     </Drawer>
   );
 };

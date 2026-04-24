@@ -322,6 +322,7 @@
         "ipRangeOrderInvalid": "起始 IP 不可大于结束 IP",
         "chooseIp": "选择IP",
         "chooseAsset": "选择资产",
+        "chooseHost": "选择主机",
         "everyMinute": "每",
         "executeOnce": "执行一次",
         "database": "数据库",
@@ -352,6 +353,10 @@
             "username": "账户",
             "password": "密码",
             "sslVerify": "SSL 验证"
+        },
+        "IPMITask": {
+            "privilege": "权限级别",
+            "privilegeTooltip": "用于控制 IPMI 会话的权限级别。为保证兼容性，建议选择 administrator；较低权限级别可能无法返回完整资产信息。"
         },
         "SNMPTask": {
             "chooseSNMP": "SNMP",

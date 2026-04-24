@@ -6,11 +6,7 @@ from apps.rpc.base import RpcClient, AppClient, BaseOperationAnaRpc
 class Monitor(object):
     def __init__(self, is_local_client=False):
         is_local_client = os.getenv("IS_LOCAL_RPC", "0") == "1" or is_local_client
-        self.client = (
-            AppClient("apps.monitor.nats.permission")
-            if is_local_client
-            else RpcClient()
-        )
+        self.client = AppClient("apps.monitor.nats.permission") if is_local_client else RpcClient()
 
     def get_module_data(self, **kwargs):
         """
@@ -37,11 +33,13 @@ class MonitorOperationAnaRpc(BaseOperationAnaRpc):
         """查询监控对象列表"""
         return self.client.run("monitor_objects", **kwargs)
 
+    def monitor_object_instance_count(self, **kwargs):
+        """统计全部监控对象实例数量（不过滤权限）"""
+        return self.client.run("monitor_object_instance_count", **kwargs)
+
     def monitor_metrics(self, monitor_obj_id: str, **kwargs):
         """查询指标信息"""
-        return self.client.run(
-            "monitor_metrics", monitor_obj_id=monitor_obj_id, **kwargs
-        )
+        return self.client.run("monitor_metrics", monitor_obj_id=monitor_obj_id, **kwargs)
 
     def monitor_object_instances(self, monitor_obj_id: str, **kwargs):
         """查询监控对象实例列表
@@ -51,9 +49,7 @@ class MonitorOperationAnaRpc(BaseOperationAnaRpc):
             user: 用户对象或用户名
         }
         """
-        return self.client.run(
-            "monitor_object_instances", monitor_obj_id=monitor_obj_id, **kwargs
-        )
+        return self.client.run("monitor_object_instances", monitor_obj_id=monitor_obj_id, **kwargs)
 
     def monitor_instance_metrics(self, query_data: dict, **kwargs):
         """查询实例已监控指标清单
@@ -70,9 +66,7 @@ class MonitorOperationAnaRpc(BaseOperationAnaRpc):
             user: 用户对象或用户名
         }
         """
-        return self.client.run(
-            "monitor_instance_metrics", query_data=query_data, **kwargs
-        )
+        return self.client.run("monitor_instance_metrics", query_data=query_data, **kwargs)
 
     def query_monitor_data_by_metric(self, query_data: dict, **kwargs):
         """查询监控数据
@@ -107,9 +101,7 @@ class MonitorOperationAnaRpc(BaseOperationAnaRpc):
             "items": list,
         }
         """
-        return self.client.run(
-            "query_monitor_data_by_metric", query_data=query_data, **kwargs
-        )
+        return self.client.run("query_monitor_data_by_metric", query_data=query_data, **kwargs)
 
     def query_range(self, query: str, time_range: str, step="5m", **kwargs):
         """查询时间范围内的指标数据
@@ -118,9 +110,7 @@ class MonitorOperationAnaRpc(BaseOperationAnaRpc):
         end: 结束时间（UTC时间戳）
         step: 数据采集间隔，默认为5分钟
         """
-        return self.client.run(
-            "mm_query_range", query=query, time_range=time_range, step=step, **kwargs
-        )
+        return self.client.run("mm_query_range", query=query, time_range=time_range, step=step, **kwargs)
 
     def query(self, query: str, step="5m", **kwargs):
         """查询单点指标数据
@@ -156,6 +146,27 @@ class MonitorOperationAnaRpc(BaseOperationAnaRpc):
             "items": list,
         }
         """
-        return self.client.run(
-            "query_monitor_alert_segments", query_data=query_data, **kwargs
-        )
+        return self.client.run("query_monitor_alert_segments", query_data=query_data, **kwargs)
+
+    def query_latest_active_alerts(self, query_data: dict, **kwargs):
+        """查询当前用户可访问范围内最新活跃告警
+        query_data: {
+            "monitor_obj_id": str,
+            "limit": int,
+            "instance_id": str,
+            "instance_ids": list[str],
+            "level": str | list[str],
+            "alert_type": str | list[str],
+        }
+        user_info: {
+            team: 当前组织ID,
+            user: 用户对象或用户名,
+            include_children: 是否包含子组织,
+        }
+        返回 data: {
+            "count": int,
+            "items": list,
+        }
+        monitor_obj_id 为可选，用于收窄到指定监控对象。
+        """
+        return self.client.run("query_latest_active_alerts", query_data=query_data, **kwargs)

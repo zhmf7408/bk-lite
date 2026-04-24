@@ -34,6 +34,7 @@ const IP_SELECTION_TASK_TYPES = [
   'protocol',
   'host',
 ];
+const ASSET_ONLY_SELECTION_TASK_TYPES = ['config_file'];
 // 需要通用实例选择的任务类型
 const COMMON_SELECT_INST_TASK_TYPES = [
   'db',
@@ -41,6 +42,7 @@ const COMMON_SELECT_INST_TASK_TYPES = [
   'host',
   'protocol',
   'middleware',
+  'config_file',
 ];
 // 需要单实例选择的任务类型
 const SINGLE_INSTANCE_SELECT_TASK_TYPES = ['vm', 'k8s', 'cloud'];
@@ -79,6 +81,7 @@ interface BaseTaskFormProps {
   modelItem: ModelItem;
   submitLoading?: boolean;
   instPlaceholder?: string;
+  assetOptionLabel?: string;
   timeoutProps?: {
     min?: number;
     defaultValue?: number;
@@ -112,13 +115,16 @@ const BaseTaskForm = forwardRef<BaseTaskRef, BaseTaskFormProps>(
         addonAfter: '',
       },
       instPlaceholder,
+      assetOptionLabel,
       onClose,
       onTest,
     },
     ref
   ) => {
-    const { editingId, scan_cycle_type } = useAssetManageStore();
-    const { model_id: modelId, task_type: taskType } = modelItem;
+    const editingId = useAssetManageStore((state) => state.editingId);
+    const scan_cycle_type = useAssetManageStore((state) => state.scan_cycle_type);
+    const { model_id: modelId, task_type: taskType, target_model_id: targetModelId } = modelItem;
+    const instanceModelId = targetModelId || modelId;
     const normalizedTaskType = taskType || nodeId || '';
     const { t } = useTranslation();
     const instanceApi = useInstanceApi();
@@ -164,6 +170,9 @@ const BaseTaskForm = forwardRef<BaseTaskRef, BaseTaskFormProps>(
     const supportsIpSelection = IP_SELECTION_TASK_TYPES.includes(
       normalizedTaskType
     );
+    const supportsAssetOnlySelection = ASSET_ONLY_SELECTION_TASK_TYPES.includes(
+      normalizedTaskType
+    );
 
     const requiresSingleInstanceSelect = SINGLE_INSTANCE_SELECT_TASK_TYPES.includes(
       normalizedTaskType
@@ -172,6 +181,13 @@ const BaseTaskForm = forwardRef<BaseTaskRef, BaseTaskFormProps>(
     const isCommonSelectInstTask = COMMON_SELECT_INST_TASK_TYPES.includes(
       normalizedTaskType
     );
+
+    useEffect(() => {
+      if (!supportsAssetOnlySelection) {
+        return;
+      }
+      setCollectionType('asset');
+    }, [supportsAssetOnlySelection]);
 
     const instColumns = [
       {
@@ -231,7 +247,7 @@ const BaseTaskForm = forwardRef<BaseTaskRef, BaseTaskFormProps>(
     const handleOpenDrawer = () => {
       setInstVisible(true);
       if (isCommonSelectInstTask) {
-        fetchInstData(modelId);
+        fetchInstData(instanceModelId);
       }
     };
 
@@ -339,7 +355,7 @@ const BaseTaskForm = forwardRef<BaseTaskRef, BaseTaskFormProps>(
       try {
         setOptLoading(true);
         const data = await instanceApi.searchInstances({
-          model_id: modelId,
+          model_id: instanceModelId,
           page: 1,
           page_size: 10000,
         });
@@ -430,7 +446,8 @@ const BaseTaskForm = forwardRef<BaseTaskRef, BaseTaskFormProps>(
 
     const initCollectionType = (value: any, type: string) => {
       if (type === 'ip') {
-        setIpRange(ipRange);
+        setIpRange(value || []);
+        form.setFieldValue('ipRange', value || []);
       } else {
         setSelectedData(value || []);
         form.setFieldValue('assetInst', value || []);
@@ -585,20 +602,22 @@ const BaseTaskForm = forwardRef<BaseTaskRef, BaseTaskFormProps>(
             )}
 
             {/* ip选择 */}
-            {supportsIpSelection && (
+            {(supportsIpSelection || supportsAssetOnlySelection) && (
               <>
-                {
+                {supportsIpSelection ? (
                   <Radio.Group
                     value={collectionType}
                     className="ml-8 mb-6"
                     onChange={(e) => setCollectionType(e.target.value)}
                   >
                     <Radio value="ip">{t('Collection.chooseIp')}</Radio>
-                    <Radio value="asset">{t('Collection.chooseAsset')}</Radio>
+                    <Radio value="asset">
+                      {assetOptionLabel || t('Collection.chooseAsset')}
+                    </Radio>
                   </Radio.Group>
-                }
+                ) : null}
 
-                {collectionType === 'ip' ? (
+                {supportsIpSelection && collectionType === 'ip' ? (
                   <>
                     {/* IP范围 */}
                     <Form.Item

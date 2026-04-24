@@ -2,7 +2,7 @@
   "name": "mysql",
   "collector": "Filebeat",
   "config_section": "module",
-  "icon": "mysql",
+  "icon": "mm-mysql_Mysql",
   "description": "Collects and parses MySQL slow logs and error logs using Filebeat module",
   "default_query": "collect_type: mysql | last 1 by (_time) partition by (instance_id)",
   "attrs": [

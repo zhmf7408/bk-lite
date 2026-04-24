@@ -66,7 +66,7 @@ const StrategyOperation = () => {
   const searchParams = useSearchParams();
   const [form] = Form.useForm();
   const router = useRouter();
-  const { getCollectType, getGroupIds } = useObjectConfigInfo();
+  const { getGroupIds } = useObjectConfigInfo();
   const userList: UserItem[] = commonContext?.userList || [];
   const instRef = useRef<ModalRef>(null);
   const formContainerRef = useRef<HTMLDivElement>(null);
@@ -257,11 +257,17 @@ const StrategyOperation = () => {
     const data = await getMonitorPlugin({
       monitor_object_id: monitorObjId
     });
-    const plugins = data.map((item: PluginItem) => ({
-      label: getCollectType(monitorName as string, item.name),
-      value: item.id,
-      name: item.name
-    }));
+    const plugins = data
+      .sort((a: PluginItem, b: PluginItem) => {
+        const order = (item: PluginItem) =>
+          item.is_pre ? 0 : !item.is_custom ? 1 : 2;
+        return order(a) - order(b);
+      })
+      .map((item: PluginItem) => ({
+        label: item.display_name || item.name || '--',
+        value: item.id,
+        name: item.name
+      }));
     setPluginList(plugins);
     getMetrics(
       {

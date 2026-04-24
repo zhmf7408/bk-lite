@@ -1,5 +1,10 @@
+import re
+
 from apps.core.exceptions.base_app_exception import BaseAppException
 from apps.monitor.utils.victoriametrics_api import VictoriaMetricsAPI
+
+
+SIMPLE_SELECTOR_PATTERN = re.compile(r"^(?:[a-zA-Z_:][a-zA-Z0-9_:]*|\{[^{}]*\})(?:\{[^{}]*\})?$")
 
 
 def period_to_seconds(period):
@@ -52,9 +57,21 @@ def _count(metric_query, start, end, step, group_by):
 #     return metrics
 
 
+def _supports_explicit_range_selector(metric_query: str) -> bool:
+    query = (metric_query or "").strip()
+    return bool(query) and bool(SIMPLE_SELECTOR_PATTERN.fullmatch(query))
+
+
 def last_over_time(metric_query, start, end, step, group_by):
-    query = f"any(last_over_time({metric_query})) by ({group_by})"
-    metrics = VictoriaMetricsAPI().query(query, step, end)
+    # 仅对简单 selector（裸指标、label-only、metric{labels}）显式补 range selector。
+    # 对复杂表达式保持原样，继续沿用 step + instant query 的兼容路径，避免在无法可靠
+    # 重写 PromQL/MetricsQL 时引入新的语义漂移。
+    if _supports_explicit_range_selector(metric_query):
+        query = f"any(last_over_time({metric_query}[{step}])) by ({group_by})"
+        metrics = VictoriaMetricsAPI().query(query, None, end)
+    else:
+        query = f"any(last_over_time({metric_query})) by ({group_by})"
+        metrics = VictoriaMetricsAPI().query(query, step, end)
     for data in metrics.get("data", {}).get("result", []):
         data["values"] = [data["value"]]
     return metrics

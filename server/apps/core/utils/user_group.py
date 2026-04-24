@@ -4,6 +4,18 @@ from apps.rpc.system_mgmt import SystemMgmt
 logger = logging.getLogger(__name__)
 
 
+def normalize_user_group_ids(group_list):
+    """兼容 dict/int/str 结构并统一提取组织 ID 列表。"""
+    normalized_group_ids = []
+    for group in group_list or []:
+        group_id = group.get("id") if isinstance(group, dict) else group
+        try:
+            normalized_group_ids.append(int(group_id))
+        except (TypeError, ValueError):
+            continue
+    return normalized_group_ids
+
+
 class SubGroup:
     def __init__(self, group_id, group_list):
         self.group_id = group_id
@@ -104,6 +116,10 @@ class Group:
         """获取用户组织ID与子组ID的列表"""
         if user_group_list is None:
             user_group_list = []
+
+        normalized_group_ids = normalize_user_group_ids(user_group_list)
+        if normalized_group_ids and len(normalized_group_ids) == len(user_group_list):
+            return list(set(normalized_group_ids))
 
         all_groups = self.get_group_list()
         if not all_groups:

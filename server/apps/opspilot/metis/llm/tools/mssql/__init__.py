@@ -10,16 +10,8 @@
 
 # 工具集构造参数元数据
 CONSTRUCTOR_PARAMS = [
-    {"name": "host", "type": "string", "required": False, "description": "MSSQL服务器地址,默认localhost"},
-    {"name": "port", "type": "integer", "required": False, "description": "端口,默认1433"},
-    {
-        "name": "database",
-        "type": "string",
-        "required": False,
-        "description": "默认连接的数据库。可选参数,不填时使用master数据库。大多数工具支持动态指定database参数来查询不同数据库",
-    },
-    {"name": "user", "type": "string", "required": False, "description": "用户名,默认sa"},
-    {"name": "password", "type": "string", "required": False, "description": "密码,从环境变量读取或配置传入"},
+    {"name": "mssql_instances", "type": "string", "required": False, "description": "MSSQL多实例JSON配置"},
+    {"name": "mssql_default_instance_id", "type": "string", "required": False, "description": "默认MSSQL实例ID"},
 ]
 
 # 导入所有工具函数

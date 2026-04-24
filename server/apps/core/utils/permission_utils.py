@@ -130,6 +130,73 @@ def delete_instance_rules(app_name, permission_key, instance_id, group_ids):
     return result
 
 
+def _normalize_permission_ids(values):
+    result = set()
+    if not isinstance(values, list):
+        return result
+
+    for value in values:
+        if isinstance(value, dict):
+            value = value.get("id")
+        if value is None:
+            continue
+        result.add(value)
+        result.add(str(value))
+
+    return result
+
+
+def _normalize_instance_permissions(values):
+    permission_map = {}
+    if not isinstance(values, list):
+        return permission_map
+
+    for value in values:
+        if not isinstance(value, dict) or "id" not in value:
+            continue
+        instance_id = str(value["id"])
+        current_permissions = permission_map.get(instance_id, [])
+        next_permissions = value.get("permission") or DEFAULT_PERMISSION
+        merged_permissions = []
+        for permission in list(current_permissions) + list(next_permissions):
+            if permission not in merged_permissions:
+                merged_permissions.append(permission)
+        permission_map[instance_id] = merged_permissions or DEFAULT_PERMISSION
+
+    return permission_map
+
+
+def get_instance_permission_map(permission):
+    """从权限规则中提取实例权限映射，并合并重复实例权限。"""
+    if not isinstance(permission, dict):
+        return {}
+    return _normalize_instance_permissions(permission.get("instance", []))
+
+
+def get_instance_permissions(object_type_id, instance_id, teams, permissions, cur_team):
+    """返回实例具备的权限列表，无权限时返回空列表。"""
+    teams = {team for team in teams if team is not None}
+
+    admin_cur_team = _normalize_permission_ids(permissions.get("all", {}).get("team", []))
+    if admin_cur_team and (teams & admin_cur_team):
+        return DEFAULT_PERMISSION
+
+    permission = permissions.get(str(object_type_id))
+    if not permission:
+        return DEFAULT_PERMISSION if teams & set(cur_team) else []
+
+    instance_permissions = get_instance_permission_map(permission)
+    normalized_instance_id = str(instance_id)
+    if normalized_instance_id in instance_permissions:
+        return instance_permissions[normalized_instance_id]
+
+    team_permission = _normalize_permission_ids(permission.get("team", []))
+    if teams & team_permission:
+        return DEFAULT_PERMISSION
+
+    return []
+
+
 def check_instance_permission(object_type_id, instance_id, teams, permissions, cur_team):
     """
     通用实例权限检查逻辑
@@ -151,50 +218,7 @@ def check_instance_permission(object_type_id, instance_id, teams, permissions, c
         # 日志模块使用
         has_permission = check_instance_permission(collect_type_id, policy_id, teams, permissions, cur_team)
     """
-    # 超管权限检查
-    admin_cur_team = permissions.get("all", {}).get("team")
-    if admin_cur_team:
-        if teams & set(admin_cur_team):
-            return True
-
-    cur_team = set(cur_team)
-
-    # 未设置该对象类型的权限规则时，检查实例组织是否在用户团队中
-    permission = permissions.get(str(object_type_id))
-    if not permission:
-        if cur_team & teams:
-            return True
-        else:
-            return False
-
-    # 安全获取实例权限，确保类型正确
-    instance_data = permission.get("instance", [])
-    if isinstance(instance_data, list):
-        inst_permission = {i["id"] for i in instance_data if isinstance(i, dict) and "id" in i}
-    else:
-        inst_permission = set()
-
-    # 安全获取团队权限，确保类型正确
-    team_data = permission.get("team", [])
-    if isinstance(team_data, list):
-        team_permission = {i["id"] if isinstance(i, dict) and "id" in i else i for i in team_data if i is not None}
-    else:
-        team_permission = set()
-
-    # 存在实例权限，但是都为空时，代表此对象当前组没有任何此类对象的实例权限
-    if not inst_permission and not team_permission:
-        return False
-
-    # 如果实例权限中包含当前实例ID，直接返回True
-    if instance_id in inst_permission:
-        return True
-
-    team_permission = set(team_permission)
-    # 如果当前组在团队权限中有权限，直接返回True
-    if teams & team_permission:
-        return True
-
-    return False
+    return bool(get_instance_permissions(object_type_id, instance_id, teams, permissions, cur_team))
 
 
 def filter_instances_with_permissions(instances_result, policy_permissions, current_teams):
@@ -217,33 +241,14 @@ def filter_instances_with_permissions(instances_result, policy_permissions, curr
         instance_id = item["instance_id"]
         organizations_set = set(item["organizations"])
 
-        # 检查超管权限
-        admin_team_permission = policy_permissions.get("all", {}).get("team", [])
-        if admin_team_permission and organizations_set & set(admin_team_permission):
-            result[instance_id] = DEFAULT_PERMISSION
-            continue
-
-        # 检查特定采集类型权限
-        type_permission = policy_permissions.get(collect_type_id_str, {})
-        if not type_permission:
-            # 如果没有配置权限规则，检查组织匹配
-            if current_teams_set & organizations_set:
-                result[instance_id] = DEFAULT_PERMISSION
-            continue
-
-        # 检查实例级权限
-        instance_permissions = type_permission.get("instance", {})
-        if instance_id in instance_permissions:
-            permissions = instance_permissions[instance_id]
-            if permissions:  # 如果有具体权限
-                result[instance_id] = permissions
-            else:  # 如果权限为空列表，使用默认权限
-                result[instance_id] = DEFAULT_PERMISSION
-            continue
-
-        # 检查团队权限
-        team_permissions = set(type_permission.get("team", []))
-        if current_teams_set & team_permissions or organizations_set & team_permissions:
-            result[instance_id] = DEFAULT_PERMISSION
+        permissions = get_instance_permissions(
+            collect_type_id_str,
+            instance_id,
+            organizations_set,
+            policy_permissions,
+            current_teams_set,
+        )
+        if permissions:
+            result[instance_id] = permissions
 
     return result

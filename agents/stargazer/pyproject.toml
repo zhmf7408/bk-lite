@@ -30,6 +30,7 @@ dependencies = [
     "oracledb==3.3.0",
     "pyodbc==5.2.0",
     "paramiko==3.5.0",
+    "pyghmi>=1.6.5",
     "pytz==2025.2",
     "arq>=0.26.0",
     "redis>=5.0.0",

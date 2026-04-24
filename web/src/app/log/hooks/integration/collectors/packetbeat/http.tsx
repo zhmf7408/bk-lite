@@ -10,7 +10,7 @@ export const usePacketbeatConfig = () => {
   const pluginConfig = {
     collector: 'Packetbeat',
     collect_type: 'http',
-    icon: 'wangluo'
+    icon: 'll-flows_网络流量'
   };
 
   return {

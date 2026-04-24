@@ -227,6 +227,7 @@ class LLMSkill(MaintainerInfo):
 
     show_think = models.BooleanField(default=True)
     tools = models.JSONField(default=list)
+    skill_params = models.JSONField(default=list, verbose_name="技能参数")
 
     temperature = models.FloatField(default=0.7, verbose_name="温度")
     skill_type = models.IntegerField(

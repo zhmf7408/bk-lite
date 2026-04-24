@@ -848,7 +848,7 @@ const JobHomePage = () => {
                     <span className="w-3 h-3 rounded-full border-[3px] border-[#ff5a52] bg-white" />
                     <span>{t('job.failed')}</span>
                   </div>
-                  <div className="text-xs text-[#9aa9bc]">悬停查看成功/失败/总执行</div>
+                  <div className="text-xs text-[#9aa9bc]">{t('job.hoverToViewExecutionStats')}</div>
                 </div>
               </div>
             </div>

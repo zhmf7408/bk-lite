@@ -5,17 +5,21 @@ import React, {
   useImperativeHandle,
   useState,
   useCallback,
+  useMemo,
 } from 'react';
+import { useIntl } from 'react-intl';
 import styles from './index.module.scss';
 import { useTranslation } from '@/utils/i18n';
 import { useOpsAnalysis } from '@/app/ops-analysis/context/common';
-import { Spin } from 'antd';
+import { setLocaleData } from './utils/localeStore';
+import { Spin, Select } from 'antd';
 import { AppstoreOutlined, CloseOutlined } from '@ant-design/icons';
 import { v4 as uuidv4 } from 'uuid';
 import { useTopologyState } from './hooks/useTopologyState';
 import { useGraphOperations } from './hooks/useGraphOperations';
 import { useContextMenuAndModal } from './hooks/useGraphInteractions';
 import { useDataSourceManager } from '@/app/ops-analysis/hooks/useDataSource';
+import { useUnifiedFilter } from '@/app/ops-analysis/hooks/useUnifiedFilter';
 import {
   NodeType,
   NodeTypeId,
@@ -26,7 +30,12 @@ import {
   TopologyRef,
   TopologyNodeData,
 } from '@/app/ops-analysis/types/topology';
+import type {
+  UnifiedFilterDefinition,
+  FilterValue,
+} from '@/app/ops-analysis/types/dashBoard';
 import type { DatasourceItem } from '@/app/ops-analysis/types/dataSource';
+import type { Model } from '@antv/x6';
 import TopologyToolbar from './components/toolbar';
 import ContextMenu from './components/contextMenu';
 import EdgeConfigPanel from './components/edgeConfPanel';
@@ -34,6 +43,11 @@ import NodeSidebar from './components/nodeSidebar';
 import NodeConfPanel from './components/nodeConfPanel';
 import ViewConfig from '../dashBoard/components/viewConfig';
 import ViewSelector from '../dashBoard/components/viewSelector';
+import {
+  UnifiedFilterBar,
+  UnifiedFilterConfigModal,
+} from '@/app/ops-analysis/components/unifiedFilter';
+import { collectNamespaceOptionsFromNodes, convertNodesToLayoutItems, buildFiltersFromNodes, syncFilterValuesWithDefinitions } from './utils/namespaceUtils';
 
 const Topology = forwardRef<TopologyRef, TopologyProps>(
   ({ selectedTopology }, ref) => {
@@ -53,14 +67,43 @@ const Topology = forwardRef<TopologyRef, TopologyProps>(
       y: number;
     } | null>(null);
     const [minimapVisible, setMinimapVisible] = useState(true);
+    const [filterConfigModalVisible, setFilterConfigModalVisible] = useState(false);
+    const [selectedNamespaceId, setSelectedNamespaceId] = useState<number | undefined>(undefined);
+    const [searchKey, setSearchKey] = useState(0);
+    const [nodeChangeKey, setNodeChangeKey] = useState(0);
+    const [originalGraphState, setOriginalGraphState] = useState<Model.FromJSONData | null>(null);
+    const [originalDefinitions, setOriginalDefinitions] = useState<UnifiedFilterDefinition[]>([]);
+    const rebuildFiltersRef = useRef<(() => void) | null>(null);
+
     const { t } = useTranslation();
+    const intl = useIntl();
     const state = useTopologyState();
     const dataSourceManager = useDataSourceManager();
-    const { fetchDataSources } = useOpsAnalysis();
+    const { fetchDataSources, namespaceList, fetchNamespaces } = useOpsAnalysis();
+
+    const {
+      definitions,
+      filterValues,
+      setFilterValues,
+      updateDefinitions,
+      setDefinitions,
+    } = useUnifiedFilter();
+
+    useEffect(() => {
+      setLocaleData(intl.locale, intl.messages as Record<string, string>);
+    }, [intl.locale, intl.messages]);
 
     useEffect(() => {
       void fetchDataSources();
     }, [fetchDataSources]);
+
+    useEffect(() => {
+      void fetchNamespaces();
+    }, [fetchNamespaces]);
+
+    const handleNodeRemovedCallback = useCallback(() => {
+      rebuildFiltersRef.current?.();
+    }, []);
 
     const {
       zoomIn,
@@ -84,12 +127,64 @@ const Topology = forwardRef<TopologyRef, TopologyProps>(
       finishInitialization,
       clearOperationHistory,
       refreshAllSingleValueNodes,
-    } = useGraphOperations(containerRef, state, minimapContainerRef);
+      refreshAllChartNodes,
+      loadChartNodeData,
+      updateSingleNodeData,
+    } = useGraphOperations(containerRef, state, minimapContainerRef, handleNodeRemovedCallback);
 
     const { handleEdgeConfigConfirm, closeEdgeConfig, handleMenuClick } =
       useContextMenuAndModal(containerRef, state);
 
-    // 定时刷新处理
+    const namespaceOptions = useMemo(() => {
+      return collectNamespaceOptionsFromNodes(
+        state.graphInstance,
+        dataSourceManager.dataSources,
+        namespaceList
+      );
+    }, [state.graphInstance, dataSourceManager.dataSources, namespaceList, searchKey, nodeChangeKey]);
+
+    useEffect(() => {
+      if (namespaceOptions.length > 0) {
+        const currentValid = selectedNamespaceId !== undefined &&
+          namespaceOptions.some((o) => o.value === selectedNamespaceId);
+        if (!currentValid) {
+          setSelectedNamespaceId(namespaceOptions[0].value);
+        }
+      } else {
+        setSelectedNamespaceId(undefined);
+      }
+    }, [namespaceOptions, selectedNamespaceId]);
+
+    const namespaceSelectorElement = useMemo(() => {
+      if (namespaceOptions.length <= 1) return undefined;
+      return (
+        <div className="flex items-center gap-2">
+          <span className="text-sm text-(--color-text-2) whitespace-nowrap">
+            {t('namespace.title')}:
+          </span>
+          <Select
+            value={selectedNamespaceId}
+            onChange={(val: number) => {
+              setSelectedNamespaceId(val);
+              setSearchKey((prev) => prev + 1);
+            }}
+            options={namespaceOptions}
+            style={{ minWidth: 160 }}
+          />
+        </div>
+      );
+    }, [namespaceOptions, selectedNamespaceId, t]);
+
+    const prevSearchKeyRef = useRef(0);
+
+    useEffect(() => {
+      if (searchKey === 0 || searchKey === prevSearchKeyRef.current) return;
+      prevSearchKeyRef.current = searchKey;
+
+      refreshAllSingleValueNodes(filterValues, definitions, selectedNamespaceId);
+      refreshAllChartNodes(filterValues, definitions, dataSourceManager.dataSources, selectedNamespaceId);
+    }, [searchKey, filterValues, definitions, refreshAllSingleValueNodes, refreshAllChartNodes, dataSourceManager.dataSources, selectedNamespaceId]);
+
     const handleFrequencyChange = useCallback(
       (frequency: number) => {
         if (refreshTimerRef.current) {
@@ -99,16 +194,18 @@ const Topology = forwardRef<TopologyRef, TopologyProps>(
 
         if (frequency > 0) {
           refreshTimerRef.current = setInterval(() => {
-            refreshAllSingleValueNodes();
+            refreshAllSingleValueNodes(filterValues, definitions, selectedNamespaceId);
+            refreshAllChartNodes(filterValues, definitions, dataSourceManager.dataSources, selectedNamespaceId);
           }, frequency);
         }
       },
-      [refreshAllSingleValueNodes]
+      [refreshAllSingleValueNodes, refreshAllChartNodes, filterValues, definitions, dataSourceManager.dataSources, selectedNamespaceId]
     );
 
     const handleRefresh = useCallback(() => {
-      refreshAllSingleValueNodes();
-    }, [refreshAllSingleValueNodes]);
+      refreshAllSingleValueNodes(filterValues, definitions, selectedNamespaceId);
+      refreshAllChartNodes(filterValues, definitions, dataSourceManager.dataSources, selectedNamespaceId);
+    }, [refreshAllSingleValueNodes, refreshAllChartNodes, filterValues, definitions, dataSourceManager.dataSources, selectedNamespaceId]);
 
     // 监听画布容器大小变化，自动调整画布大小
     const handleCanvasResize = useCallback(() => {
@@ -195,11 +292,38 @@ const Topology = forwardRef<TopologyRef, TopologyProps>(
     ) => {
       if (!state.editingNodeData) return;
       if (state.editingNodeData.isNewNode && state.editingNodeData.position) {
-        await handleAddChartNode(values);
+        const result = await handleAddChartNode(values, true);
         state.setEditingNodeData(null);
         state.setViewConfigVisible(false);
+
+        // Rebuild filters synchronously after node is added (like dashboard's 3-step pipeline)
+        setTimeout(() => {
+          const newDefinitions = buildFiltersFromNodes(
+            state.graphInstance,
+            dataSourceManager.dataSources,
+            definitions
+          );
+          const syncedValues = syncFilterValuesWithDefinitions(newDefinitions, filterValues);
+
+          setDefinitions(newDefinitions);
+          setFilterValues(syncedValues);
+          setNodeChangeKey((prev) => prev + 1);
+
+          // Now fetch the new node's data with correct filter values
+          if (result?.nodeId && result?.valueConfig?.dataSource) {
+            loadChartNodeData(
+              result.nodeId,
+              result.valueConfig,
+              syncedValues,
+              newDefinitions,
+              undefined,
+              selectedNamespaceId,
+            );
+          }
+        }, 100);
       } else {
-        await handleViewConfigConfirm(values);
+        await handleViewConfigConfirm(values, filterValues, definitions, dataSourceManager.dataSources, selectedNamespaceId);
+        setTimeout(() => rebuildFiltersFromNodes(), 100);
       }
     };
 
@@ -252,9 +376,33 @@ const Topology = forwardRef<TopologyRef, TopologyProps>(
             thresholdColors: values.thresholdColors,
           },
         };
-        addNewNode(nodeConfig);
+        const isSingleValue = selectedNodeType.id === 'single-value' &&
+          !!nodeConfig.valueConfig?.dataSource && (nodeConfig.valueConfig?.selectedFields?.length ?? 0) > 0;
+        const nodeId = addNewNode(nodeConfig, isSingleValue);
+        setTimeout(() => {
+          const newDefinitions = buildFiltersFromNodes(
+            state.graphInstance,
+            dataSourceManager.dataSources,
+            definitions
+          );
+          const syncedValues = syncFilterValuesWithDefinitions(newDefinitions, filterValues);
+          setDefinitions(newDefinitions);
+          setFilterValues(syncedValues);
+          setNodeChangeKey((prev) => prev + 1);
+
+          // Fetch single-value node data with correct filter values
+          if (isSingleValue && nodeId) {
+            updateSingleNodeData(
+              { ...nodeConfig, id: nodeId },
+              syncedValues,
+              newDefinitions,
+              selectedNamespaceId
+            );
+          }
+        }, 100);
       } else {
-        await handleNodeUpdate(values);
+        await handleNodeUpdate(values, filterValues, definitions, selectedNamespaceId);
+        setTimeout(() => rebuildFiltersFromNodes(), 100);
       }
       handleNodeEditClose();
     };
@@ -277,9 +425,52 @@ const Topology = forwardRef<TopologyRef, TopologyProps>(
 
     const handleSave = () => {
       if (selectedTopology) {
-        handleSaveTopology(selectedTopology);
+        handleSaveTopology(selectedTopology, definitions);
       }
     };
+
+    const handleEnterEditMode = useCallback(() => {
+      if (state.graphInstance) {
+        setOriginalGraphState(state.graphInstance.toJSON());
+        setOriginalDefinitions([...definitions]);
+      }
+      toggleEditMode();
+    }, [state.graphInstance, definitions, toggleEditMode]);
+
+    const handleCancelEdit = useCallback(() => {
+      if (state.graphInstance && originalGraphState) {
+        state.graphInstance.fromJSON(originalGraphState);
+      }
+      const restoredDefs = [...originalDefinitions];
+      setDefinitions(restoredDefs);
+      toggleEditMode();
+      const restoredValues = syncFilterValuesWithDefinitions(restoredDefs, {});
+      refreshAllSingleValueNodes(restoredValues, restoredDefs, selectedNamespaceId);
+      refreshAllChartNodes(restoredValues, restoredDefs, dataSourceManager.dataSources, selectedNamespaceId);
+    }, [state.graphInstance, originalGraphState, originalDefinitions, setDefinitions, toggleEditMode, refreshAllSingleValueNodes, refreshAllChartNodes, dataSourceManager.dataSources, selectedNamespaceId]);
+
+    const handleFilterValuesChange = useCallback((values: Record<string, FilterValue>) => {
+      setFilterValues(values);
+      setSearchKey((prev) => prev + 1);
+    }, [setFilterValues]);
+
+    const handleFilterConfigConfirm = useCallback((newDefinitions: UnifiedFilterDefinition[]) => {
+      updateDefinitions(newDefinitions);
+    }, [updateDefinitions]);
+
+    const rebuildFiltersFromNodes = useCallback(() => {
+      const newDefinitions = buildFiltersFromNodes(
+        state.graphInstance,
+        dataSourceManager.dataSources,
+        definitions
+      );
+      setDefinitions(newDefinitions);
+      setNodeChangeKey((prev) => prev + 1);
+    }, [state.graphInstance, dataSourceManager.dataSources, definitions, setDefinitions]);
+
+    useEffect(() => {
+      rebuildFiltersRef.current = rebuildFiltersFromNodes;
+    }, [rebuildFiltersFromNodes]);
 
     const hasUnsavedChanges = () => {
       return state.isEditMode;
@@ -293,16 +484,46 @@ const Topology = forwardRef<TopologyRef, TopologyProps>(
       state.resetAllStates();
       startInitialization();
       clearOperationHistory();
+      setDefinitions([]);
+      setOriginalDefinitions([]);
+      setSelectedNamespaceId(undefined);
 
-      // 清除定时刷新
       if (refreshTimerRef.current) {
         clearInterval(refreshTimerRef.current);
         refreshTimerRef.current = null;
       }
 
       if (selectedTopology?.data_id && state.graphInstance) {
-        handleLoadTopology(selectedTopology.data_id).finally(() => {
+        handleLoadTopology(selectedTopology.data_id).then((loadedFilters) => {
+          const autoBuiltFilters = buildFiltersFromNodes(
+            state.graphInstance,
+            dataSourceManager.dataSources,
+            loadedFilters
+          );
+
+          // Step 1: Build filter definitions and sync values
+          const syncedValues = syncFilterValuesWithDefinitions(autoBuiltFilters, {});
+          if (autoBuiltFilters.length > 0) {
+            setDefinitions(autoBuiltFilters);
+            setFilterValues(syncedValues);
+            setOriginalDefinitions([...autoBuiltFilters]);
+          }
+
+          // Step 2: Determine initial namespace
+          const nsOptions = collectNamespaceOptionsFromNodes(
+            state.graphInstance,
+            dataSourceManager.dataSources,
+            namespaceList
+          );
+          const initialNamespaceId = nsOptions.length > 0 ? nsOptions[0].value : undefined;
+          if (initialNamespaceId !== undefined) {
+            setSelectedNamespaceId(initialNamespaceId);
+          }
+
+          // Step 3: Fetch all node data with correct filter values
           setTimeout(() => {
+            refreshAllSingleValueNodes(syncedValues, autoBuiltFilters, initialNamespaceId);
+            refreshAllChartNodes(syncedValues, autoBuiltFilters, dataSourceManager.dataSources, initialNamespaceId);
             finishInitialization();
           }, 100);
         });
@@ -354,8 +575,10 @@ const Topology = forwardRef<TopologyRef, TopologyProps>(
         {/* 工具栏 */}
         <TopologyToolbar
           selectedTopology={selectedTopology}
-          onEdit={toggleEditMode}
+          onEdit={handleEnterEditMode}
           onSave={handleSave}
+          onCancel={handleCancelEdit}
+          onFilterConfig={() => setFilterConfigModalVisible(true)}
           onZoomIn={zoomIn}
           onZoomOut={zoomOut}
           onFit={handleFit}
@@ -370,6 +593,17 @@ const Topology = forwardRef<TopologyRef, TopologyProps>(
           onRefresh={handleRefresh}
           onFrequencyChange={handleFrequencyChange}
         />
+
+        {(definitions.length > 0 || namespaceSelectorElement) && (
+          <div className="shrink-0 mb-2">
+            <UnifiedFilterBar
+              definitions={definitions}
+              values={filterValues}
+              onChange={handleFilterValuesChange}
+              prefixContent={namespaceSelectorElement}
+            />
+          </div>
+        )}
 
         <div className="flex-1 flex overflow-hidden">
           {/* 侧边栏 */}
@@ -473,6 +707,16 @@ const Topology = forwardRef<TopologyRef, TopologyProps>(
           onClose={() => state.setViewConfigVisible(false)}
           onConfirm={handleTopologyViewConfigConfirm}
           dataSourceManager={dataSourceManager}
+          filterDefinitions={definitions}
+        />
+
+        <UnifiedFilterConfigModal
+          open={filterConfigModalVisible}
+          definitions={definitions}
+          onConfirm={handleFilterConfigConfirm}
+          onCancel={() => setFilterConfigModalVisible(false)}
+          layoutItems={convertNodesToLayoutItems(state.graphInstance)}
+          dataSources={dataSourceManager.dataSources}
         />
       </div>
     );

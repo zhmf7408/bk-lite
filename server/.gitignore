@@ -27,3 +27,4 @@ uv.lock
 docs/api/*
 docs/*
 ca.pem
+*license_mgmt*

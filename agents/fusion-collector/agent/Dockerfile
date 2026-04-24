@@ -37,6 +37,7 @@ ADD ./filebeat ./bin/filebeat
 ADD ./packetbeat ./bin/packetbeat
 ADD ./auditbeat ./bin/auditbeat
 ADD ./windows /opt/release/windows/fusion-collectors
+ADD ./linux/bklite-controller-installer /opt/release/linux/fusion-collectors/bklite-controller-installer
 
 # exporters
 ADD ./linux/exporters /opt/release/linux/exporters

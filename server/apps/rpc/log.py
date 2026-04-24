@@ -6,9 +6,7 @@ from apps.rpc.base import RpcClient, AppClient, BaseOperationAnaRpc
 class Log(object):
     def __init__(self, is_local_client=False):
         is_local_client = os.getenv("IS_LOCAL_RPC", "0") == "1" or is_local_client
-        self.client = (
-            AppClient("apps.log.nats.permission") if is_local_client else RpcClient()
-        )
+        self.client = AppClient("apps.log.nats.permission") if is_local_client else RpcClient()
 
     def get_module_data(self, **kwargs):
         """
@@ -31,6 +29,10 @@ class Log(object):
 
 
 class LogOperationAnaRpc(BaseOperationAnaRpc):
+    def get_vmlogs_disk_usage(self, **kwargs):
+        """获取 VictoriaLogs 已占用磁盘容量（GB）。"""
+        return self.client.run("get_vmlogs_disk_usage", **kwargs)
+
     def search(self, query, time_range, limit=10, **kwargs):
         """
         日志搜索
@@ -39,9 +41,7 @@ class LogOperationAnaRpc(BaseOperationAnaRpc):
         end_time: 结束时间，eg:2025-08-16T11:52:13.106Z
         limit: 返回结果条数，默认10
         """
-        return self.client.run(
-            "log_search", query=query, time_range=time_range, limit=limit, **kwargs
-        )
+        return self.client.run("log_search", query=query, time_range=time_range, limit=limit, **kwargs)
 
     def hits(self, query, time_range, field, fields_limit=5, step="5m", **kwargs):
         """
@@ -89,6 +89,4 @@ class LogOperationAnaRpc(BaseOperationAnaRpc):
             "items": list,
         }
         """
-        return self.client.run(
-            "query_log_alert_segments", query_data=query_data, **kwargs
-        )
+        return self.client.run("query_log_alert_segments", query_data=query_data, **kwargs)
