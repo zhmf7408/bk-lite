@@ -27,8 +27,17 @@ class PlaybookExecution(ExecutionTaskBaseService):
             self.update_execution_status(execution, ExecutionStatus.FAILED, finished_at=timezone.now())
             return
 
+        logger.info(
+            f"[{self.task_name}] Playbook信息: "
+            f"name={execution.playbook.name}, version={execution.playbook.version}, "
+            f"file_key={execution.playbook.file_key}, bucket={execution.playbook.bucket_name}, "
+            f"targets={len(target_list)}, target_source={execution.target_source}, "
+            f"params='{execution.params}', timeout={execution.timeout}"
+        )
+
         # 判断是否走 Ansible 路径
         if self._should_use_ansible(execution.target_source, target_list):
+            logger.info(f"[{self.task_name}] 使用 Ansible 路径执行: execution_id={self.execution_id}")
             self._run_via_ansible(execution, target_list)
         else:
             error_msg = "Playbook 执行仅支持 Ansible 驱动的目标管理主机"
@@ -69,6 +78,8 @@ class PlaybookExecution(ExecutionTaskBaseService):
         if not targets:
             raise ValueError("未找到有效的目标记录")
 
+        logger.info(f"[{task_name}] 目标主机: " + ", ".join(f"{t.ip}(id={t.id}, driver={t.driver}, region={t.cloud_region_id})" for t in targets))
+
         # 按云区域分组，当前仅取第一个云区域
         region_targets = {}
         for target in targets:
@@ -78,16 +89,21 @@ class PlaybookExecution(ExecutionTaskBaseService):
             region_targets[region_id].append(target)
 
         if len(region_targets) > 1:
-            logger.warning(f"[{task_name}] 检测到多个云区域，当前仅使用第一个云区域执行")
+            logger.warning(f"[{task_name}] 检测到多个云区域({list(region_targets.keys())})，当前仅使用第一个云区域执行")
 
         cloud_region_id = list(region_targets.keys())[0]
         region_target_list = region_targets[cloud_region_id]
 
         # 获取 Ansible 执行节点
         ansible_node_id = cls._get_ansible_node(cloud_region_id)
+        logger.info(f"[{task_name}] Ansible 执行节点: node_id={ansible_node_id}, cloud_region_id={cloud_region_id}")
 
         # 构建主机凭据
         host_credentials = cls._build_host_credentials(region_target_list)
+        logger.info(
+            f"[{task_name}] 主机凭据: "
+            + ", ".join(f"{c.get('host')}(port={c.get('port')}, user={c.get('user')}, conn={c.get('connection')})" for c in host_credentials)
+        )
 
         # 构建回调配置
         callback_config = {
@@ -97,6 +113,7 @@ class PlaybookExecution(ExecutionTaskBaseService):
 
         # 构建 extra_vars（从 execution.params 和 playbook.params 还原）
         extra_vars = cls._build_extra_vars(execution.params, playbook.params)
+        logger.info(f"[{task_name}] extra_vars: {extra_vars}")
 
         # 构建文件列表（Playbook ZIP 存储在 MinIO）
         files = []
@@ -108,9 +125,16 @@ class PlaybookExecution(ExecutionTaskBaseService):
                     "bucket_name": playbook.bucket_name,
                 }
             )
+        logger.info(f"[{task_name}] Playbook 文件: {files}")
 
         # 调用 AnsibleExecutor.playbook()
         executor = AnsibleExecutor(ansible_node_id)
+        logger.info(
+            f"[{task_name}] 调用 AnsibleExecutor.playbook(): "
+            f"playbook_path=playbook.yml, task_id={execution.id}, timeout={execution.timeout}, "
+            f"callback_subject={callback_config['subject']}, "
+            f"host_count={len(host_credentials)}, file_count={len(files)}, extra_vars_keys={list(extra_vars.keys())}"
+        )
         result = executor.playbook(
             playbook_path="playbook.yml",
             host_credentials=host_credentials,
