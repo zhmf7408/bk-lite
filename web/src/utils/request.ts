@@ -26,7 +26,7 @@ const setToken = (token: string | null) => {
   tokenRef.current = token;
 };
 
-const handleResponse = (response: AxiosResponse) => {
+const handleResponse = (response: AxiosResponse, _onError?: () => void) => {
   const { result, message: msg, data } = response.data;
   if (!result) {
     throw new Error(msg);
@@ -105,11 +105,6 @@ const useApiClient = () => {
   const get = useCallback(async <T = any>(url: string, config?: AxiosRequestConfig): Promise<T> => {
     const response = await apiClient.get<T>(url, config);
     return config?.responseType === 'blob' ? response.data : handleResponse(response);
-  }, []);
-
-  const post = useCallback(async <T = any>(url: string, data?: unknown, config?: AxiosRequestConfig): Promise<T> => {
-    const response = await apiClient.post<T>(url, data, config);
-    return handleResponse(response);
   }, []);
 
   const post = useCallback(async <T = any>(url: string, data?: unknown, config?: AxiosRequestConfig, onError?: () => void): Promise<T> => {
