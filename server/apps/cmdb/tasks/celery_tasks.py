@@ -25,6 +25,9 @@ def sync_collect_task(instance_id):
     instance = CollectModels._default_manager.filter(id=instance_id).first()
     if not instance:
         return
+    from apps.cmdb.services.collect_service import CollectModelService
+
+    CollectModelService.repair_host_cloud_snapshot(instance)
     if instance.exec_status == CollectRunStatusType.NOT_START:
         CollectModels._default_manager.filter(id=instance_id).update(exec_status=CollectRunStatusType.RUNNING)
     # # 防止周期触发与延迟补跑重叠导致同一任务并发执行
