@@ -588,6 +588,45 @@ tools:
           Requirements:
           1. When the build target is unclear, do not execute the task, tell the user similar job names
           2. Do not build disabled jobs
+  monitor:
+    name: Monitor
+    description: |
+      Monitor Tool Module
+
+      This module provides monitor query tools for OpsPilot through the Monitor RPC/NATS pipeline.
+      It helps the model discover monitor objects, inspect instances, list metrics, query metric data,
+      and check active or historical alerts without directly coupling to local monitor implementations.
+
+      **Key Features:**
+      - Discover available monitor objects
+      - List monitor object instances
+      - List object-level and instance-level metrics
+      - Query metric time series data by object and metric
+      - Query latest active alerts and historical alert segments
+
+      **Tool List:**
+      - monitor_list_objects: List available monitor objects
+      - monitor_list_object_instances: List instances under a monitor object
+      - monitor_list_object_metrics: List metrics for a monitor object
+      - monitor_list_instance_metrics: List metrics for a monitor instance
+      - monitor_query_metric_data: Query metric data in a time range
+      - monitor_list_active_alerts: List latest active alerts
+      - monitor_query_alert_segments: Query historical alert segments
+    tools:
+      monitor_list_objects:
+        description: List available monitor objects that can be used for follow-up instance and metric queries
+      monitor_list_object_instances:
+        description: List monitor instances under a specified monitor object, scoped by the authenticated user and selected team
+      monitor_list_object_metrics:
+        description: List available metrics for a specified monitor object
+      monitor_list_instance_metrics:
+        description: List available metrics for a specified monitor instance, with optional filters for data availability and time window
+      monitor_query_metric_data:
+        description: Query metric time series data for a specified monitor object and metric within a time range, optionally filtered by instances and dimensions
+      monitor_list_active_alerts:
+        description: List the latest active monitor alerts, optionally filtered by monitor object, instances, severity level, or alert type
+      monitor_query_alert_segments:
+        description: Query historical monitor alert segments within a time range, optionally filtered by instances, status, severity level, or alert type
   postgres:
     name: PostgreSQL
     description: |

@@ -1,15 +1,24 @@
 from apps.core.utils.loader import LanguageLoader
-from apps.opspilot.metis.llm.tools.mssql import CONSTRUCTOR_PARAMS as MSSQL_CONSTRUCTOR_PARAMS, __all__ as MSSQL_EXPORTS
+from apps.opspilot.metis.llm.tools.monitor import CONSTRUCTOR_PARAMS as MONITOR_CONSTRUCTOR_PARAMS
+from apps.opspilot.metis.llm.tools.monitor import __all__ as MONITOR_EXPORTS
+from apps.opspilot.metis.llm.tools.mssql import CONSTRUCTOR_PARAMS as MSSQL_CONSTRUCTOR_PARAMS
+from apps.opspilot.metis.llm.tools.mssql import __all__ as MSSQL_EXPORTS
 from apps.opspilot.metis.llm.tools.mssql.connection import get_mssql_instances_prompt
-from apps.opspilot.metis.llm.tools.mysql import CONSTRUCTOR_PARAMS as MYSQL_CONSTRUCTOR_PARAMS, __all__ as MYSQL_EXPORTS
+from apps.opspilot.metis.llm.tools.mysql import CONSTRUCTOR_PARAMS as MYSQL_CONSTRUCTOR_PARAMS
+from apps.opspilot.metis.llm.tools.mysql import __all__ as MYSQL_EXPORTS
 from apps.opspilot.metis.llm.tools.mysql.connection import get_mysql_instances_prompt
-from apps.opspilot.metis.llm.tools.oracle import CONSTRUCTOR_PARAMS as ORACLE_CONSTRUCTOR_PARAMS, __all__ as ORACLE_EXPORTS
+from apps.opspilot.metis.llm.tools.oracle import CONSTRUCTOR_PARAMS as ORACLE_CONSTRUCTOR_PARAMS
+from apps.opspilot.metis.llm.tools.oracle import __all__ as ORACLE_EXPORTS
 from apps.opspilot.metis.llm.tools.oracle.connection import get_oracle_instances_prompt
-from apps.opspilot.metis.llm.tools.redis import CONSTRUCTOR_PARAMS as REDIS_CONSTRUCTOR_PARAMS, __all__ as REDIS_EXPORTS
+from apps.opspilot.metis.llm.tools.redis import CONSTRUCTOR_PARAMS as REDIS_CONSTRUCTOR_PARAMS
+from apps.opspilot.metis.llm.tools.redis import __all__ as REDIS_EXPORTS
 from apps.opspilot.metis.llm.tools.redis.connection import get_redis_instances_prompt
 
 BUILTIN_REDIS_TOOL_ID = -1
 BUILTIN_REDIS_TOOL_NAME = "redis"
+
+BUILTIN_MONITOR_TOOL_ID = -5
+BUILTIN_MONITOR_TOOL_NAME = "monitor"
 
 BUILTIN_MYSQL_TOOL_ID = -2
 BUILTIN_MYSQL_TOOL_NAME = "mysql"
@@ -78,6 +87,39 @@ def build_builtin_redis_runtime_tool(tool_kwargs):
         "enable_auth": False,
         "auth_token": "",
         "extra_tools_prompt": get_redis_instances_prompt(tool_kwargs),
+    }
+
+
+def build_builtin_monitor_tool(loader: LanguageLoader):
+    description = loader.get(f"tools.{BUILTIN_MONITOR_TOOL_NAME}.description") or "Monitor built-in tool"
+    return {
+        "id": BUILTIN_MONITOR_TOOL_ID,
+        "name": BUILTIN_MONITOR_TOOL_NAME,
+        "display_name": "Monitor",
+        "description": description,
+        "description_tr": description,
+        "icon": "gongjuji",
+        "team": [],
+        "tags": [],
+        "params": {
+            "name": BUILTIN_MONITOR_TOOL_NAME,
+            "url": f"langchain:{BUILTIN_MONITOR_TOOL_NAME}",
+            "kwargs": _build_kwargs_from_params(MONITOR_CONSTRUCTOR_PARAMS),
+            "enable_auth": False,
+            "auth_token": "",
+        },
+        "is_build_in": True,
+        "tools": _build_sub_tools(BUILTIN_MONITOR_TOOL_NAME, MONITOR_EXPORTS, loader),
+    }
+
+
+def build_builtin_monitor_runtime_tool(tool_kwargs):
+    return {
+        "name": BUILTIN_MONITOR_TOOL_NAME,
+        "url": f"langchain:{BUILTIN_MONITOR_TOOL_NAME}",
+        "enable_auth": False,
+        "auth_token": "",
+        "extra_param_prompt": tool_kwargs,
     }
 
 

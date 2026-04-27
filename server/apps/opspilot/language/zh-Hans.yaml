@@ -583,6 +583,45 @@ tools:
           要求：
           1. 当构建目标不明确的时候，不要执行任务，告诉与这个任务名字相似的任务
           2. 不允许构建已禁用的任务
+  monitor:
+    name: 监控工具
+    description: |
+      监控工具模块
+
+      这个模块通过 Monitor RPC/NATS 链路为 OpsPilot 提供监控查询工具。
+      它帮助模型发现监控对象、查看实例、列出指标、查询指标数据，以及查看当前活跃告警和历史异常段，
+      同时避免直接耦合本地 monitor 实现。
+
+      **主要特性：**
+      - 发现可用的监控对象
+      - 列出监控对象实例
+      - 列出对象级和实例级指标
+      - 按对象和指标查询时序数据
+      - 查询最新活跃告警和历史告警异常段
+
+      **工具列表：**
+      - monitor_list_objects: 列出可用监控对象
+      - monitor_list_object_instances: 列出监控对象下的实例
+      - monitor_list_object_metrics: 列出监控对象指标
+      - monitor_list_instance_metrics: 列出监控实例指标
+      - monitor_query_metric_data: 查询时间范围内的指标数据
+      - monitor_list_active_alerts: 列出最新活跃告警
+      - monitor_query_alert_segments: 查询历史告警异常段
+    tools:
+      monitor_list_objects:
+        description: 列出可用的监控对象，供后续实例查询和指标查询使用
+      monitor_list_object_instances:
+        description: 列出指定监控对象下的监控实例，结果受认证用户和所选组织范围约束
+      monitor_list_object_metrics:
+        description: 列出指定监控对象可用的指标
+      monitor_list_instance_metrics:
+        description: 列出指定监控实例可用的指标，支持按是否有数据和时间窗口进行筛选
+      monitor_query_metric_data:
+        description: 查询指定监控对象和指标在时间范围内的时序数据，支持按实例和维度进一步过滤
+      monitor_list_active_alerts:
+        description: 列出最新的活跃监控告警，支持按监控对象、实例、告警级别或告警类型过滤
+      monitor_query_alert_segments:
+        description: 查询指定时间范围内的历史监控告警异常段，支持按实例、状态、告警级别或告警类型过滤
   postgres:
     name: PostgreSQL
     description: |
