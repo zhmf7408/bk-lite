@@ -1,6 +1,7 @@
 import React, {
   useState,
   useEffect,
+  useMemo,
   forwardRef,
   useImperativeHandle,
 } from 'react';
@@ -17,6 +18,7 @@ import {
   message,
   Spin,
   Tooltip,
+  Select,
 } from 'antd';
 import { useTranslation } from '@/utils/i18n';
 import { useOpsAnalysis } from '@/app/ops-analysis/context/common';
@@ -54,6 +56,7 @@ import {
   getBindableFilterParams,
   buildDefaultFilterBindings,
 } from '@/app/ops-analysis/utils/widgetDataTransform';
+import { collectNamespaceOptions } from '@/app/ops-analysis/utils/namespaceFilter';
 import 'react-grid-layout/css/styles.css';
 import 'react-resizable/css/styles.css';
 
@@ -72,7 +75,7 @@ const Dashboard = forwardRef<DashboardRef, DashboardProps>(
     const { t } = useTranslation();
     const { getDashboardDetail, saveDashboard } = useDashBoardApi();
     const dataSourceManager = useDataSourceManager();
-    const { fetchDataSources } = useOpsAnalysis();
+    const { fetchDataSources, namespaceList, fetchNamespaces } = useOpsAnalysis();
     const [isEditMode, setIsEditMode] = useState(false);
     const [addModalVisible, setAddModalVisible] = useState(false);
     const [layout, setLayout] = useState<LayoutItem[]>([]);
@@ -91,6 +94,7 @@ const Dashboard = forwardRef<DashboardRef, DashboardProps>(
     );
     const [filterConfigModalVisible, setFilterConfigModalVisible] =
       useState(false);
+    const [selectedNamespaceId, setSelectedNamespaceId] = useState<number | undefined>(undefined);
 
     const {
       definitions,
@@ -148,7 +152,7 @@ const Dashboard = forwardRef<DashboardRef, DashboardProps>(
           if (param.type === 'timeRange' && typeof param.value === 'number') {
             const end = dayjs();
             const start = end.subtract(param.value, 'minute');
-            defaultValue = { start: start.toISOString(), end: end.toISOString() };
+            defaultValue = { start: start.toISOString(), end: end.toISOString(), selectValue: param.value };
           } else {
             defaultValue = param.value as FilterValue;
           }
@@ -242,7 +246,18 @@ const Dashboard = forwardRef<DashboardRef, DashboardProps>(
                 'start' in rawValue &&
                 'end' in rawValue
               ) {
-                updatedValues[def.id] = rawValue;
+                const trv = rawValue as TimeRangeValue;
+                if (trv.selectValue && trv.selectValue > 0) {
+                  const end = dayjs();
+                  const start = end.subtract(trv.selectValue, 'minute');
+                  updatedValues[def.id] = {
+                    start: start.toISOString(),
+                    end: end.toISOString(),
+                    selectValue: trv.selectValue,
+                  } as TimeRangeValue;
+                } else {
+                  updatedValues[def.id] = rawValue;
+                }
               }
             } else {
               updatedValues[def.id] = def.defaultValue;
@@ -256,6 +271,45 @@ const Dashboard = forwardRef<DashboardRef, DashboardProps>(
     useEffect(() => {
       void fetchDataSources();
     }, [fetchDataSources]);
+
+    useEffect(() => {
+      void fetchNamespaces();
+    }, [fetchNamespaces]);
+
+    const namespaceOptions = useMemo(() => {
+      return collectNamespaceOptions(layout, dataSourceManager.dataSources, namespaceList);
+    }, [layout, dataSourceManager.dataSources, namespaceList]);
+
+    useEffect(() => {
+      if (namespaceOptions.length > 0) {
+        const currentValid = selectedNamespaceId !== undefined && namespaceOptions.some((o) => o.value === selectedNamespaceId);
+        if (!currentValid) {
+          setSelectedNamespaceId(namespaceOptions[0].value);
+        }
+      } else {
+        setSelectedNamespaceId(undefined);
+      }
+    }, [namespaceOptions, selectedNamespaceId]);
+
+    const namespaceSelectorElement = useMemo(() => {
+      if (namespaceOptions.length <= 1) return undefined;
+      return (
+        <div className="flex items-center gap-2">
+          <span className="text-sm text-(--color-text-2) whitespace-nowrap">
+            {t('namespace.title')}:
+          </span>
+          <Select
+            value={selectedNamespaceId}
+            onChange={(val: number) => {
+              setSelectedNamespaceId(val);
+              setSearchKey((prev) => prev + 1);
+            }}
+            options={namespaceOptions}
+            style={{ minWidth: 160 }}
+          />
+        </div>
+      );
+    }, [namespaceOptions, selectedNamespaceId, t]);
 
     useEffect(() => {
       const loadDashboardData = async () => {
@@ -323,6 +377,7 @@ const Dashboard = forwardRef<DashboardRef, DashboardProps>(
       setIsNewComponentConfig(false);
       setSaving(false);
       setRefreshKey(0);
+      setSelectedNamespaceId(undefined);
     }, [selectedDashboard?.data_id]);
 
     const openAddModal = () => {
@@ -549,28 +604,9 @@ const Dashboard = forwardRef<DashboardRef, DashboardProps>(
     const handleFilterConfigConfirm = (
       newDefinitions: UnifiedFilterDefinition[],
     ) => {
-      const hasDefinitionChanged = newDefinitions.some((newDef) => {
-        const oldDef = definitions.find((d) => d.id === newDef.id);
-        if (!oldDef) return newDef.enabled;
-        return (
-          oldDef.enabled !== newDef.enabled ||
-          oldDef.key !== newDef.key ||
-          oldDef.type !== newDef.type ||
-          JSON.stringify(oldDef.defaultValue) !== JSON.stringify(newDef.defaultValue)
-        );
-      });
-
-      const hasDefinitionRemoved = definitions.some(
-        (oldDef) => oldDef.enabled && !newDefinitions.find((d) => d.id === oldDef.id)
-      );
-
       updateDefinitions(newDefinitions);
       const updatedValues = syncFilterValuesWithDefinitions(newDefinitions, filterValues);
       setFilterValues(updatedValues);
-
-      if (hasDefinitionChanged || hasDefinitionRemoved) {
-        setRefreshKey((prev) => prev + 1);
-      }
     };
 
     const handleDelete = (id: string) => {
@@ -675,12 +711,13 @@ const Dashboard = forwardRef<DashboardRef, DashboardProps>(
         </div>
 
         <div className="flex-1 bg-(--color-fill-1) rounded-lg overflow-hidden flex flex-col">
-          {definitions.length > 0 && (
+          {(definitions.length > 0 || namespaceSelectorElement) && (
             <div className="shrink-0">
               <UnifiedFilterBar
                 definitions={definitions}
                 values={filterValues}
                 onChange={handleFilterValuesChange}
+                prefixContent={namespaceSelectorElement}
               />
             </div>
           )}
@@ -724,7 +761,7 @@ const Dashboard = forwardRef<DashboardRef, DashboardProps>(
                   layout={layout}
                   onLayoutChange={onLayoutChange}
                   cols={12}
-                  rowHeight={100}
+                  rowHeight={60}
                   margin={[12, 12]}
                   containerPadding={[12, 12]}
                   draggableCancel=".no-drag, .widget-body"
@@ -754,16 +791,16 @@ const Dashboard = forwardRef<DashboardRef, DashboardProps>(
                         key={item.i}
                         className="widget bg-(--color-bg-1) rounded-lg shadow-sm overflow-hidden p-4 flex flex-col"
                       >
-                        <div className="widget-header pb-4 flex justify-between items-center">
+                        <div className="widget-header pb-4 flex justify-between items-start">
                           <div className="flex-1">
                             <h4 className="text-md font-medium text-(--color-text-1)">
                               {item.name}
                             </h4>
-                            {
+                            {item.description?.trim() && (
                               <p className="text-sm text-(--color-text-2) mt-1">
-                                {item.description || '--'}
+                                {item.description}
                               </p>
-                            }
+                            )}
                           </div>
                           {isEditMode && (
                             <Dropdown overlay={menu} trigger={['click']}>
@@ -785,6 +822,7 @@ const Dashboard = forwardRef<DashboardRef, DashboardProps>(
                             )}
                             unifiedFilterValues={filterValues}
                             filterDefinitions={definitions}
+                            builtinNamespaceId={selectedNamespaceId}
                           />
                         </div>
                       </div>

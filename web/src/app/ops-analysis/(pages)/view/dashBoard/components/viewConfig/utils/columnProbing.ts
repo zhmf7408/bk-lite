@@ -43,54 +43,24 @@ export const buildDisplayColumnsFromSchema = (
 export const extractFirstRecordFromSourceData = (
   sourceData: any,
 ): Record<string, unknown> | null => {
-  const findFirstRecord = (rows: any[]): Record<string, unknown> | null => {
-    for (const row of rows) {
-      if (row && typeof row === 'object') {
-        const rowData = row.data;
+  if (!sourceData) return null;
 
-        // Table format: data is object with {items: [...], count}
-        if (
-          rowData &&
-          typeof rowData === 'object' &&
-          !Array.isArray(rowData) &&
-          Array.isArray(rowData.items)
-        ) {
-          const firstInNested = rowData.items.find(
-            (item: any) => item && typeof item === 'object',
-          );
-          if (firstInNested) {
-            return firstInNested;
-          }
-          continue;
-        }
-
-        // Chart format: data is array
-        if (Array.isArray(rowData)) {
-          const firstInGroup = rowData.find(
-            (item: any) => item && typeof item === 'object',
-          );
-          if (firstInGroup) {
-            return firstInGroup;
-          }
-          continue;
-        }
-
-        // Format doesn't match, skip
-        continue;
-      }
-    }
-    return null;
-  };
-
-  if (Array.isArray(sourceData)) {
-    return findFirstRecord(sourceData);
+  if (
+    typeof sourceData === 'object' &&
+    !Array.isArray(sourceData) &&
+    Array.isArray(sourceData.items)
+  ) {
+    const first = sourceData.items.find(
+      (item: any) => item && typeof item === 'object',
+    );
+    return first || null;
   }
 
-  if (sourceData && typeof sourceData === 'object') {
-    const rows = sourceData.items || sourceData.data || sourceData.list;
-    if (Array.isArray(rows)) {
-      return findFirstRecord(rows);
-    }
+  if (Array.isArray(sourceData)) {
+    const first = sourceData.find(
+      (item: any) => item && typeof item === 'object',
+    );
+    return first || null;
   }
 
   return null;

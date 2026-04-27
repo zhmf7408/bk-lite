@@ -4,11 +4,13 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"nats-executor/local"
 	"nats-executor/logger"
 	"nats-executor/utils"
+	"nats-executor/utils/downloaderr"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -68,6 +70,8 @@ var (
 	executeLocalSCPCommand          = local.Execute
 	parsePrivateKeyFn               = ssh.ParsePrivateKey
 	parsePrivateKeyWithPassphraseFn = ssh.ParsePrivateKeyWithPassphrase
+	mkdirTempDir                    = os.MkdirTemp
+	removeAllPath                   = os.RemoveAll
 	sshDialFn                       = func(network, addr string, config *ssh.ClientConfig) (sshClient, error) {
 		client, err := ssh.Dial(network, addr, config)
 		if err != nil {
@@ -201,24 +205,40 @@ func handleDownloadToRemoteMessage(data []byte, instanceId string, nc sshConn) (
 		return utils.NewErrorExecuteResponse(instanceId, utils.ErrorCodeInvalidRequest, "invalid request payload"), true
 	}
 
-	localTargetPath := downloadRequest.LocalPath
-	if localTargetPath == "" {
-		localTargetPath = "/tmp"
+	stagingBasePath := downloadRequest.LocalPath
+	if stagingBasePath == "" {
+		stagingBasePath = os.TempDir()
 	}
+	stagingDir, err := mkdirTempDir(stagingBasePath, "nats-executor-*")
+	if err != nil {
+		return utils.NewErrorExecuteResponse(instanceId, utils.ErrorCodeExecutionFailure, fmt.Sprintf("Failed to prepare local staging path: %v", err)), true
+	}
+	defer func() {
+		if err := removeAllPath(stagingDir); err != nil {
+			logger.Warnf("[SCP Transfer] Instance: %s, failed to clean staging dir %s: %v", instanceId, stagingDir, err)
+		}
+	}()
 
 	localdownloadRequest := utils.DownloadFileRequest{
 		BucketName:     downloadRequest.BucketName,
 		FileKey:        downloadRequest.FileKey,
 		FileName:       downloadRequest.FileName,
-		TargetPath:     localTargetPath,
+		TargetPath:     stagingDir,
 		ExecuteTimeout: downloadRequest.ExecuteTimeout,
 	}
 
 	if err := downloadFromObjectStore(localdownloadRequest, nc); err != nil {
-		return utils.NewErrorExecuteResponse(instanceId, utils.ErrorCodeDependencyFailure, fmt.Sprintf("Failed to download file: %v", err)), true
+		code := utils.ErrorCodeDependencyFailure
+		switch {
+		case downloaderr.KindOf(err) == downloaderr.KindTimeout || errors.Is(err, context.DeadlineExceeded):
+			code = utils.ErrorCodeTimeout
+		case downloaderr.KindOf(err) == downloaderr.KindIO:
+			code = utils.ErrorCodeExecutionFailure
+		}
+		return utils.NewErrorExecuteResponse(instanceId, code, fmt.Sprintf("Failed to download file: %v", err)), true
 	}
 
-	sourcePath := fmt.Sprintf("%s/%s", localdownloadRequest.TargetPath, localdownloadRequest.FileName)
+	sourcePath := filepath.Join(localdownloadRequest.TargetPath, localdownloadRequest.FileName)
 	scpCommand, cleanup, err := buildSCPCommandFn(
 		downloadRequest.User,
 		downloadRequest.Host,

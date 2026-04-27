@@ -98,7 +98,7 @@ def prepare_context(config: RunnableConfig = None) -> dict:
     """
     准备MSSQL连接上下文
 
-    从config中提取数据库连接参数,返回连接配置字典
+    从config中提取数据库连接参数,支持多实例和旧式单实例配置
 
     Args:
         config: RunnableConfig对象,包含配置参数
@@ -109,18 +109,26 @@ def prepare_context(config: RunnableConfig = None) -> dict:
     if config is None:
         config = {}
 
-    # 从config的configurable中提取参数
     configurable = config.get("configurable", {}) if isinstance(config, dict) else getattr(config, "configurable", {})
 
-    db_config = {
+    from apps.opspilot.metis.llm.tools.mssql.connection import (
+        build_mssql_config_from_instance,
+        get_mssql_instances_from_configurable,
+        resolve_mssql_instance,
+    )
+
+    instances, default_instance_id = get_mssql_instances_from_configurable(configurable)
+    if instances:
+        instance = resolve_mssql_instance(instances, default_instance_id)
+        return build_mssql_config_from_instance(instance)
+
+    return {
         "host": configurable.get("host", "localhost"),
         "port": configurable.get("port", 1433),
         "database": configurable.get("database", "master"),
         "user": configurable.get("user", "sa"),
         "password": configurable.get("password", ""),
     }
-
-    return db_config
 
 
 def get_available_driver() -> str:
@@ -157,17 +165,26 @@ def get_available_driver() -> str:
     raise RuntimeError("未找到可用的SQL Server ODBC驱动。请安装以下驱动之一: ODBC Driver 18 for SQL Server, ODBC Driver 17 for SQL Server, 或 SQL Server")
 
 
-def get_db_connection(config: RunnableConfig = None, database: str = None):
+def get_db_connection(config: RunnableConfig = None, database: str = None, instance_name: str = None, instance_id: str = None):
     """
     获取数据库连接
 
     Args:
         config: RunnableConfig对象
         database: 可选的数据库名,如果提供则覆盖config中的database
+        instance_name: 可选的实例名称,用于多实例场景
+        instance_id: 可选的实例ID,用于多实例场景
 
     Returns:
         pyodbc.Connection: 数据库连接对象
     """
+    if instance_name or instance_id:
+        from apps.opspilot.metis.llm.tools.mssql.connection import get_mssql_connection
+        conn = get_mssql_connection(config, instance_name=instance_name, instance_id=instance_id)
+        if database:
+            conn.execute(f"USE [{database}]")
+        return conn
+
     db_config = prepare_context(config)
 
     # 如果提供了database参数,则覆盖配置中的database

@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { Form, Input, Select, Switch, Button, InputNumber, Slider, Spin, message } from 'antd';
 import { useTranslation } from '@/utils/i18n';
 import useGroups from '@/app/opspilot/hooks/useGroups';
@@ -12,6 +12,7 @@ import KnowledgeBaseSelector from '@/app/opspilot/components/skill/knowledgeBase
 import { KnowledgeBase, RagScoreThresholdItem, KnowledgeBaseRagSource } from '@/app/opspilot/types/skill';
 import { SelectTool } from '@/app/opspilot/types/tool';
 import ToolSelector from '@/app/opspilot/components/skill/toolSelector';
+import EditablePasswordField from '@/components/dynamic-form/editPasswordField';
 import { useSkillApi } from '@/app/opspilot/api/skill';
 import { useSkill } from '@/app/opspilot/context/skillContext';
 import { getModelOptionText, renderModelOptionLabel } from '@/app/opspilot/utils/modelOption';
@@ -53,6 +54,33 @@ const SkillSettingsPage: React.FC = () => {
   const [enableKmRoute, setEnableKmRoute] = useState(true);
   const [kmLlmModel, setKmLlmModel] = useState<number | null>(null);
   const [guideValue, setGuideValue] = useState<string>('');
+  const [hasInvalidParamKeys, setHasInvalidParamKeys] = useState(false);
+
+  const syncSkillParamsFromPrompt = useCallback((promptText: string) => {
+    const validRegex = /\{\{([a-zA-Z][a-zA-Z0-9_]*)\}\}/g;
+    const allBracketRegex = /\{\{(.+?)\}\}/g;
+    const keysInPrompt: string[] = [];
+    let match;
+    while ((match = validRegex.exec(promptText)) !== null) {
+      if (!keysInPrompt.includes(match[1])) {
+        keysInPrompt.push(match[1]);
+      }
+    }
+    // Detect invalid keys (e.g. Chinese characters)
+    const allKeys: string[] = [];
+    while ((match = allBracketRegex.exec(promptText)) !== null) {
+      allKeys.push(match[1]);
+    }
+    setHasInvalidParamKeys(allKeys.some((k) => !/^[a-zA-Z][a-zA-Z0-9_]*$/.test(k)));
+
+    const currentParams: { key: string; value: string; type: string }[] =
+      form.getFieldValue('skill_params') || [];
+    const existingMap = new Map(currentParams.map((p) => [p.key, p]));
+    const newParams = keysInPrompt.map((k) =>
+      existingMap.get(k) || { key: k, value: '', type: 'text' }
+    );
+    form.setFieldValue('skill_params', newParams);
+  }, [form]);
 
   useEffect(() => {
     const fetchFormData = async (knowledgeBases: KnowledgeBase[]) => {
@@ -66,6 +94,7 @@ const SkillSettingsPage: React.FC = () => {
           llmModel: data.llm_model,
           temperature: data.temperature || 0.7,
           prompt: data.skill_prompt,
+          skill_params: data.skill_params || [],
           guide: data.guide || initialGuide,
           show_think: data.show_think,
           enable_suggest: data.enable_suggest,
@@ -165,6 +194,7 @@ const SkillSettingsPage: React.FC = () => {
         })),
         enable_suggest: values.enable_suggest,
         enable_query_rewrite: values.enable_query_rewrite,
+        skill_params: (values.skill_params || []).filter((p: any) => p && p.key),
       };
       setSaveLoading(true);
       await saveSkillDetail(id, payload);
@@ -256,6 +286,7 @@ const SkillSettingsPage: React.FC = () => {
         km_llm_model: enableKmRoute ? kmLlmModel : undefined,
         enable_suggest: values.enable_suggest,
         enable_query_rewrite: values.enable_query_rewrite,
+        skill_params: (values.skill_params || []).filter((p: any) => p && p.key),
       };
 
       return {
@@ -323,10 +354,10 @@ const SkillSettingsPage: React.FC = () => {
                     wrapperCol={{ flex: '1' }}
                     initialValues={{ temperature: 0.7, show_think: true }}
                   >
-                    <Form.Item label={t('skill.form.name')} name="name" rules={[{ required: true, message: `${t('common.input')} ${t('skill.form.name')}` }]}>
+                    <Form.Item label={t('common.name')} name="name" rules={[{ required: true, message: `${t('common.input')} ${t('common.name')}` }]}>
                       <Input />
                     </Form.Item>
-                    <Form.Item label={t('skill.form.group')} name="group" rules={[{ required: true, message: `${t('common.input')} ${t('skill.form.group')}` }]}>
+                    <Form.Item label={t('common.organization')} name="group" rules={[{ required: true, message: `${t('common.input')} ${t('common.organization')}` }]}>
                       <Select mode="multiple">
                         {groups.map(group => (
                           <Option key={group.id} value={group.id}>{group.name}</Option>
@@ -400,8 +431,87 @@ const SkillSettingsPage: React.FC = () => {
                       label={t('skill.form.prompt')}
                       name="prompt"
                       tooltip={t('skill.form.promptTip')}
+                      extra={hasInvalidParamKeys ? <span className="text-orange-500">{t('skill.skillParams.invalidKeyWarning')}</span> : undefined}
                       rules={[{ required: true, message: `${t('common.input')} ${t('skill.form.prompt')}` }]}>
-                      <TextArea rows={4} />
+                      <TextArea rows={4} onChange={(e) => syncSkillParamsFromPrompt(e.target.value)} />
+                    </Form.Item>
+                    <Form.Item label={t('skill.skillParams.title')} tooltip={t('skill.skillParams.tip')}>
+                      <Form.List name="skill_params">
+                        {(fields) => (
+                          <>
+                            {fields.length === 0 ? (
+                              <div className="rounded-xl border border-slate-200 bg-slate-50/80 px-5 py-5 text-center">
+                                <div className="text-[13px] font-medium leading-5 text-slate-700">
+                                  {t('skill.skillParams.emptyHint')}
+                                </div>
+                                <div className="mt-1 text-[13px] leading-5 text-slate-700">
+                                  {t('skill.skillParams.emptySubHint')}
+                                </div>
+                                <div className="mt-3 inline-flex max-w-full items-center rounded-md border border-slate-200 bg-white px-3 py-1.5 text-[13px] leading-5 text-slate-600 shadow-sm">
+                                  {t('skill.skillParams.emptyExample')}
+                                </div>
+                              </div>
+                            ) : (
+                              fields.map(({ key, name, ...restField }) => (
+                              <div key={key} className="flex items-center gap-2 mb-2">
+                                <Form.Item
+                                  {...restField}
+                                  name={[name, 'key']}
+                                  className="mb-0 flex-1"
+                                  rules={[
+                                    { required: true, message: t('skill.skillParams.paramNamePlaceholder') },
+                                  ]}
+                                >
+                                  <Input placeholder={t('skill.skillParams.paramNamePlaceholder')} disabled />
+                                </Form.Item>
+                                <Form.Item
+                                  noStyle
+                                  shouldUpdate={(prev, cur) =>
+                                    prev?.skill_params?.[name]?.type !== cur?.skill_params?.[name]?.type
+                                  }
+                                >
+                                  {() => {
+                                    const paramType = form.getFieldValue(['skill_params', name, 'type']) || 'text';
+                                    return (
+                                      <Form.Item
+                                        {...restField}
+                                        name={[name, 'value']}
+                                        className="mb-0 flex-1"
+                                      >
+                                        {paramType === 'password' ? (
+                                          <EditablePasswordField
+                                            size="middle"
+                                            placeholder={t('skill.skillParams.paramValuePlaceholder')}
+                                          />
+                                        ) : (
+                                          <Input placeholder={t('skill.skillParams.paramValuePlaceholder')} />
+                                        )}
+                                      </Form.Item>
+                                    );
+                                  }}
+                                </Form.Item>
+                                <Form.Item
+                                  {...restField}
+                                  name={[name, 'type']}
+                                  className="mb-0"
+                                  initialValue="text"
+                                >
+                                  <Select
+                                    style={{ width: 100 }}
+                                    onChange={() => {
+                                      form.setFieldValue(['skill_params', name, 'value'], '');
+                                    }}
+                                  >
+                                    <Option value="text">{t('skill.skillParams.text')}</Option>
+                                    <Option value="password">{t('skill.skillParams.password')}</Option>
+                                  </Select>
+                                </Form.Item>
+                              </div>
+                              ))
+                            )}
+                          </>
+                        )}
+                      </Form.List>
                     </Form.Item>
                     <Form.Item
                       label={t('skill.form.guide')}

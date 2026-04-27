@@ -78,12 +78,34 @@ class SystemMgmt(object):
         return_data = self.client.run("verify_token", token=token)
         return return_data
 
+    def revoke_token(self, token):
+        """撤销 token，将其 jti 加入黑名单。"""
+        return_data = self.client.run("revoke_token", token=token)
+        return return_data
+
     def get_group_users(self, group, include_children=False):
         """
         :param group: 当前组的ID
         :param include_children: 是否递归查子组
         """
         return_data = self.client.run("get_group_users", group=group, include_children=include_children)
+        return return_data
+
+    def get_group_users_scoped(self, actor_context, group=None, include_children=False):
+        return_data = self.client.run(
+            "get_group_users_scoped",
+            actor_context=actor_context,
+            group=group,
+            include_children=include_children,
+        )
+        return return_data
+
+    def get_authorized_groups_scoped(self, actor_context, include_children=False):
+        return_data = self.client.run(
+            "get_authorized_groups_scoped",
+            actor_context=actor_context,
+            include_children=include_children,
+        )
         return return_data
 
     def get_all_users(self):
@@ -115,6 +137,16 @@ class SystemMgmt(object):
         :param include_children: bool , True、False
         """
         return_data = self.client.run("search_channel_list", channel_type=channel_type, teams=teams, include_children=include_children)
+        return return_data
+
+    def search_channel_list_scoped(self, actor_context, channel_type="", teams=None, include_children=False):
+        return_data = self.client.run(
+            "search_channel_list_scoped",
+            actor_context=actor_context,
+            channel_type=channel_type,
+            teams=teams,
+            include_children=include_children,
+        )
         return return_data
 
     def send_msg_with_channel(self, channel_id, title, content, receivers, attachments=None):

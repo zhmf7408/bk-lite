@@ -18,154 +18,238 @@ export interface LineBarChartData {
 
 export type PieChartData = ChartDataItem[];
 
-/**
- * 通用数据转换函数
- * 支持多种数据格式转换为图表数据
- */
 export class ChartDataTransformer {
-  /**
-   * 将归一化后的 nsData 数组转换为 { [category]: value } 映射
-   * 支持 [{name, value}] 和 [[key, value]] 两种格式
-   */
-  private static nsDataToMap(nsData: any[]): { [key: string]: number } {
+  static formatCategoryValue(value: any): string {
+    if (value === undefined || value === null) return '';
+    return String(value);
+  }
+
+  private static isUnixTimestampLike(value: any): boolean {
+    if (typeof value === 'string' && !/^\d+(\.\d+)?$/.test(value.trim())) {
+      return false;
+    }
+
+    const numericValue = Number(value);
+    if (!Number.isFinite(numericValue)) {
+      return false;
+    }
+
+    const secondsValue = numericValue > 9999999999 ? numericValue / 1000 : numericValue;
+
+    return secondsValue >= 946684800 && secondsValue <= 4102444800;
+  }
+
+  static shouldFormatAsTimeDimension(values: any[]): boolean {
+    const normalizedValues = values.filter(
+      (value) => value !== undefined && value !== null && value !== ''
+    );
+
+    if (normalizedValues.length === 0) {
+      return false;
+    }
+
+    const validCount = normalizedValues.filter((value) => {
+      if (typeof value === 'number') {
+        return this.isUnixTimestampLike(value);
+      }
+
+      if (typeof value === 'string') {
+        const trimmed = value.trim();
+        if (!trimmed) return false;
+
+        if (this.isUnixTimestampLike(trimmed)) {
+          return true;
+        }
+
+        const hasExplicitDateMarkers = /[-/:T\s]/.test(trimmed);
+        if (!hasExplicitDateMarkers) return false;
+
+        return dayjs(trimmed).isValid();
+      }
+
+      return false;
+    }).length;
+
+    return validCount > 0 && validCount === normalizedValues.length;
+  }
+
+  static formatDimensionValue(value: any, shouldFormatAsTime: boolean): string {
+    return shouldFormatAsTime
+      ? this.formatTimeValue(value)
+      : this.formatCategoryValue(value);
+  }
+
+  static isStructurallyEmpty(rawData: any): boolean {
+    if (!rawData) return true;
+    if (Array.isArray(rawData)) return rawData.length === 0;
+    if (typeof rawData === 'object') return Object.keys(rawData).length === 0;
+    return false;
+  }
+
+  private static dataToMap(
+    data: any[],
+    shouldFormatAsTime: boolean
+  ): { [key: string]: number } {
     const map: { [key: string]: number } = {};
-    if (nsData.length === 0) return map;
-    if (typeof nsData[0] === 'object' && !Array.isArray(nsData[0]) && 'name' in nsData[0] && 'value' in nsData[0]) {
-      nsData.forEach((item: any) => {
-        map[this.formatTimeValue(item.name)] = parseFloat(item.value) || 0;
+    if (data.length === 0) return map;
+    if (typeof data[0] === 'object' && !Array.isArray(data[0]) && 'name' in data[0] && 'value' in data[0]) {
+      data.forEach((item: any) => {
+        map[this.formatDimensionValue(item.name, shouldFormatAsTime)] = parseFloat(item.value) || 0;
       });
-    } else {
-      nsData.forEach((item: any[]) => {
-        map[item[0]] = item[1];
+    } else if (Array.isArray(data[0]) && data[0].length >= 2) {
+      data.forEach((item: any[]) => {
+        map[this.formatDimensionValue(item[0], shouldFormatAsTime)] = parseFloat(item[1]) || 0;
       });
     }
     return map;
   }
 
-  /**
-   * 格式化时间显示
-   */
   static formatTimeValue(value: any): string {
     if (typeof value === 'number') {
-      // 数字时间戳
-      return dayjs(value * 1000).format('MM-DD HH:mm:ss');
+      const timestamp = value > 9999999999 ? value : value * 1000;
+      return dayjs(timestamp).format('MM-DD HH:mm:ss');
     } else if (typeof value === 'string') {
-      // 检查是否是 ISO 8601 格式的时间字符串
+      if (this.isUnixTimestampLike(value)) {
+        const numericValue = Number(value);
+        const timestamp = numericValue > 9999999999 ? numericValue : numericValue * 1000;
+        return dayjs(timestamp).format('MM-DD HH:mm:ss');
+      }
+
+      const trimmed = value.trim();
+      const hasExplicitDateMarkers = /[-/:T\s]/.test(trimmed);
+      if (!hasExplicitDateMarkers) {
+        return value;
+      }
+
       const dateValue = dayjs(value);
       if (dateValue.isValid()) {
         return dateValue.format('MM-DD HH:mm:ss');
       }
-      // 如果不是有效的时间字符串，直接返回
       return value;
     }
     return String(value);
   }
 
-  /**
-   * 转换为折线图/柱状图数据格式
-   */
   static transformToLineBarData(rawData: any): LineBarChartData {
     if (!rawData) {
       return { categories: [], values: [] };
     }
 
-    if (Array.isArray(rawData) && rawData.length === 0) {
+    if (Array.isArray(rawData)) {
+      if (rawData.length === 0) {
+        return { categories: [], values: [] };
+      }
+
+      // [{name, count}] format
+      if (rawData[0] && typeof rawData[0] === 'object' && 'name' in rawData[0] && 'count' in rawData[0]) {
+        return {
+          categories: rawData.map((item: any) => item.name),
+          values: rawData.map((item: any) => item.count),
+        };
+      }
+
+      // [{name, value}] format
+      if (rawData[0] && typeof rawData[0] === 'object' && !Array.isArray(rawData[0]) && 'name' in rawData[0] && 'value' in rawData[0]) {
+        const shouldFormatAsTime = this.shouldFormatAsTimeDimension(
+          rawData.map((item: any) => item.name)
+        );
+        return {
+          categories: rawData.map((item: any) =>
+            this.formatDimensionValue(item.name, shouldFormatAsTime)
+          ),
+          values: rawData.map((item: any) => parseFloat(item.value) || 0),
+        };
+      }
+
+      // [[key, value], ...] format
+      if (Array.isArray(rawData[0]) && rawData[0].length >= 2) {
+        const shouldFormatAsTime = this.shouldFormatAsTimeDimension(
+          rawData.map((item: any[]) => item[0])
+        );
+        return {
+          categories: rawData.map((item: any[]) =>
+            this.formatDimensionValue(item[0], shouldFormatAsTime)
+          ),
+          values: rawData.map((item: any[]) => item[1]),
+        };
+      }
+
       return { categories: [], values: [] };
     }
 
-    if (Array.isArray(rawData) && rawData.length > 0) {
-      // 检查是否是新的对象格式 [{name: "xxx", count: 20}, ...]
-      if (
-        rawData[0] &&
-        typeof rawData[0] === 'object' &&
-        'name' in rawData[0] &&
-        'count' in rawData[0]
-      ) {
-        const categories = rawData.map((item: any) => item.name);
-        const values = rawData.map((item: any) => item.count);
-        return { categories, values };
-      }
-      // 检查是否是多维数据（多个系列）
-      else if (
-        rawData[0] &&
-        typeof rawData[0] === 'object' &&
-        rawData[0].namespace_id &&
-        rawData[0].data
-      ) {
+    // Object-keyed multi-series: { seriesName: [[x,y], ...], ... }
+    if (typeof rawData === 'object') {
+      const keys = Object.keys(rawData);
+      const isMultiSeries = keys.length > 0 && keys.every((k) => Array.isArray(rawData[k]));
+      if (isMultiSeries) {
+        const rawCategories: any[] = [];
+        keys.forEach((k) => {
+          rawData[k].forEach((item: any) => {
+            if (Array.isArray(item) && item.length >= 2) {
+              rawCategories.push(item[0]);
+            } else if (item && typeof item === 'object' && 'name' in item) {
+              rawCategories.push(item.name);
+            }
+          });
+        });
+
+        const shouldFormatAsTime = this.shouldFormatAsTimeDimension(rawCategories);
         const allCategoriesSet = new Set<string>();
-        rawData.forEach((namespace: any) => {
-          const nsData = Array.isArray(namespace.data) ? namespace.data : [];
-          Object.keys(this.nsDataToMap(nsData)).forEach((k) => allCategoriesSet.add(k));
+        keys.forEach((k) => {
+          rawData[k].forEach((item: any) => {
+            if (Array.isArray(item) && item.length >= 2) {
+              allCategoriesSet.add(
+                this.formatDimensionValue(item[0], shouldFormatAsTime)
+              );
+            } else if (item && typeof item === 'object' && 'name' in item) {
+              allCategoriesSet.add(
+                this.formatDimensionValue(item.name, shouldFormatAsTime)
+              );
+            }
+          });
         });
         const categories = Array.from(allCategoriesSet).sort();
-
-        const series = rawData.map((namespace: any) => {
-          const dataMap = this.nsDataToMap(
-            Array.isArray(namespace.data) ? namespace.data : [],
-          );
+        const series = keys.map((k) => {
+          const dataMap = this.dataToMap(rawData[k], shouldFormatAsTime);
           return {
-            name: namespace.namespace_id,
-            data: categories.map((category) => dataMap[category] || 0),
+            name: k,
+            data: categories.map((cat) => dataMap[cat] || 0),
           };
         });
-
         return { categories, series };
-      } else {
-        // 原有的二维数组格式 [[key, value], ...]
-        const categories = rawData.map((item: any[]) => item[0]);
-        const values = rawData.map((item: any[]) => item[1]);
-        return { categories, values };
       }
-    }
-
-    // 处理单个namespace的情况
-    if (rawData && rawData.namespace_id && rawData.data) {
-      const dataMap = this.nsDataToMap(
-        Array.isArray(rawData.data) ? rawData.data : [],
-      );
-      const categories = Object.keys(dataMap).sort();
-      return { categories, values: categories.map((k) => dataMap[k]) };
     }
 
     return { categories: [], values: [] };
   }
 
-  /**
-   * 转换为饼图数据格式
-   */
   static transformToPieData(rawData: any): PieChartData {
-    if (!rawData) {
-      return [];
-    }
+    if (!rawData) return [];
 
-    // namespace 数组格式：取第一个 namespace 的数据
-    if (Array.isArray(rawData) && rawData.length > 0 && rawData[0]?.namespace_id) {
-      const namespaceData = Array.isArray(rawData[0].data) ? rawData[0].data : [];
-      return this.transformToPieData(namespaceData.slice(0, 10));
-    }
-
-    // 单 namespace 对象格式
-    if (!Array.isArray(rawData) && rawData.namespace_id) {
-      const namespaceData = Array.isArray(rawData.data) ? rawData.data : [];
-      return this.transformToPieData(namespaceData.slice(0, 10));
-    }
-
-    // 直接是数组
     if (Array.isArray(rawData)) {
       if (rawData.length === 0) return [];
 
-      // 对象格式 [{name, value}]
+      // [{name, value}]
       if (typeof rawData[0] === 'object' && !Array.isArray(rawData[0]) && 'name' in rawData[0] && 'value' in rawData[0]) {
         return rawData.map((item: any) => ({
-          name: this.formatTimeValue(item.name),
+          name: this.formatCategoryValue(item.name),
           value: parseFloat(item.value) || 0,
         }));
       }
-      // 二维数组格式 [[timestamp, value], ...]
+
+      // [[key, value], ...]
       if (Array.isArray(rawData[0]) && rawData[0].length >= 2) {
         return rawData.map((item: any[]) => ({
-          name: this.formatTimeValue(item[0]),
+          name: this.formatCategoryValue(item[0]),
           value: parseFloat(item[1]) || 0,
+        }));
+      }
+
+      // [{name, count}]
+      if (typeof rawData[0] === 'object' && 'name' in rawData[0] && 'count' in rawData[0]) {
+        return rawData.map((item: any) => ({
+          name: item.name,
+          value: item.count,
         }));
       }
     }
@@ -173,21 +257,15 @@ export class ChartDataTransformer {
     return [];
   }
 
-  /**
-   * 检查数据是否为多系列格式 
-   */
   static isMultiSeriesData(rawData: any): boolean {
-    return Array.isArray(rawData) &&
-      rawData.length > 0 &&
-      rawData[0] &&
-      typeof rawData[0] === 'object' &&
-      rawData[0].namespace_id &&
-      rawData[0].data;
+    if (!rawData || Array.isArray(rawData)) return false;
+    if (typeof rawData === 'object') {
+      const keys = Object.keys(rawData);
+      return keys.length > 0 && keys.every((k) => Array.isArray(rawData[k]));
+    }
+    return false;
   }
 
-  /**
-   * 检查数据是否有效
-   */
   static hasValidData(data: LineBarChartData | PieChartData): boolean {
     if (Array.isArray(data)) {
       return data.length > 0;
@@ -195,12 +273,8 @@ export class ChartDataTransformer {
     return data.categories && data.categories.length > 0;
   }
 
-  /**
-   * 校验原始数据是否可以转换为折线图/柱状图数据
-   */
   static validateLineBarData(rawData: any, errorMessage?: string): { isValid: boolean; message?: string } {
-    // 数据为空时图表组件会显示 Empty 状态，不需要校验
-    if (!rawData || (Array.isArray(rawData) && rawData.length === 0)) {
+    if (this.isStructurallyEmpty(rawData)) {
       return { isValid: true };
     }
 
@@ -211,7 +285,6 @@ export class ChartDataTransformer {
         return { isValid: false, message: errorMessage || '数据格式不匹配' };
       }
 
-      // 检查数值数据
       const hasValidData = transformedData.series
         ? transformedData.series.some(series =>
           series.data && series.data.length > 0 &&
@@ -230,12 +303,8 @@ export class ChartDataTransformer {
     }
   }
 
-  /**
-   * 校验原始数据是否可以转换为饼图数据
-   */
   static validatePieData(rawData: any, errorMessage?: string): { isValid: boolean; message?: string } {
-    // 数据为空时图表组件会显示 Empty 状态，不需要校验
-    if (!rawData || (Array.isArray(rawData) && rawData.length === 0)) {
+    if (this.isStructurallyEmpty(rawData)) {
       return { isValid: true };
     }
 

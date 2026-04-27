@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useRef } from 'react';
+import React, { useEffect, useState, useCallback, useRef } from 'react';
 import ReactEcharts from 'echarts-for-react';
 import ChartLegend from '../components/chartLegend';
 import { Spin, Empty } from 'antd';
@@ -8,15 +8,52 @@ import { ChartDataTransformer } from '@/app/log/utils/chartDataTransform';
 interface OsPieProps {
   rawData: any;
   loading?: boolean;
+  config?: any;
   onReady?: (ready: boolean) => void;
 }
 
-const OsPie: React.FC<OsPieProps> = ({ rawData, loading = false, onReady }) => {
+const OsPie: React.FC<OsPieProps> = ({
+  rawData,
+  loading = false,
+  config,
+  onReady
+}) => {
   const [isDataReady, setIsDataReady] = useState(false);
-  const chartRef = useRef<any>(null);
+  const [chartInstance, setChartInstance] = useState<any>(null);
+  const [showLegend, setShowLegend] = useState(true);
+  const containerRef = useRef<HTMLDivElement>(null);
   const chartColors = randomColorForLegend();
 
+  useEffect(() => {
+    const el = containerRef.current;
+    if (!el) return;
+    const observer = new ResizeObserver((entries) => {
+      for (const entry of entries) {
+        setShowLegend(entry.contentRect.width >= 360);
+      }
+    });
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, []);
+
+  const onChartReady = useCallback((instance: any) => {
+    setChartInstance(instance);
+  }, []);
+
   const transformData = (rawData: any) => {
+    // 如果有 displayMaps 配置，先将原始数据映射为 {name, value} 格式
+    const displayMaps = config?.displayMaps;
+    if (displayMaps?.key && displayMaps?.value && Array.isArray(rawData)) {
+      const mapped = rawData
+        .filter((item: any) => item[displayMaps.key] !== undefined)
+        .map((item: any) => ({
+          name: String(item[displayMaps.key]),
+          value: parseFloat(item[displayMaps.value]) || 0
+        }));
+      if (mapped.length > 0) {
+        return mapped;
+      }
+    }
     return ChartDataTransformer.transformToPieData(rawData);
   };
 
@@ -42,7 +79,7 @@ const OsPie: React.FC<OsPieProps> = ({ rawData, loading = false, onReady }) => {
       confine: true,
       extraCssText: 'box-shadow: 0 0 3px rgba(150,150,150, 0.7);',
       textStyle: {
-        fontSize: 12,
+        fontSize: 12
       },
       formatter: function (params: any) {
         const percent = params.percent || 0;
@@ -61,10 +98,10 @@ const OsPie: React.FC<OsPieProps> = ({ rawData, loading = false, onReady }) => {
             </div>
           </div>
         `;
-      },
+      }
     },
     legend: {
-      show: false,
+      show: false
     },
     series: [
       {
@@ -88,34 +125,34 @@ const OsPie: React.FC<OsPieProps> = ({ rawData, loading = false, onReady }) => {
             title: {
               fontSize: 14,
               color: '#666',
-              lineHeight: 20,
+              lineHeight: 20
             },
             value: {
               fontSize: 24,
               fontWeight: 'bold',
               color: '#333',
-              lineHeight: 32,
-            },
-          },
+              lineHeight: 32
+            }
+          }
         },
         labelLine: {
           show: false,
           length: 10,
           length2: 15,
-          smooth: true,
+          smooth: true
         },
         itemStyle: {
           borderRadius: 2,
           borderColor: '#fff',
-          borderWidth: 1,
+          borderWidth: 1
         },
         emphasis: {
           focus: 'none',
-          scaleSize: 5,
+          scaleSize: 5
         },
-        data: chartData || [],
-      },
-    ],
+        data: chartData || []
+      }
+    ]
   };
 
   if (loading) {
@@ -135,21 +172,21 @@ const OsPie: React.FC<OsPieProps> = ({ rawData, loading = false, onReady }) => {
   }
 
   return (
-    <div className="h-full flex">
+    <div className="h-full flex" ref={containerRef}>
       {/* 图表区域 */}
-      <div className="flex-1">
+      <div className="flex-1 min-w-[200px]">
         <ReactEcharts
-          ref={chartRef}
           option={option}
           style={{ height: '100%', width: '100%' }}
+          onChartReady={onChartReady}
         />
       </div>
 
       {/* 图例区域 */}
-      {chartData && chartData.length > 1 && (
-        <div className="w-34 flex-shrink-0 h-full">
+      {showLegend && chartData && chartData.length > 1 && (
+        <div className="w-40 flex-shrink-0 h-full">
           <ChartLegend
-            chart={chartRef.current?.getEchartsInstance()}
+            chart={chartInstance}
             data={chartData.map((item: any) => ({ name: item.name }))}
             colors={chartColors}
           />

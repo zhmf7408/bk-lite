@@ -36,6 +36,7 @@ export interface CollectTask {
 export interface TreeNode {
   id: string;
   model_id?: string;
+  target_model_id?: string;
   key: string;
   name: string;
   type?: string;
@@ -50,6 +51,7 @@ export interface TreeNode {
 export interface ModelItem {
   id: string;
   model_id: string;
+  target_model_id?: string;
   key: string;
   name: string;
   type?: string;

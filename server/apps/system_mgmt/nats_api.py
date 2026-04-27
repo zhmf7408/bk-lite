@@ -4,6 +4,7 @@ import json
 import os
 import time
 from datetime import timedelta
+from uuid import uuid4
 
 import jwt
 import pyotp
@@ -17,7 +18,7 @@ import nats_client
 from apps.core.constants import VERIFY_TOKEN_USER_NOT_FOUND_CODE, VERIFY_TOKEN_USER_NOT_FOUND_MESSAGE
 from apps.core.logger import system_mgmt_logger as logger
 from apps.core.utils.loader import LanguageLoader
-from apps.core.utils.permission_cache import clear_users_permission_cache, get_cached_token_info, set_cached_token_info
+from apps.core.utils.permission_cache import clear_token_info_cache, clear_users_permission_cache, get_cached_token_info, set_cached_token_info
 from apps.system_mgmt.guest_menus import CMDB_MENUS, MONITOR_MENUS, OPSPILOT_GUEST_MENUS
 from apps.system_mgmt.models import (
     App,
@@ -47,6 +48,7 @@ from apps.system_mgmt.utils.channel_utils import (
 )
 from apps.system_mgmt.utils.group_utils import GroupUtils
 from apps.system_mgmt.utils.password_validator import PasswordValidator
+from apps.system_mgmt.utils.token_blacklist import blacklist_token, is_blacklisted
 
 
 def get_user_all_roles(user):
@@ -97,19 +99,48 @@ def get_user_all_roles(user):
     return list(personal_role_ids | group_role_ids)
 
 
+def _get_login_expired_seconds():
+    """获取 login_expired_time 配置值（秒）。"""
+    login_expired_time_set = SystemSettings.objects.filter(key="login_expired_time").first()
+    if login_expired_time_set:
+        return int(float(login_expired_time_set.value) * 3600)
+    return 3600 * 24
+
+
+def _build_jwt_payload(user_id):
+    """构建包含 jti 和 exp 的 JWT payload。"""
+    now = int(time.time())
+    expired_seconds = _get_login_expired_seconds()
+    return {
+        "user_id": user_id,
+        "login_time": now,
+        "jti": uuid4().hex,
+        "exp": now + expired_seconds,
+    }
+
+
 def _verify_token(token):
     token = token.split("Basic ")[-1]
     secret_key = os.getenv("SECRET_KEY")
     algorithm = os.getenv("JWT_ALGORITHM", "HS256")
-    user_info = jwt.decode(token, key=secret_key, algorithms=algorithm)
+    user_info = jwt.decode(token, key=secret_key, algorithms=[algorithm], options={"verify_exp": False})
     time_now = int(time.time())
-    login_expired_time_set = SystemSettings.objects.filter(key="login_expired_time").first()
-    login_expired_time = 3600 * 24
-    if login_expired_time_set:
-        login_expired_time = float(login_expired_time_set.value) * 3600
 
-    if time_now - login_expired_time > user_info["login_time"]:
-        raise Exception("Token is invalid")
+    # New-format token (with jti + exp): use PyJWT exp validation + blacklist check
+    if "jti" in user_info and "exp" in user_info:
+        # Re-decode with exp verification enabled
+        jwt.decode(token, key=secret_key, algorithms=[algorithm])
+        if is_blacklisted(user_info["jti"]):
+            raise Exception("Token has been revoked")
+    else:
+        # Legacy token: fall back to login_time-based expiry check
+        login_expired_time_set = SystemSettings.objects.filter(key="login_expired_time").first()
+        login_expired_time = 3600 * 24
+        if login_expired_time_set:
+            login_expired_time = float(login_expired_time_set.value) * 3600
+        if time_now - login_expired_time > user_info["login_time"]:
+            raise Exception("Token is invalid")
+
     user = User.objects.filter(id=user_info["user_id"]).first()
     if not user:
         raise Exception(VERIFY_TOKEN_USER_NOT_FOUND_MESSAGE)
@@ -223,9 +254,38 @@ def verify_token(token):
 
 
 @nats_client.register
+def revoke_token(token):
+    """撤销 token：将 jti 加入黑名单并清除用户验证缓存。"""
+    if not token:
+        return {"result": False, "message": "Token is missing"}
+
+    try:
+        token = token.split("Basic ")[-1]
+        secret_key = os.getenv("SECRET_KEY")
+        algorithm = os.getenv("JWT_ALGORITHM", "HS256")
+        user_info = jwt.decode(token, key=secret_key, algorithms=[algorithm], options={"verify_exp": False})
+    except Exception as e:
+        return {"result": False, "message": f"Invalid token: {e}"}
+
+    jti = user_info.get("jti")
+    exp = user_info.get("exp")
+    if not jti or not exp:
+        return {"result": False, "message": "Token does not support revocation (missing jti/exp)"}
+
+    blacklist_token(jti, exp)
+
+    # Clear verify_token cache for this user
+    user = User.objects.filter(id=user_info.get("user_id")).first()
+    if user:
+        clear_token_info_cache(user.username, user.domain)
+
+    return {"result": True, "message": "Token revoked"}
+
+
+@nats_client.register
 def get_user_menus(client_id, roles, username, is_superuser):
     client = RoleManage()
-    client_id = client_id
+    # client_id used directly below
     menus = []
     if not is_superuser:
         menu_ids = []
@@ -271,6 +331,7 @@ def get_client_detail(client_id):
         "data": {
             "id": app_obj.id,
             "name": app_obj.name,
+            "display_name": app_obj.display_name,
             "description": app_obj.description,
             "description_cn": app_obj.description_cn,
         },
@@ -294,6 +355,89 @@ def get_group_users(group=None, include_children=False):
     else:
         users = User.objects.filter(group_list__contains=int(group)).values("id", "username", "display_name")
     return {"result": True, "data": list(users)}
+
+
+def _get_actor_user_scope(actor_context, include_children=False):
+    """
+    根据调用方上下文解析允许访问的组织范围。
+
+    :param actor_context: 调用方上下文，包含 username、domain、current_team、is_superuser 等字段
+    :param include_children: 是否包含当前组织下的已授权子组织
+    :return: (user_obj, authorized_groups)
+        - user_obj: 当前调用用户对象，不存在时返回 None
+        - authorized_groups: 当前调用方允许访问的组织 ID 列表
+    """
+    username = (actor_context or {}).get("username")
+    domain = (actor_context or {}).get("domain", "domain.com")
+    current_team = (actor_context or {}).get("current_team")
+    is_superuser = (actor_context or {}).get("is_superuser", False)
+
+    if not username or current_team in (None, ""):
+        return None, []
+
+    user_obj = User.objects.filter(username=username, domain=domain).first()
+    if not user_obj:
+        return None, []
+
+    try:
+        current_team = int(current_team)
+    except (TypeError, ValueError):
+        return user_obj, []
+
+    if is_superuser:
+        if include_children:
+            return user_obj, GroupUtils.get_group_with_descendants(current_team)
+        return user_obj, [current_team]
+
+    authorized_groups = GroupUtils.get_user_authorized_child_groups(
+        user_obj.group_list,
+        current_team,
+        include_children=include_children,
+    )
+    return user_obj, authorized_groups
+
+
+@nats_client.register
+def get_group_users_scoped(actor_context, group=None, include_children=False):
+    """
+    在调用方授权范围内查询组织用户列表。
+
+    :param actor_context: 调用方上下文，包含 username、domain、current_team、is_superuser 等字段
+    :param group: 可选，指定查询的组织 ID；若不传则使用调用方当前授权范围
+    :param include_children: 是否包含目标组织下的已授权子组织用户
+    :return: 标准 NATS 返回结构，data 为用户列表
+    """
+    user_obj, authorized_groups = _get_actor_user_scope(actor_context, include_children=include_children)
+    if not user_obj or not authorized_groups:
+        return {"result": True, "data": []}
+
+    if group is not None:
+        try:
+            group = int(group)
+        except (TypeError, ValueError):
+            return {"result": True, "data": []}
+        if group not in authorized_groups:
+            return {"result": True, "data": []}
+        query_groups = GroupUtils.get_user_authorized_child_groups(
+            user_obj.group_list,
+            group,
+            include_children=include_children,
+        )
+    else:
+        query_groups = authorized_groups
+
+    if not query_groups:
+        return {"result": True, "data": []}
+
+    users = User.objects.filter(group_list__overlap=query_groups).values("id", "username", "display_name")
+    return {"result": True, "data": list(users)}
+
+
+@nats_client.register
+def get_authorized_groups_scoped(actor_context, include_children=False):
+    """返回调用方在当前组织上下文下可访问的组织范围。"""
+    _user_obj, authorized_groups = _get_actor_user_scope(actor_context, include_children=include_children)
+    return {"result": True, "data": authorized_groups}
 
 
 @nats_client.register
@@ -484,6 +628,39 @@ def search_channel_list(channel_type="", teams=None, include_children=False):
         "result": True,
         "data": [i for i in channels.values("id", "name", "channel_type", "description")],
     }
+
+
+@nats_client.register
+def search_channel_list_scoped(actor_context, channel_type="", teams=None, include_children=False):
+    """
+    在调用方授权范围内查询通知通道列表。
+
+    :param actor_context: 调用方上下文，包含 username、domain、current_team、is_superuser 等字段
+    :param channel_type: 可选，通道类型过滤条件
+    :param teams: 可选，待查询的组织 ID 列表；最终会与调用方授权范围取交集
+    :param include_children: 是否包含当前组织下的已授权子组织
+    :return: 标准 NATS 返回结构，data 为通知通道列表
+    """
+    user_obj, authorized_groups = _get_actor_user_scope(actor_context, include_children=include_children)
+    if not user_obj or not authorized_groups:
+        return {"result": True, "data": []}
+
+    if teams:
+        normalized_teams = []
+        for team in teams:
+            try:
+                normalized_teams.append(int(team))
+            except (TypeError, ValueError):
+                continue
+        teams = [team for team in normalized_teams if team in authorized_groups]
+    else:
+        teams = authorized_groups
+
+    return search_channel_list(
+        channel_type=channel_type,
+        teams=teams,
+        include_children=False,
+    )
 
 
 @nats_client.register
@@ -925,7 +1102,7 @@ def wechat_user_register(user_id, nick_name):
         pass
     secret_key = os.getenv("SECRET_KEY")
     algorithm = os.getenv("JWT_ALGORITHM", "HS256")
-    user_obj = {"user_id": user.id, "login_time": int(time.time())}
+    user_obj = _build_jwt_payload(user.id)
     token = jwt.encode(payload=user_obj, key=secret_key, algorithm=algorithm)
     return {
         "result": True,
@@ -1034,7 +1211,7 @@ def get_user_login_token(user, username):
         return {"result": False, "message": "User is disabled"}
     secret_key = os.getenv("SECRET_KEY")
     algorithm = os.getenv("JWT_ALGORITHM", "HS256")
-    user_obj = {"user_id": user.id, "login_time": int(time.time())}
+    user_obj = _build_jwt_payload(user.id)
     token = jwt.encode(payload=user_obj, key=secret_key, algorithm=algorithm)
     enable_otp = SystemSettings.objects.filter(key="enable_otp").first()
     user.last_login = timezone.now()
@@ -1164,7 +1341,7 @@ def verify_bk_token(bk_token):
     user.locale = bk_user.get("language", user.locale)
     user.timezone = bk_user.get("time_zone", user.timezone)
     user.save()
-    user_obj = {"user_id": user.id, "login_time": int(time.time())}
+    user_obj = _build_jwt_payload(user.id)
     secret_key = os.getenv("SECRET_KEY")
     algorithm = os.getenv("JWT_ALGORITHM", "HS256")
     token = jwt.encode(payload=user_obj, key=secret_key, algorithm=algorithm)

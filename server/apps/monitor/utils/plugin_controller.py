@@ -2,6 +2,7 @@ import uuid
 
 from jinja2 import Environment, BaseLoader, DebugUndefined
 
+from apps.core.exceptions.base_app_exception import BaseAppException
 from apps.core.logger import monitor_logger as logger
 from apps.monitor.constants.database import DatabaseConstants
 from apps.monitor.models import CollectConfig, MonitorPluginConfigTemplate
@@ -166,23 +167,23 @@ class Controller:
 
         if not templates_by_type:
             logger.warning(f"未找到任何模板：collector={collector}, collect_type={collect_type}")
-            return
+            raise BaseAppException(f"未找到采集模板：collector={collector}, collect_type={collect_type}")
 
         if not configs:
             logger.debug(f"没有需要创建的配置：collector={collector}, collect_type={collect_type}")
-            return
+            raise BaseAppException(f"没有可创建的采集配置：collector={collector}, collect_type={collect_type}")
 
         for config_info in configs:
             type_name = config_info.get("type")
             if not type_name:
-                logger.warning(f"配置缺少 type 字段，跳过: {config_info}")
-                continue
+                logger.warning(f"配置缺少 type 字段: {config_info}")
+                raise BaseAppException("采集配置缺少 type 字段")
 
             templates = templates_by_type.get(type_name)
 
             if not templates:
                 logger.warning(f"未找到模板：collector={collector}, collect_type={collect_type}, type={type_name}")
-                continue
+                raise BaseAppException(f"未找到采集模板：collector={collector}, collect_type={collect_type}, type={type_name}")
 
             env_config = {k[4:]: v for k, v in config_info.items() if k.startswith("ENV_")}
 
@@ -203,7 +204,7 @@ class Controller:
                     )
                 except (ValueError, Exception) as e:
                     logger.error(f"渲染模板失败：type={type_name}, config_id={config_id}, instance_id={config_info.get('instance_id')}, 错误: {e}")
-                    continue
+                    raise BaseAppException(f"渲染采集模板失败：type={type_name}, instance_id={config_info.get('instance_id')}") from e
 
                 if is_child:
                     child_env_config = {f"{k.upper()}__{config_id.upper()}": v for k, v in env_config.items()}
@@ -245,7 +246,7 @@ class Controller:
 
         if not collect_configs:
             logger.warning(f"没有生成任何配置：collector={collector}, collect_type={collect_type}")
-            return
+            raise BaseAppException(f"没有生成任何采集配置：collector={collector}, collect_type={collect_type}")
 
         # 步骤2：批量创建 CollectConfig（使用外层事务，不新建事务）
         try:

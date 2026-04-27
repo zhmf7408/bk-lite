@@ -1,0 +1,25 @@
+name: config_file
+version: "2.0.0"
+category: infrastructure
+
+metadata:
+  display_name: "配置文件信息"
+  description: "主机配置文件内容采集插件"
+  author: "WeOps"
+  tags: [infrastructure, config-file]
+  cloud_protocol: false
+  model_id: config_file
+
+executors:
+  job:
+    type: job
+    timeout: 60
+    scripts:
+      linux: plugins/inputs/config_file/config_file_discover.sh
+      windows: plugins/inputs/config_file/config_file_discover.ps1
+    collector:
+      module: plugins.inputs.config_file.config_file_info
+      class: ConfigFileInfo
+    default_script: linux
+
+default_executor: job

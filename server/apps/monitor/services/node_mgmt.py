@@ -1,9 +1,12 @@
 from django.db import transaction
 from django.db import models
+from django.db.models import Q
 
-from apps.core.exceptions.base_app_exception import BaseAppException
+from apps.core.exceptions.base_app_exception import BaseAppException, UnauthorizedException
+from apps.core.utils.permission_utils import get_permission_rules
 from apps.core.logger import monitor_logger as logger
 from apps.monitor.constants.database import DatabaseConstants
+from apps.monitor.constants.permission import PermissionConstants
 from apps.monitor.models import (
     MonitorInstance,
     MonitorInstanceOrganization,
@@ -16,6 +19,8 @@ from apps.monitor.utils.dimension import parse_instance_id
 from apps.monitor.utils.config_format import ConfigFormat
 from apps.monitor.utils.plugin_controller import Controller
 from apps.rpc.node_mgmt import NodeMgmt
+from apps.system_mgmt.models import User
+from apps.system_mgmt.utils.group_utils import GroupUtils
 
 
 class InstanceConfigService:
@@ -23,6 +28,167 @@ class InstanceConfigService:
         "Pod": "pod_status_phase",
         "Node": "node_status_condition",
     }
+
+    @staticmethod
+    def _build_permission_data(actor_context):
+        return {
+            "username": actor_context["username"],
+            "domain": actor_context["domain"],
+            "current_team": actor_context["current_team"],
+            "include_children": actor_context.get("include_children", False),
+        }
+
+    @staticmethod
+    def _build_actor_user(actor_context):
+        return User(username=actor_context["username"], domain=actor_context["domain"])
+
+    @staticmethod
+    def _get_actor_scope_groups(actor_context):
+        if actor_context.get("is_superuser"):
+            return None
+        return GroupUtils.get_user_authorized_child_groups(
+            actor_context.get("group_list", []),
+            actor_context["current_team"],
+            include_children=actor_context.get("include_children", False),
+        )
+
+    @classmethod
+    def _get_authorized_monitor_instances(cls, actor_context, monitor_object_id, require_operate=False):
+        if actor_context.get("is_superuser"):
+            return MonitorInstance.objects.filter(monitor_object_id=monitor_object_id)
+
+        permission = get_permission_rules(
+            cls._build_actor_user(actor_context),
+            actor_context["current_team"],
+            "monitor",
+            f"{PermissionConstants.INSTANCE_MODULE}.{monitor_object_id}",
+            include_children=actor_context.get("include_children", False),
+        )
+        team_ids = permission.get("team", [])
+        instance_permissions = permission.get("instance", [])
+        allowed_instance_ids = [
+            item["id"]
+            for item in instance_permissions
+            if isinstance(item, dict) and "id" in item and (not require_operate or "Operate" in item.get("permission", []))
+        ]
+
+        queryset = MonitorInstance.objects.filter(monitor_object_id=monitor_object_id)
+        if team_ids and allowed_instance_ids:
+            return queryset.filter(Q(monitorinstanceorganization__organization__in=team_ids) | Q(id__in=allowed_instance_ids)).distinct()
+        if team_ids:
+            return queryset.filter(monitorinstanceorganization__organization__in=team_ids).distinct()
+        if allowed_instance_ids:
+            return queryset.filter(id__in=allowed_instance_ids)
+        return queryset.none()
+
+    @classmethod
+    def _get_authorized_collect_configs(cls, ids, actor_context=None, require_operate=False):
+        config_ids = list({str(config_id) for config_id in ids if config_id not in (None, "")})
+        if not config_ids:
+            return []
+
+        config_objs = list(CollectConfig.objects.filter(id__in=config_ids).select_related("monitor_instance__monitor_object"))
+        if not config_objs:
+            return []
+
+        if actor_context is None:
+            return config_objs
+
+        if actor_context.get("is_superuser"):
+            return config_objs
+
+        configs_by_object = {}
+        for config_obj in config_objs:
+            configs_by_object.setdefault(config_obj.monitor_instance.monitor_object_id, []).append(config_obj)
+
+        authorized_ids = set()
+        for monitor_object_id, object_configs in configs_by_object.items():
+            instance_ids = {
+                instance_id
+                for instance_id in cls._get_authorized_monitor_instances(
+                    actor_context,
+                    monitor_object_id,
+                    require_operate=require_operate,
+                ).values_list("id", flat=True)
+            }
+            for config_obj in object_configs:
+                if config_obj.monitor_instance_id in instance_ids:
+                    authorized_ids.add(config_obj.id)
+
+        if len(authorized_ids) != len(config_ids):
+            raise UnauthorizedException("无权限访问指定采集配置")
+
+        return [config_obj for config_obj in config_objs if config_obj.id in authorized_ids]
+
+    @classmethod
+    def _ensure_instance_access(cls, collect_instance_id, actor_context=None, require_operate=False):
+        instance = MonitorInstance.objects.select_related("monitor_object").filter(id=collect_instance_id).first()
+        if not instance:
+            raise BaseAppException("监控实例不存在")
+        if actor_context is None:
+            return instance
+        if actor_context.get("is_superuser"):
+            return instance
+        authorized = (
+            cls._get_authorized_monitor_instances(
+                actor_context,
+                instance.monitor_object_id,
+                require_operate=require_operate,
+            )
+            .filter(id=collect_instance_id)
+            .exists()
+        )
+        if not authorized:
+            raise UnauthorizedException("无权限访问指定监控实例")
+        return instance
+
+    @classmethod
+    def _sanitize_instances_for_onboarding(cls, instances, actor_context):
+        if actor_context.get("is_superuser"):
+            authorized_scope_groups = None
+        else:
+            authorized_scope_groups = set(cls._get_actor_scope_groups(actor_context) or [])
+            if not authorized_scope_groups:
+                raise UnauthorizedException("当前组织无可用权限范围")
+
+        requested_node_ids = set()
+        for instance in instances:
+            node_ids = instance.get("node_ids", [])
+            if not node_ids:
+                raise BaseAppException(f"实例 {instance.get('instance_name', instance.get('instance_id', 'unknown'))} 缺少 node_ids")
+            requested_node_ids.update(str(node_id) for node_id in node_ids if node_id not in (None, ""))
+
+        authorized_nodes = NodeMgmt().get_authorized_nodes_by_ids(
+            list(requested_node_ids),
+            cls._build_permission_data(actor_context),
+        )
+        authorized_node_map = {str(node["id"]): node for node in authorized_nodes}
+        unauthorized_node_ids = sorted(requested_node_ids - set(authorized_node_map))
+        if unauthorized_node_ids:
+            raise UnauthorizedException(f"存在无权限节点: {', '.join(unauthorized_node_ids)}")
+
+        sanitized_instances = []
+        for instance in instances:
+            node_ids = []
+            group_ids = set()
+            for raw_node_id in instance.get("node_ids", []):
+                node_id = str(raw_node_id)
+                node_info = authorized_node_map.get(node_id)
+                if not node_info:
+                    raise UnauthorizedException(f"节点 {node_id} 无权限访问")
+                node_ids.append(node_id)
+                node_groups = set(node_info.get("organization_ids", []))
+                if authorized_scope_groups is not None:
+                    node_groups &= authorized_scope_groups
+                if not node_groups:
+                    raise UnauthorizedException(f"节点 {node_id} 不在当前组织授权范围内")
+                group_ids.update(node_groups)
+
+            sanitized_instance = {**instance}
+            sanitized_instance["node_ids"] = node_ids
+            sanitized_instance["group_ids"] = sorted(group_ids)
+            sanitized_instances.append(sanitized_instance)
+        return sanitized_instances
 
     @classmethod
     def _get_default_group_metric(cls, child_obj):
@@ -64,9 +230,13 @@ class InstanceConfigService:
         return len(instances_to_update)
 
     @staticmethod
-    def get_config_content(ids):
+    def get_config_content(ids, actor_context=None):
         result = {}
-        config_objs = CollectConfig.objects.filter(id__in=ids)
+        config_objs = InstanceConfigService._get_authorized_collect_configs(
+            ids,
+            actor_context,
+            require_operate=False,
+        )
         if not config_objs:
             return result
 
@@ -90,8 +260,14 @@ class InstanceConfigService:
         return result
 
     @staticmethod
-    def get_instance_configs(collect_instance_id):
+    def get_instance_configs(collect_instance_id, actor_context=None):
         """获取实例配置"""
+
+        InstanceConfigService._ensure_instance_access(
+            collect_instance_id,
+            actor_context,
+            require_operate=False,
+        )
 
         config_objs = CollectConfig.objects.filter(monitor_instance_id=collect_instance_id)
 
@@ -129,7 +305,7 @@ class InstanceConfigService:
 
         items = list(result.values())
         for item in items:
-            config_content = InstanceConfigService.get_config_content(item["config_ids"])
+            config_content = InstanceConfigService.get_config_content(item["config_ids"], actor_context)
             item.update(config_content=config_content)
 
         return items
@@ -398,7 +574,7 @@ class InstanceConfigService:
         return instance_objs, association_objs, instance_ids
 
     @staticmethod
-    def create_monitor_instance_by_node_mgmt(data):
+    def create_monitor_instance_by_node_mgmt(data, actor_context=None):
         """创建监控对象实例（支持同一实例ID多种采集方式）"""
         instances = data.get("instances", [])
         monitor_object_id = data["monitor_object_id"]
@@ -411,10 +587,14 @@ class InstanceConfigService:
             logger.info("没有需要创建的实例")
             return
 
+        sanitized_instances = instances
+        if actor_context is not None:
+            sanitized_instances = InstanceConfigService._sanitize_instances_for_onboarding(instances, actor_context)
+
         # ============ 阶段1: 参数预校验与数据准备 ============
         try:
             new_instances, existing_instances, deleted_ids = InstanceConfigService._prepare_instances_for_creation(
-                instances,
+                sanitized_instances,
                 monitor_object_id,
                 collect_type,
                 collector,
@@ -448,9 +628,10 @@ class InstanceConfigService:
 
                 # 阶段3：调用 Controller 创建采集配置（使用外层事务）
                 # 注意：所有实例（新建+已存在）都需要创建采集配置
-                data["instances"] = new_instances + existing_instances
-                data["monitor_plugin_id"] = monitor_plugin_id
-                Controller(data).controller()
+                sanitized_data = {**data}
+                sanitized_data["instances"] = new_instances + existing_instances
+                sanitized_data["monitor_plugin_id"] = monitor_plugin_id
+                Controller(sanitized_data).controller()
                 logger.info("采集配置创建成功")
 
                 # ✅ 所有操作成功，事务自动提交
@@ -467,16 +648,35 @@ class InstanceConfigService:
         logger.info(f"创建监控实例成功,共 {len(created_instance_ids)} 个新实例,{len(existing_instances)} 个复用实例")
 
     @staticmethod
-    def update_instance_config(child_info, base_info):
+    def update_instance_config(child_info, base_info, actor_context=None):
+        config_ids = []
+        if base_info and base_info.get("id"):
+            config_ids.append(base_info["id"])
+        if child_info and child_info.get("id"):
+            config_ids.append(child_info["id"])
+
+        config_objs = InstanceConfigService._get_authorized_collect_configs(
+            config_ids,
+            actor_context,
+            require_operate=True,
+        )
+        config_map = {config.id: config for config in config_objs}
+
+        if base_info and child_info:
+            base_config = config_map.get(base_info["id"])
+            child_config = config_map.get(child_info["id"])
+            if base_config and child_config and base_config.monitor_instance_id != child_config.monitor_instance_id:
+                raise BaseAppException("基础配置与子配置不属于同一监控实例")
+
         if base_info:
-            config_obj = CollectConfig.objects.filter(id=base_info["id"]).first()
+            config_obj = config_map.get(base_info["id"])
             if config_obj:
                 content = ConfigFormat.json_to_yaml(base_info["content"])
                 env_config = base_info.get("env_config")
                 NodeMgmt().update_config_content(base_info["id"], content, env_config)
 
         if child_info:
-            config_obj = CollectConfig.objects.filter(id=child_info["id"]).first()
+            config_obj = config_map.get(child_info["id"])
             if not config_obj:
                 return
             env_config = child_info.get("env_config")

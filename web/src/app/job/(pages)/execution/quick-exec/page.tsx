@@ -59,32 +59,6 @@ interface QuickExecReplayDraft {
   scriptContent?: string;
 }
 
-const DEFAULT_SCRIPT_CONTENT: Record<ScriptLang, string> = {
-  shell: `#!/bin/bash
-
-# 任务正常结束
-job_success() {
-    echo "[INFO] Job completed successfully"
-    exit 0
-}
-
-# 任务异常结束
-job_fail() {
-    echo "[ERROR] Job failed"
-    exit 1
-}
-
-# ---------- 在此处编写脚本逻辑 ----------
-
-
-
-# ---------- 结束 ----------
-job_success`,
-  bat: `@echo off\nREM Enter your batch script here\n`,
-  python: `#!/usr/bin/env python3\n# Enter your Python script here\n`,
-  powershell: `# Enter your PowerShell script here\n`,
-};
-
 const QuickExecPage = () => {
   const { t } = useTranslation();
   const searchParams = useSearchParams();
@@ -92,6 +66,13 @@ const QuickExecPage = () => {
   const { isLoading: isApiReady } = useApiClient();
   const { getScriptList, getScriptDetail, getPlaybookList, getPlaybookDetail, quickExecute, playbookExecute, getEnabledDangerousRules } = useJobApi();
   const [form] = Form.useForm();
+
+  const defaultScriptContent: Record<ScriptLang, string> = {
+    shell: t('job.scriptTemplateShell'),
+    bat: t('job.scriptTemplateBat'),
+    python: t('job.scriptTemplatePython'),
+    powershell: t('job.scriptTemplatePowershell'),
+  };
 
   const [contentSource, setContentSource] = useState<ContentSource>('template');
   const [templateType, setTemplateType] = useState<TemplateType>('scriptLibrary');
@@ -167,7 +148,7 @@ const QuickExecPage = () => {
         timeout: draft.timeout || '600',
         execParams: Array.isArray(draft.params) ? String(draft.params[0]?.value || '') : '',
         scriptContent: {
-          ...DEFAULT_SCRIPT_CONTENT,
+          ...defaultScriptContent,
           [draftScriptType]: draft.scriptContent,
         },
       });
@@ -566,7 +547,7 @@ const QuickExecPage = () => {
           form={form}
           layout="vertical"
           className="w-full"
-          initialValues={{ timeout: '600', scriptContent: DEFAULT_SCRIPT_CONTENT }}
+          initialValues={{ timeout: '600', scriptContent: defaultScriptContent }}
         >
 
           <Form.Item
@@ -626,7 +607,7 @@ const QuickExecPage = () => {
                               color: targetSource === 'node_manager' ? 'var(--color-text-4)' : undefined,
                             }}
                           >
-                            <span>Playbook</span>
+                            <span>{t('job.playbook')}</span>
                             {targetSource === 'node_manager' && (
                               <Tooltip title={t('job.nodeManagerPlaybookNotSupported')}>
                                 <span

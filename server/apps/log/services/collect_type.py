@@ -330,9 +330,10 @@ class CollectTypeService:
         for instance_id, config_id in conf_objs:
             conf_map[instance_id].append(config_id)
 
-        # 获取节点信息(只补充节点名称，可以不用鉴权)
-        nodes = NodeMgmt().node_list(dict(page_size=-1))
-        node_map = {node["id"]: node["name"] for node in nodes["nodes"]}
+        # 只补充当前页实例关联的节点名称，避免每次实例列表查询都拉取全量节点。
+        page_node_ids = [instance.node_id for instance in page_data if instance.node_id]
+        nodes = NodeMgmt().get_node_names_by_ids(page_node_ids) if page_node_ids else []
+        node_map = {node["id"]: node["name"] for node in nodes}
 
         # 构建结果（与监控模块格式保持一致，使用 results 字段）
         items = []

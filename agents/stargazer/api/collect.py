@@ -16,6 +16,20 @@ from plugins.base_utils import expand_ip_range
 collect_router = Blueprint("collect", url_prefix="/collect")
 
 
+def _is_config_file_collect(task_params: dict) -> bool:
+    return (
+        str(task_params.get("callback_subject") or "") == "receive_config_file_result"
+        or str(task_params.get("plugin_name") or "") == "config_file_info"
+        or str(task_params.get("model_id") or "") == "config_file"
+    )
+
+def _get_connect_ip(host: str) -> str:
+    host_str = str(host or "").strip()
+    if not host_str:
+        return ""
+    return host_str.split("[", 1)[0].strip()
+
+
 def _parse_hosts(hosts_param: str) -> List[str]:
     """
     解析hosts参数，支持逗号分隔和IP段
@@ -184,6 +198,11 @@ async def collect(request):
                         "batch_index": idx,
                         "batch_total": len(hosts_list)
                     }
+                    if _is_config_file_collect(task_params):
+                        # 配置文件采集回调由 CMDB 按实例名称反查 _id，这里只保留拆分后的 host 和连接 IP。
+                        single_host_params.pop("connect_ip", None)
+                        single_host_params.pop("target_instance_id", None)
+                        single_host_params["connect_ip"] = _get_connect_ip(host)
                     
                     # 创建任务
                     task_info = await task_queue.enqueue_collect_task(single_host_params)

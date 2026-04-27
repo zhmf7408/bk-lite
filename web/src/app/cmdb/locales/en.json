@@ -324,6 +324,7 @@
         "ipRangeOrderInvalid": "Start IP must not be greater than End IP",
         "chooseIp": "Choose IP",
         "chooseAsset": "Choose Asset",
+        "chooseHost": "Choose Host",
         "everyMinute": "Every",
         "executeOnce": "Execute once",
         "database": "Database",

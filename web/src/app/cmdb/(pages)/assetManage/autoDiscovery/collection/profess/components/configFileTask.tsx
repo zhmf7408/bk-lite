@@ -1,0 +1,223 @@
+'use client';
+
+import React, { useEffect, useRef } from 'react';
+import { Alert, Collapse, Form, Input, InputNumber, Spin } from 'antd';
+import { CaretRightOutlined } from '@ant-design/icons';
+import { useLocale } from '@/context/locale';
+import { useTranslation } from '@/utils/i18n';
+import BaseTaskForm, { BaseTaskRef } from './baseTask';
+import { useTaskForm, getCleanupFormValues, getCycleFormValues } from '../hooks/useTaskForm';
+import { TreeNode, ModelItem } from '@/app/cmdb/types/autoDiscovery';
+import {
+  CONFIG_FILE_FORM_INITIAL_VALUES,
+  PASSWORD_PLACEHOLDER,
+} from '@/app/cmdb/constants/professCollection';
+import { formatTaskValues, buildCredential } from '../hooks/formatTaskValues';
+import useAssetManageStore from '@/app/cmdb/store/useAssetManage';
+
+interface ConfigFileTaskFormProps {
+  onClose: () => void;
+  onSuccess?: () => void;
+  selectedNode: TreeNode;
+  modelItem: ModelItem;
+  editId?: number | null;
+}
+
+const MAX_FILE_SIZE_LIMIT = 5 * 1024 * 1024;
+const LINUX_FILE_PATH_RE = /^\/(?!.*\/$)(?!.*[*?]).+/;
+const WINDOWS_FILE_PATH_RE = /^[A-Za-z]:\\(?!.*[\\/]$)(?!.*[*?]).+/;
+
+const validateConfigFilePath = (_: unknown, value: string) => {
+  const normalizedValue = (value || '').trim();
+  if (!normalizedValue) {
+    return Promise.reject(new Error('请输入配置文件绝对路径'));
+  }
+
+  const matchesAbsolutePath =
+    LINUX_FILE_PATH_RE.test(normalizedValue) || WINDOWS_FILE_PATH_RE.test(normalizedValue);
+  if (!matchesAbsolutePath) {
+    return Promise.reject(new Error('请输入完整的配置文件路径，不能填写目录'));
+  }
+
+  const pathSegments = normalizedValue.split(/[\\/]/).filter(Boolean);
+  const fileName = pathSegments[pathSegments.length - 1] || '';
+  if (!fileName || fileName === '.' || fileName === '..') {
+    return Promise.reject(new Error('请输入完整的配置文件路径，不能填写目录'));
+  }
+
+  return Promise.resolve();
+};
+
+const ConfigFileTask: React.FC<ConfigFileTaskFormProps> = ({
+  onClose,
+  onSuccess,
+  selectedNode,
+  modelItem,
+  editId,
+}) => {
+  const { t } = useTranslation();
+  const localeContext = useLocale();
+  const baseRef = useRef<BaseTaskRef>(null as any);
+  const copyTaskData = useAssetManageStore((state) => state.copyTaskData);
+  const { model_id: modelId } = modelItem;
+
+  const { form, loading, submitLoading, fetchTaskDetail, formatCycleValue, onFinish } =
+    useTaskForm({
+      modelId,
+      editId,
+      initialValues: CONFIG_FILE_FORM_INITIAL_VALUES,
+      onSuccess,
+      onClose,
+      formatValues: (values) => {
+        const baseData = formatTaskValues({
+          values,
+          baseRef,
+          selectedNode,
+          modelItem,
+          modelId,
+          formatCycleValue,
+        });
+
+        const selectedData = baseRef.current?.selectedData;
+
+        return {
+          ...baseData,
+          ip_range: '',
+          instances: selectedData || [],
+          credential: buildCredential(
+            {
+              username: 'username',
+              password: 'password',
+              port: 'port',
+            },
+            values
+          ),
+          params: {
+            config_file_path: values.configFilePath?.trim(),
+          },
+        };
+      },
+    });
+
+  const buildFormValues = (values: any, isCopy: boolean) => ({
+    ...CONFIG_FILE_FORM_INITIAL_VALUES,
+    ...getCleanupFormValues(values),
+    ...getCycleFormValues(values),
+    ...values,
+    taskName: isCopy ? '' : values.name,
+    organization: values.team || [],
+    username: values.credential?.username || values.credential?.user,
+    password: isCopy ? '' : PASSWORD_PLACEHOLDER,
+    port: values.credential?.port,
+    accessPointId: values.access_point?.[0]?.id,
+    configFilePath: values.params?.config_file_path || '',
+  });
+
+  useEffect(() => {
+    const initForm = async () => {
+      if (copyTaskData) {
+        const values = copyTaskData;
+        baseRef.current?.initCollectionType(values.instances, 'asset');
+        form.setFieldsValue(buildFormValues(values, true));
+      } else if (editId) {
+        const values = await fetchTaskDetail(editId);
+        if (!values) {
+          return;
+        }
+        baseRef.current?.initCollectionType(values.instances, 'asset');
+        form.setFieldsValue(buildFormValues(values, false));
+      } else {
+        baseRef.current?.initCollectionType([], 'asset');
+        form.setFieldsValue(CONFIG_FILE_FORM_INITIAL_VALUES);
+      }
+    };
+
+    initForm();
+  }, [modelId, copyTaskData, editId]);
+
+  return (
+    <Spin spinning={loading}>
+      <Form
+        form={form}
+        layout="horizontal"
+        labelCol={{ span: localeContext.locale === 'en' ? 6 : 5 }}
+        onFinish={onFinish}
+        initialValues={CONFIG_FILE_FORM_INITIAL_VALUES}
+      >
+        <BaseTaskForm
+          ref={baseRef}
+          nodeId={selectedNode.id}
+          modelItem={modelItem}
+          onClose={onClose}
+          submitLoading={submitLoading}
+          instPlaceholder={t('Collection.chooseHost')}
+          assetOptionLabel={t('Collection.chooseHost')}
+          timeoutProps={{
+            min: 1,
+            defaultValue: 10,
+            addonAfter: t('Collection.k8sTask.second'),
+          }}
+        >
+          <Alert
+            type="info"
+            showIcon
+            className="mb-4"
+            message={`单文件大小上限 ${MAX_FILE_SIZE_LIMIT / 1024 / 1024} MB，由系统在入库时统一限制，仅支持文本文件采集`}
+          />
+
+          <Form.Item
+            label="配置文件绝对路径"
+            name="configFilePath"
+            rules={[{ validator: validateConfigFilePath }]}
+          >
+            <Input
+              autoComplete="off"
+              placeholder="/etc/nginx/nginx.conf 或 C:\\Windows\\System32\\drivers\\etc\\hosts"
+            />
+          </Form.Item>
+
+          <Collapse
+            ghost
+            defaultActiveKey={['credential']}
+            expandIcon={({ isActive }) => (
+              <CaretRightOutlined rotate={isActive ? 90 : 0} className="text-base" />
+            )}
+          >
+            <Collapse.Panel
+              header={<div className="font-medium">{t('Collection.credential')}</div>}
+              key="credential"
+            >
+              <Form.Item label={t('user')} name="username">
+                <Input placeholder={t('common.inputTip')} />
+              </Form.Item>
+
+              <Form.Item label={t('password')} name="password">
+                <Input.Password
+                  placeholder={t('common.inputTip')}
+                  onFocus={(e) => {
+                    if (!editId) return;
+                    if (e.target.value === PASSWORD_PLACEHOLDER) {
+                      form.setFieldValue('password', '');
+                    }
+                  }}
+                  onBlur={(e) => {
+                    if (!editId) return;
+                    if (!e.target.value?.trim()) {
+                      form.setFieldValue('password', PASSWORD_PLACEHOLDER);
+                    }
+                  }}
+                />
+              </Form.Item>
+
+              <Form.Item label={t('Collection.port')} name="port">
+                <InputNumber min={1} max={65535} className="w-32" placeholder="22" />
+              </Form.Item>
+            </Collapse.Panel>
+          </Collapse>
+        </BaseTaskForm>
+      </Form>
+    </Spin>
+  );
+};
+
+export default ConfigFileTask;

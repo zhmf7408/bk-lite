@@ -11,6 +11,13 @@ from apps.monitor.tasks.utils.policy_methods import period_to_seconds
 from apps.monitor.constants.alert_policy import AlertConstants
 
 
+def _run_scan_and_record_success(policy_obj, scan_time):
+    """Run one policy scan window and advance the watermark only after success."""
+    policy_obj.last_run_time = scan_time
+    MonitorPolicyScan(policy_obj).run()
+    MonitorPolicy.objects.filter(id=policy_obj.id).update(last_run_time=scan_time)
+
+
 @shared_task(base=Singleton, raise_on_duplicate=False)
 def scan_policy_task(policy_id):
     """扫描监控策略
@@ -43,14 +50,8 @@ def scan_policy_task(policy_id):
         current_time = datetime.now(timezone.utc)
 
         if not policy_obj.last_run_time:
-            policy_obj.last_run_time = current_time
-            MonitorPolicy.objects.filter(id=policy_id).update(
-                last_run_time=current_time
-            )
-            logger.info(
-                f"监控策略 [{policy_id}] 首次执行，设置 last_run_time: {current_time}"
-            )
-            MonitorPolicyScan(policy_obj).run()
+            logger.info(f"监控策略 [{policy_id}] 首次执行，扫描时间点: {current_time}")
+            _run_scan_and_record_success(policy_obj, current_time)
         else:
             period_seconds = period_to_seconds(policy_obj.period)
             gap_seconds = (current_time - policy_obj.last_run_time).total_seconds()
@@ -60,23 +61,16 @@ def scan_policy_task(policy_id):
             backfill_count = int(gap_seconds // period_seconds)
 
             if backfill_count <= 1:
-                policy_obj.last_run_time = current_time
-                MonitorPolicy.objects.filter(id=policy_id).update(
-                    last_run_time=current_time
-                )
-                MonitorPolicyScan(policy_obj).run()
+                _run_scan_and_record_success(policy_obj, current_time)
             else:
                 backfill_count = min(backfill_count, AlertConstants.MAX_BACKFILL_COUNT)
                 logger.info(f"监控策略 [{policy_id}] 需要补偿 {backfill_count} 个周期")
 
                 for i in range(backfill_count):
-                    policy_obj.last_run_time = policy_obj.last_run_time + timedelta(
+                    scan_time = policy_obj.last_run_time + timedelta(
                         seconds=period_seconds
                     )
-                    MonitorPolicyScan(policy_obj).run()
-                    MonitorPolicy.objects.filter(id=policy_id).update(
-                        last_run_time=policy_obj.last_run_time
-                    )
+                    _run_scan_and_record_success(policy_obj, scan_time)
                     logger.debug(
                         f"监控策略 [{policy_id}] 完成第 {i + 1}/{backfill_count} 次补偿"
                     )

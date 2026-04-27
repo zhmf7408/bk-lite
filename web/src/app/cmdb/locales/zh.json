@@ -322,6 +322,7 @@
         "ipRangeOrderInvalid": "起始 IP 不可大于结束 IP",
         "chooseIp": "选择IP",
         "chooseAsset": "选择资产",
+        "chooseHost": "选择主机",
         "everyMinute": "每",
         "executeOnce": "执行一次",
         "database": "数据库",

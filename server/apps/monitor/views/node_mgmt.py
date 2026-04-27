@@ -1,6 +1,8 @@
 from rest_framework.decorators import action
 from rest_framework.viewsets import ViewSet
 
+from apps.core.exceptions.base_app_exception import BaseAppException
+from apps.core.utils.user_group import normalize_user_group_ids
 from apps.core.utils.web_utils import WebUtils
 from apps.monitor.services.node_mgmt import InstanceConfigService
 from apps.rpc.node_mgmt import NodeMgmt
@@ -8,17 +10,38 @@ from apps.core.logger import monitor_logger as logger
 from apps.monitor.utils.pagination import parse_page_params
 
 
+def _build_actor_context(request):
+    current_team = request.COOKIES.get("current_team")
+    if current_team in (None, ""):
+        raise BaseAppException("缺少 current_team 参数")
+
+    try:
+        current_team = int(current_team)
+    except (TypeError, ValueError):
+        raise BaseAppException("current_team 参数非法")
+
+    return {
+        "username": request.user.username,
+        "domain": request.user.domain,
+        "current_team": current_team,
+        "include_children": request.COOKIES.get("include_children", "0") == "1",
+        "is_superuser": request.user.is_superuser,
+        "group_list": normalize_user_group_ids(getattr(request.user, "group_list", [])),
+    }
+
+
 class NodeMgmtView(ViewSet):
     @action(methods=["post"], detail=False, url_path="nodes")
     def get_nodes(self, request):
+        actor_context = _build_actor_context(request)
         orgs = {
-            i["id"] for i in request.user.group_list if i["name"] == "OpsPilotGuest"
+            int(group["id"])
+            for group in getattr(request.user, "group_list", [])
+            if isinstance(group, dict) and group.get("name") == "OpsPilotGuest" and group.get("id") is not None
         }
-        orgs.add(request.COOKIES.get("current_team"))
+        orgs.add(actor_context["current_team"])
 
-        page, page_size = parse_page_params(
-            request.data, default_page=1, default_page_size=10, allow_page_size_all=True
-        )
+        page, page_size = parse_page_params(request.data, default_page=1, default_page_size=10, allow_page_size_all=True)
 
         organization_ids = [] if request.user.is_superuser else list(orgs)
         data = NodeMgmt().node_list(
@@ -36,7 +59,7 @@ class NodeMgmtView(ViewSet):
                 permission_data={
                     "username": request.user.username,
                     "domain": request.user.domain,
-                    "current_team": request.COOKIES.get("current_team"),
+                    "current_team": actor_context["current_team"],
                 },
             )
         )
@@ -44,27 +67,29 @@ class NodeMgmtView(ViewSet):
 
     @action(methods=["post"], detail=False, url_path="batch_setting_node_child_config")
     def batch_setting_node_child_config(self, request):
+        actor_context = _build_actor_context(request)
         logger.debug(
             "batch_setting_node_child_config called by user=%s, current_team=%s",
             request.user.username,
             request.COOKIES.get("current_team"),
         )
-        InstanceConfigService.create_monitor_instance_by_node_mgmt(request.data)
+        InstanceConfigService.create_monitor_instance_by_node_mgmt(request.data, actor_context)
         return WebUtils.response_success()
 
     @action(methods=["post"], detail=False, url_path="get_instance_asso_config")
     def get_instance_child_config(self, request):
-        data = InstanceConfigService.get_instance_configs(request.data["instance_id"])
+        actor_context = _build_actor_context(request)
+        data = InstanceConfigService.get_instance_configs(request.data["instance_id"], actor_context)
         return WebUtils.response_success(data)
 
     @action(methods=["post"], detail=False, url_path="get_config_content")
     def get_config_content(self, request):
-        result = InstanceConfigService.get_config_content(request.data["ids"])
+        actor_context = _build_actor_context(request)
+        result = InstanceConfigService.get_config_content(request.data["ids"], actor_context)
         return WebUtils.response_success(result)
 
     @action(methods=["post"], detail=False, url_path="update_instance_collect_config")
     def update_instance_collect_config(self, request):
-        InstanceConfigService.update_instance_config(
-            request.data.get("child"), request.data.get("base")
-        )
+        actor_context = _build_actor_context(request)
+        InstanceConfigService.update_instance_config(request.data.get("child"), request.data.get("base"), actor_context)
         return WebUtils.response_success()

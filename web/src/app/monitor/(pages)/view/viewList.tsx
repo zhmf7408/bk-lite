@@ -48,7 +48,7 @@ const ViewList: React.FC<ViewListProps> = ({
   const router = useRouter();
   const { convertToLocalizedTime } = useLocalizedTime();
   const { getEnumValueUnit } = useUnitTransform();
-  const { getCollectType, getTableDiaplay } = useObjectConfigInfo();
+  const { getTableDiaplay } = useObjectConfigInfo();
   const viewRef = useRef<ModalRef>(null);
   const timerRef = useRef<NodeJS.Timeout | null>(null);
   const abortControllerRef = useRef<AbortController | null>(null);
@@ -279,10 +279,16 @@ const ViewList: React.FC<ViewListProps> = ({
         });
       }
       setQueryData(queryForm);
-      const _plugins = res[1].map((item: IntegrationItem) => ({
-        label: getCollectType(objName as string, item.name as string),
-        value: item.id
-      }));
+      const _plugins = res[1]
+        .sort((a: IntegrationItem, b: IntegrationItem) => {
+          const order = (item: IntegrationItem) =>
+            item.is_pre ? 0 : !item.is_custom ? 1 : 2;
+          return order(a) - order(b);
+        })
+        .map((item: IntegrationItem) => ({
+          label: item.display_name || item.name || '--',
+          value: item.id
+        }));
       setPlugins(_plugins);
       setMetrics(res[0] || []);
       if (objName) {

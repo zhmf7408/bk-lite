@@ -1,5 +1,6 @@
 from rest_framework import serializers
 from apps.log.models.policy import Policy, Alert, Event, EventRawData
+from apps.log.services.access_scope import LogAccessScopeService
 from apps.log.utils.log_group import LogGroupQueryBuilder
 
 
@@ -26,9 +27,7 @@ class PolicySerializer(serializers.ModelSerializer):
             return self.instance.collect_type_id
 
         initial_data = getattr(self, "initial_data", None)
-        collect_type = (
-            initial_data.get("collect_type") if isinstance(initial_data, dict) else None
-        )
+        collect_type = initial_data.get("collect_type") if isinstance(initial_data, dict) else None
         if collect_type in [None, "", "null"]:
             return None
 
@@ -54,7 +53,13 @@ class PolicySerializer(serializers.ModelSerializer):
 
     def validate_log_groups(self, value):
         """验证日志分组的有效性"""
-        if value:
+        request = self.context.get("request") if hasattr(self, "context") else None
+        if request is not None and value:
+            try:
+                LogAccessScopeService.resolve_scope(request, value)
+            except ValueError as exc:
+                raise serializers.ValidationError(str(exc))
+        elif value:
             is_valid, error_msg, _ = LogGroupQueryBuilder.validate_log_groups(value)
             if not is_valid:
                 raise serializers.ValidationError(error_msg)
@@ -72,17 +77,13 @@ class AlertSerializer(serializers.ModelSerializer):
     # 新增字段 - 改为使用SerializerMethodField
     organizations = serializers.SerializerMethodField()
     notice_users = serializers.ListField(source="policy.notice_users", read_only=True)
-    alert_condition = serializers.DictField(
-        source="policy.alert_condition", read_only=True
-    )
+    alert_condition = serializers.DictField(source="policy.alert_condition", read_only=True)
     show_fields = serializers.ListField(source="policy.show_fields", read_only=True)
     period = serializers.DictField(source="policy.period", read_only=True)
 
     def get_organizations(self, obj):
         """通过外键关系获取策略的组织列表"""
-        return list(
-            obj.policy.policyorganization_set.values_list("organization", flat=True)
-        )
+        return list(obj.policy.policyorganization_set.values_list("organization", flat=True))
 
     def get_collect_type_name(self, obj):
         if not obj.collect_type:

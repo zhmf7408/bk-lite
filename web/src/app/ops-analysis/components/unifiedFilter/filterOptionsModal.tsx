@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Modal, Input } from 'antd';
 import { HolderOutlined, PlusOutlined, MinusOutlined } from '@ant-design/icons';
 import {
@@ -106,6 +106,7 @@ const FilterOptionsModal: React.FC<FilterOptionsModalProps> = ({
 }) => {
   const { t } = useTranslation();
   const [options, setOptions] = useState<EditableOption[]>([]);
+  const hasInitializedRef = useRef(false);
 
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
@@ -116,8 +117,12 @@ const FilterOptionsModal: React.FC<FilterOptionsModalProps> = ({
 
   useEffect(() => {
     if (!open) {
+      hasInitializedRef.current = false;
       return;
     }
+
+    if (hasInitializedRef.current) return;
+    hasInitializedRef.current = true;
 
     setOptions(
       initialOptions.length > 0

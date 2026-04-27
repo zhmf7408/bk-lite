@@ -10,6 +10,7 @@ import SQLTask from './components/sqlTask';
 import CloudTask from './components/cloudTask';
 import HostTask from './components/hostTask';
 import IPMITask from './components/ipmiTask';
+import ConfigFileTask from './components/configFileTask';
 import TaskDetail from './components/taskDetail';
 import MarkdownRenderer from '@/components/markdown';
 import CustomTable from '@/components/custom-table';
@@ -63,7 +64,9 @@ const ProfessionalCollection: React.FC = () => {
   const pathname = usePathname();
   const searchParams = useSearchParams();
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  const { editingId, setEditingId, copyTaskData: _copyTaskData, setCopyTaskData } = useAssetManageStore();
+  const editingId = useAssetManageStore((state) => state.editingId);
+  const setEditingId = useAssetManageStore((state) => state.setEditingId);
+  const setCopyTaskData = useAssetManageStore((state) => state.setCopyTaskData);
   const syncStatusConfig = React.useMemo(() => getExecStatusConfig(t), [t]);
   const [drawerVisible, setDrawerVisible] = useState(false);
   const [categoryList, setCategoryList] = useState<TreeNode[]>([]);
@@ -564,16 +567,17 @@ const ProfessionalCollection: React.FC = () => {
       editId: editingId,
     };
 
-    const taskMap: Record<string, React.ComponentType<any>> = {
-      k8s: K8sTask,
-      vm: VMTask,
-      cloud: CloudTask,
-      host: HostTask,
-      db: HostTask,
-      middleware: HostTask,
-      snmp: SNMPTask,
-      protocol: SQLTask,
-    };
+      const taskMap: Record<string, React.ComponentType<any>> = {
+        k8s: K8sTask,
+        vm: VMTask,
+        cloud: CloudTask,
+        host: HostTask,
+        db: HostTask,
+        middleware: HostTask,
+        config_file: ConfigFileTask,
+        snmp: SNMPTask,
+        protocol: SQLTask,
+      };
 
     if (currentPlugin.id === 'physcial_server_ipmi') {
       return <IPMITask {...taskProps} />;

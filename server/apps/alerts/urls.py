@@ -9,6 +9,7 @@ from apps.alerts.views import (
     AlertSourceModelViewSet,
     AlertModelViewSet,
     EventModelViewSet,
+    K8sOpenAPIViewSet,
     LevelModelViewSet,
     IncidentModelViewSet,
     SystemSettingModelViewSet,
@@ -33,6 +34,7 @@ router.register(
     r"api/alarm_strategy", AlarmStrategyModelViewSet, basename="alarm_strategy"
 )
 router.register(r"api/log", SystemLogModelViewSet, basename="log")
+router.register(r"open_api/k8s", K8sOpenAPIViewSet, basename="alerts_k8s_open_api")
 
 urlpatterns = [
     path("api/test/", request_test),

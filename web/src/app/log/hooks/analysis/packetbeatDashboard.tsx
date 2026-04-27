@@ -9,6 +9,9 @@ export const usePacketbeatDashboard = () => {
     name: t('log.analysis.packetbeat.dashboardName'),
     desc: '',
     id: '1',
+    category: 'network',
+    categoryName: t('log.analysis.category.network'),
+    collectTypeName: 'flows',
     filters: {},
     other: {},
     view_sets: [
@@ -31,13 +34,13 @@ export const usePacketbeatDashboard = () => {
             type: 'multiple',
             key: 'network.transport',
             value: 'networkbytes',
-            tooltipField: 'network.transport',
+            tooltipField: 'network.transport'
           },
           dataSourceParams: {
             query:
-              'collect_type:"flows" | stats by (_time:${_time},network.transport) sum(network.bytes) as networkbytes| math networkbytes / 1024 / 1024 / 1024 as networkbytes',
-          },
-        },
+              'collect_type:"flows" | stats by (_time:${_time},network.transport) sum(network.bytes) as networkbytes| math networkbytes / 1024 / 1024 / 1024 as networkbytes'
+          }
+        }
       },
       {
         h: 3,
@@ -56,13 +59,13 @@ export const usePacketbeatDashboard = () => {
             type: 'single',
             key: 'networkbytes',
             value: 'networkbytes',
-            tooltipField: 'networkbytes',
+            tooltipField: 'networkbytes'
           },
           dataSourceParams: {
             query:
-              'collect_type:"flows" | stats by (_time:${_time}) sum(network.bytes) as networkbytes | math networkbytes / 1024 / 1024 / 1024 as networkbytes',
-          },
-        },
+              'collect_type:"flows" | stats by (_time:${_time}) sum(network.bytes) as networkbytes | math networkbytes / 1024 / 1024 / 1024 as networkbytes'
+          }
+        }
       },
       {
         h: 3,
@@ -81,13 +84,13 @@ export const usePacketbeatDashboard = () => {
             type: 'single',
             key: 'networkpackets',
             value: 'networkpackets',
-            tooltipField: 'networkpackets',
+            tooltipField: 'networkpackets'
           },
           dataSourceParams: {
             query:
-              'collect_type:"flows" | stats by (_time:${_time}) sum(network.packets) as networkpackets',
-          },
-        },
+              'collect_type:"flows" | stats by (_time:${_time}) sum(network.packets) as networkpackets'
+          }
+        }
       },
       {
         h: 4,
@@ -106,20 +109,20 @@ export const usePacketbeatDashboard = () => {
             {
               title: t('log.analysis.packetbeat.sourceIP'),
               dataIndex: 'source.ip',
-              key: 'source.ip',
+              key: 'source.ip'
             },
             {
               title: t('log.analysis.packetbeat.networkTrafficGB'),
               dataIndex: 'src_bytes',
               key: 'src_bytes',
-              render: (val: string) => formatNumericValue(val),
-            },
+              render: (val: string) => formatNumericValue(val)
+            }
           ],
           dataSourceParams: {
             query:
-              'collect_type:"flows" | stats by (source.ip) sum(network.bytes) as src_bytes | math src_bytes / 1024 / 1024 / 1024 as src_bytes| sort by (src_bytes desc) | limit 20',
-          },
-        },
+              'collect_type:"flows" | stats by (source.ip) sum(network.bytes) as src_bytes | math src_bytes / 1024 / 1024 / 1024 as src_bytes| sort by (src_bytes desc) | limit 20'
+          }
+        }
       },
       {
         h: 4,
@@ -138,20 +141,20 @@ export const usePacketbeatDashboard = () => {
             {
               title: t('log.analysis.packetbeat.destinationIP'),
               dataIndex: 'destination.ip',
-              key: 'destination.ip',
+              key: 'destination.ip'
             },
             {
               title: t('log.analysis.packetbeat.networkTrafficGB'),
               dataIndex: 'src_bytes',
               key: 'src_bytes',
-              render: (val: string) => formatNumericValue(val),
-            },
+              render: (val: string) => formatNumericValue(val)
+            }
           ],
           dataSourceParams: {
             query:
-              'collect_type:"flows" | stats by (destination.ip) sum(network.bytes) as src_bytes | math src_bytes / 1024 / 1024 / 1024 as src_bytes| sort by (src_bytes desc) | limit 20',
-          },
-        },
+              'collect_type:"flows" | stats by (destination.ip) sum(network.bytes) as src_bytes | math src_bytes / 1024 / 1024 / 1024 as src_bytes| sort by (src_bytes desc) | limit 20'
+          }
+        }
       },
       {
         h: 6,
@@ -176,15 +179,15 @@ export const usePacketbeatDashboard = () => {
               'destination.ip': t('log.analysis.packetbeat.destinationIP'),
               'network.transport': t('log.analysis.packetbeat.transport'),
               'source.port': t('log.analysis.packetbeat.sourcePort'),
-              'destination.port': t('log.analysis.packetbeat.destinationPort'),
-            },
+              'destination.port': t('log.analysis.packetbeat.destinationPort')
+            }
           },
           dataSourceParams: {
             query:
-              'collect_type:"flows" | stats by (source.ip, destination.ip, network.transport, source.port, destination.port) sum(network.bytes) as flow_bytes| math flow_bytes / 1024 / 1024 / 1024 as flow_bytes | sort by (flow_bytes desc) | limit 20',
-          },
-        },
-      },
-    ],
+              'collect_type:"flows" | stats by (source.ip, destination.ip, network.transport, source.port, destination.port) sum(network.bytes) as flow_bytes| math flow_bytes / 1024 / 1024 / 1024 as flow_bytes | sort by (flow_bytes desc) | limit 20'
+          }
+        }
+      }
+    ]
   };
 };

@@ -7,12 +7,8 @@ class NodeMgmt(object):
     def __init__(self, is_local_client=False):
         is_local_client = os.getenv("IS_LOCAL_RPC", "0") == "1" or is_local_client
 
-        self.permission_client = (
-            AppClient("apps.node_mgmt.nats.node.permission") if is_local_client else RpcClient()
-        )
-        self.client = (
-            AppClient("apps.node_mgmt.nats.node") if is_local_client else RpcClient()
-        )
+        self.permission_client = AppClient("apps.node_mgmt.nats.node.permission") if is_local_client else RpcClient()
+        self.client = AppClient("apps.node_mgmt.nats.node") if is_local_client else RpcClient()
 
     def get_module_data(self, **kwargs):
         """
@@ -56,17 +52,20 @@ class NodeMgmt(object):
         return_data = self.client.run("node_list", query_data)
         return return_data
 
-    def batch_create_configs_and_child_configs(
-        self, configs: list, child_configs: list
-    ):
+    def get_node_names_by_ids(self, node_ids):
+        """
+        :param node_ids: 节点ID列表
+        :return: [{"id": "node_id", "name": "node_name"}]
+        """
+        return self.client.run("get_node_names_by_ids", node_ids)
+
+    def batch_create_configs_and_child_configs(self, configs: list, child_configs: list):
         """
         批量创建配置和子配置
         :param configs: 配置列表
         :param child_configs: 子配置列表
         """
-        return_data = self.client.run(
-            "batch_create_configs_and_child_configs", configs, child_configs
-        )
+        return_data = self.client.run("batch_create_configs_and_child_configs", configs, child_configs)
         return return_data
 
     def batch_add_node_child_config(self, configs: list):
@@ -111,6 +110,14 @@ class NodeMgmt(object):
         :param ids: 配置ID列表
         """
         return_data = self.client.run("get_configs_by_ids", ids)
+        return return_data
+
+    def get_authorized_nodes_by_ids(self, node_ids, permission_data=None):
+        return_data = self.client.run(
+            "get_authorized_nodes_by_ids",
+            node_ids,
+            permission_data or {},
+        )
         return return_data
 
     def update_child_config_content(self, id, content, env_config=None):

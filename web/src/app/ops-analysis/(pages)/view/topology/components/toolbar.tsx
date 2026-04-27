@@ -13,6 +13,7 @@ import {
   EditOutlined,
   UndoOutlined,
   RedoOutlined,
+  SettingOutlined,
 } from '@ant-design/icons';
 
 const TopologyToolbar: React.FC<ToolbarProps> = ({
@@ -32,6 +33,8 @@ const TopologyToolbar: React.FC<ToolbarProps> = ({
   canRedo = false,
   onRefresh,
   onFrequencyChange,
+  onCancel,
+  onFilterConfig,
 }) => {
   const { t } = useTranslation();
 
@@ -122,15 +125,33 @@ const TopologyToolbar: React.FC<ToolbarProps> = ({
                 onClick={onDelete}
               />
             </Tooltip>
+            {onFilterConfig && (
+              <PermissionWrapper requiredPermissions={['EditChart']}>
+                <Button
+                  type="text"
+                  icon={<SettingOutlined style={{ fontSize: 16 }} />}
+                  onClick={onFilterConfig}
+                >
+                  {t('dashboard.configFilter')}
+                </Button>
+              </PermissionWrapper>
+            )}
           </>
         )}
 
         <div>
           <PermissionWrapper requiredPermissions={['EditChart']}>
             {isEditMode ? (
-              <Button type="primary" onClick={onSave} className="!ml-[20px]">
-                {t('common.save')}
-              </Button>
+              <div className="flex items-center gap-2 ml-5!">
+                {onCancel && (
+                  <Button onClick={onCancel}>
+                    {t('common.cancel')}
+                  </Button>
+                )}
+                <Button type="primary" onClick={onSave}>
+                  {t('common.save')}
+                </Button>
+              </div>
             ) : (
               <Tooltip title={t('common.edit')}>
                 <Button

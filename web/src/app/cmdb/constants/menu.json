@@ -39,6 +39,13 @@
           "url": "/cmdb/assetData/detail/changeRecords",
           "name": "asset_change_records",
           "withParentPermission": true
+        },
+        {
+          "title": "配置文件",
+          "icon": "shujumoxingguanli",
+          "url": "/cmdb/assetData/detail/configFiles",
+          "name": "asset_config_files",
+          "withParentPermission": true
         }
       ]
     },
@@ -153,6 +160,13 @@
           "icon": "shujumoxingguanli",
           "url": "/cmdb/assetData/detail/changeRecords",
           "name": "asset_change_records",
+          "withParentPermission": true
+        },
+        {
+          "title": "Config Files",
+          "icon": "shujumoxingguanli",
+          "url": "/cmdb/assetData/detail/configFiles",
+          "name": "asset_config_files",
           "withParentPermission": true
         }
       ]

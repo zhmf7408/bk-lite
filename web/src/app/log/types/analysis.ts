@@ -21,6 +21,7 @@ export interface DirItem {
   id: string;
   name: string;
   desc?: string;
+  collectTypeName?: string;
   filters?: Record<string, any>;
   other?: Record<string, any>;
   view_sets?: Array<any>;

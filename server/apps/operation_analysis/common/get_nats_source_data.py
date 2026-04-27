@@ -70,53 +70,53 @@ class GetNatsData:
 
         return client
 
-    def _get_target_namespaces(self):
+    def _get_target_namespace(self):
         """
-        从 params 中取出 namespace_ids（同时移除，避免透传给 NATS 接口），
-        返回本次需要查询的 namespace 列表。
+        从 params 中取出 namespace_id（同时移除，避免透传给 NATS 接口），
+        返回本次需要查询的单个 namespace 对象。
+        若未指定则返回第一个可用 namespace。
         """
-        namespace_ids = self.params.pop("namespace_ids", None)
-        if not namespace_ids:
-            return self.namespace_list
-
-        selected_ids = set()
-        items = namespace_ids if isinstance(namespace_ids, (list, tuple, set)) else [namespace_ids]
-        for item in items:
+        namespace_id = self.params.pop("namespace_id", None)
+        if namespace_id is not None:
             try:
-                selected_ids.add(int(item))
+                namespace_id = int(namespace_id)
             except (TypeError, ValueError):
-                continue
+                namespace_id = None
 
-        if not selected_ids:
-            return self.namespace_list
+        if namespace_id is not None:
+            for ns in self.namespace_list:
+                if ns.id == namespace_id:
+                    return ns
 
-        return [ns for ns in self.namespace_list if ns.id in selected_ids]
+        # 未指定或未匹配到，返回第一个
+        return self.namespace_list[0] if self.namespace_list else None
 
-    def get_data(self) -> dict:
+    def get_data(self):
         """
-        获取NATS数据源数据
-        :return: 数据内容
-        TODO 如果速度过慢，可以考虑使用多线程或异步方式来并发获取数据
+        获取单个 namespace 的 NATS 数据源数据，直接返回裸数据。
         """
-        result = {}
-        for namespace in self._get_target_namespaces():
-            server_url = self.namespace_server_map[namespace.id]
-            nats_namespace = getattr(namespace, 'namespace', 'bk_lite')
-            nats_client = self._get_client(server=server_url, namespace=nats_namespace)
-            try:
-                if hasattr(nats_client, "DEFAULT_NATS"):
-                    fun = getattr(nats_client, "get_customization_nast_data", None)
-                else:
-                    fun = getattr(nats_client, self.path, None)
-                if fun is None:
-                    raise RuntimeError(f"NamePaces({self.namespace}) Module not found func({self.path})!")
+        namespace = self._get_target_namespace()
+        if namespace is None:
+            return []
 
-                return_data = fun(**self.params)
-                result[namespace.name] = return_data.get("data", [])
-            except Exception as e:  # noqa
-                result[namespace.name] = []
-                import traceback
-                logger.error(
-                    "==获取NATS数据源数据失败==: namespace={} error={}".format(namespace.name, traceback.format_exc()))
+        server_url = self.namespace_server_map.get(namespace.id)
+        if not server_url:
+            return []
 
-        return result
+        nats_namespace = getattr(namespace, "namespace", "bk_lite")
+        nats_client = self._get_client(server=server_url, namespace=nats_namespace)
+        try:
+            if hasattr(nats_client, "DEFAULT_NATS"):
+                fun = getattr(nats_client, "get_customization_nast_data", None)
+            else:
+                fun = getattr(nats_client, self.path, None)
+            if fun is None:
+                raise RuntimeError(f"NamePaces({self.namespace}) Module not found func({self.path})!")
+
+            return_data = fun(**self.params)
+            return return_data.get("data", [])
+        except Exception as e:  # noqa
+            import traceback
+
+            logger.error("==获取NATS数据源数据失败==: namespace={} error={}".format(namespace.name, traceback.format_exc()))
+            return []

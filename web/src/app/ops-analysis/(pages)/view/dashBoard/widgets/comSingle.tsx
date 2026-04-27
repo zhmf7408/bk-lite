@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { Spin, Empty } from 'antd';
 import {
   getColorByThreshold,
@@ -17,26 +17,6 @@ interface ComSingleProps {
 
 const getValueByPathForSingle = (obj: unknown, path: string): unknown => {
   if (!obj || !path) return undefined;
-
-  if (Array.isArray(obj) && obj.length > 0) {
-    const firstItem = obj[0] as Record<string, unknown>;
-
-    if (firstItem && typeof firstItem === 'object' && firstItem.namespace_id && firstItem.data) {
-      if (path === 'namespace_id') {
-        return firstItem.namespace_id;
-      }
-
-      if (path.startsWith('data.')) {
-        const fieldPath = path.substring(5);
-
-        if (Array.isArray(firstItem.data) && firstItem.data.length > 0) {
-          return getValueByPathForSingle(firstItem.data[0], fieldPath);
-        } else if (typeof firstItem.data === 'object' && firstItem.data !== null) {
-          return getValueByPathForSingle(firstItem.data, fieldPath);
-        }
-      }
-    }
-  }
 
   return path.split('.').reduce((current, key) => {
     if (current === null || current === undefined) return undefined;
@@ -61,7 +41,8 @@ const ComSingle: React.FC<ComSingleProps> = ({
   config,
   onReady,
 }) => {
-  const [isDataReady, setIsDataReady] = useState(false);
+  const containerRef = useRef<HTMLDivElement>(null);
+  const [containerSize, setContainerSize] = useState({ width: 0, height: 0 });
 
   const extractValue = (data: unknown): number | string | null => {
     if (data === null || data === undefined) {
@@ -86,30 +67,12 @@ const ComSingle: React.FC<ComSingleProps> = ({
     if (Array.isArray(data) && data.length > 0) {
       const firstItem = data[0];
       if (firstItem && typeof firstItem === 'object') {
-        const dataField = (firstItem as Record<string, unknown>).data;
-        if (dataField !== undefined) {
-          if (typeof dataField === 'number' || typeof dataField === 'string') {
-            return dataField;
-          }
-          if (Array.isArray(dataField) && dataField.length > 0) {
-            const firstDataItem = dataField[0];
-            if (typeof firstDataItem === 'number' || typeof firstDataItem === 'string') {
-              return firstDataItem;
-            }
-            if (firstDataItem && typeof firstDataItem === 'object') {
-              const values = Object.values(firstDataItem as Record<string, unknown>);
-              for (const val of values) {
-                if (typeof val === 'number') return val;
-              }
-              for (const val of values) {
-                if (typeof val === 'string' && !isNaN(parseFloat(val))) return val;
-              }
-            }
-          }
-        }
         const values = Object.values(firstItem as Record<string, unknown>);
         for (const val of values) {
           if (typeof val === 'number') return val;
+        }
+        for (const val of values) {
+          if (typeof val === 'string' && !isNaN(parseFloat(val))) return val;
         }
       }
     }
@@ -131,6 +94,7 @@ const ComSingle: React.FC<ComSingleProps> = ({
 
   const thresholds: ThresholdColorConfig[] = config?.thresholdColors ?? DEFAULT_THRESHOLD_COLORS;
   const color = getColorByThreshold(numericValue, thresholds, '#000000');
+  const isDataReady = rawValue !== null;
   const displayValue = formatDisplayValue(
     numericValue,
     config?.unit,
@@ -140,11 +104,28 @@ const ComSingle: React.FC<ComSingleProps> = ({
 
   useEffect(() => {
     if (!loading) {
-      const hasData = rawValue !== null;
-      setIsDataReady(hasData);
-      onReady?.(hasData);
+      onReady?.(isDataReady);
     }
-  }, [rawValue, loading, onReady]);
+  }, [isDataReady, loading, onReady]);
+
+  useEffect(() => {
+    const element = containerRef.current;
+    if (!element) return;
+
+    const updateSize = () => {
+      setContainerSize({
+        width: element.clientWidth,
+        height: element.clientHeight,
+      });
+    };
+
+    updateSize();
+
+    const observer = new ResizeObserver(updateSize);
+    observer.observe(element);
+
+    return () => observer.disconnect();
+  }, []);
 
   if (loading) {
     return (
@@ -162,13 +143,24 @@ const ComSingle: React.FC<ComSingleProps> = ({
     );
   }
 
+  const displayText = String(displayValue);
+  const textLength = Math.max(displayText.length, 1);
+  const adaptiveFontSize = (() => {
+    const { width, height } = containerSize;
+    if (!width || !height) return 42;
+
+    const heightBasedSize = height * 0.5;
+    const widthBasedSize = width / Math.max(textLength * 0.6, 2.6);
+    return Math.max(36, Math.min(104, Math.min(heightBasedSize, widthBasedSize)));
+  })();
+
   return (
-    <div className="h-full flex flex-col items-center justify-center">
+    <div ref={containerRef} className="h-full flex flex-col items-center justify-center px-4">
       <div
-        className="text-4xl font-bold transition-colors duration-300"
-        style={{ color }}
+        className="font-bold transition-colors duration-300 leading-none text-center"
+        style={{ color, fontSize: adaptiveFontSize }}
       >
-        {displayValue}
+        {displayText}
       </div>
     </div>
   );

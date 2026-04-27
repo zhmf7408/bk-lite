@@ -88,8 +88,16 @@ MIDDLEWARE = (
 
 _install_apps = {item.strip() for item in os.getenv("INSTALL_APPS", "").split(",") if item.strip()}
 
+# 企业版：如果 apps/license_mgmt 目录存在，强制加载，无需依赖环境变量
+if os.path.isdir(os.path.join(BASE_DIR, "apps", "license_mgmt")):
+    _install_apps.add("license_mgmt")
+
 if "license_mgmt" in _install_apps:
-    MIDDLEWARE += ("apps.license_mgmt.middleware.license_guard.LicenseCreateGuardMiddleware",)
+    INSTALLED_APPS += ("apps.license_mgmt",)
+    MIDDLEWARE += (
+        "apps.license_mgmt.middleware.license_guard.LicenseAppGuardMiddleware",
+        "apps.license_mgmt.middleware.license_guard.LicenseCreateGuardMiddleware",
+    )
 
 # 达梦数据库环境下，添加连接管理中间件（放在最前面）
 if _db_engine == "dameng":
@@ -135,7 +143,7 @@ if os.path.exists(APPS_DIR):
 else:
     app_folders = []
 
-INSTALLED_APPS += tuple(f"apps.{app}" for app in app_folders)
+INSTALLED_APPS += tuple(f"apps.{app}" for app in app_folders if f"apps.{app}" not in INSTALLED_APPS)
 
 # 文件上传数量限制
 DATA_UPLOAD_MAX_NUMBER_FILES = 100

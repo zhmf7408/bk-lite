@@ -5,15 +5,18 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"nats-executor/logger"
 	"nats-executor/utils"
+	"nats-executor/utils/downloaderr"
 	"os/exec"
 	"runtime"
 	"strings"
 	"time"
 	"unicode/utf16"
+	"unicode/utf8"
 
 	"github.com/nats-io/nats.go"
 	"golang.org/x/text/encoding/simplifiedchinese"
@@ -95,11 +98,18 @@ func handleDownloadToLocalMessage(data []byte, instanceId string, nc downloadCon
 	err := downloadToLocalFile(downloadRequest, nc)
 	if err != nil {
 		message := fmt.Sprintf("Failed to download file: %v", err)
+		code := utils.ErrorCodeDependencyFailure
+		switch {
+		case downloaderr.KindOf(err) == downloaderr.KindTimeout || errors.Is(err, context.DeadlineExceeded):
+			code = utils.ErrorCodeTimeout
+		case downloaderr.KindOf(err) == downloaderr.KindIO:
+			code = utils.ErrorCodeExecutionFailure
+		}
 		resp = ExecuteResponse{
 			Success:    false,
 			Output:     message,
 			InstanceId: instanceId,
-			Code:       utils.ErrorCodeDependencyFailure,
+			Code:       code,
 			Error:      message,
 		}
 	} else {

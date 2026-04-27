@@ -5,11 +5,11 @@ import React, {
   useEffect,
   forwardRef,
   useRef,
-  useImperativeHandle,
+  useImperativeHandle
 } from 'react';
 import TimeSelector from '@/components/time-selector';
 import GridLayout, { WidthProvider } from 'react-grid-layout';
-import { Button, Dropdown, Menu, Modal, Spin, Select } from 'antd';
+import { Button, Dropdown, Menu, Modal, Spin, Select, message } from 'antd';
 import { useTranslation } from '@/utils/i18n';
 import { LayoutItem, DirItem } from '@/app/log/types/analysis';
 import { SaveOutlined, MoreOutlined } from '@ant-design/icons';
@@ -20,10 +20,12 @@ import { ListItem } from '@/app/log/types';
 import { TimeSelectorDefaultValue, TimeSelectorRef } from '@/types';
 import useIntegrationApi from '@/app/log/api/integration';
 import useApiClient from '@/utils/request';
+
 const { Option } = Select;
 
 interface DashboardProps {
   selectedDashboard?: DirItem | null;
+  selectedCollectTypeId?: React.Key | null;
   editable?: boolean;
 }
 
@@ -34,55 +36,99 @@ export interface DashboardRef {
 const ResponsiveGridLayout = WidthProvider(GridLayout);
 
 const Dashboard = forwardRef<DashboardRef, DashboardProps>(
-  ({ selectedDashboard, editable = false }, ref) => {
+  (
+    { selectedDashboard, selectedCollectTypeId = null, editable = false },
+    ref
+  ) => {
     const { t } = useTranslation();
-    const { getLogStreams } = useIntegrationApi();
+    const { getLogStreams, getInstanceList } = useIntegrationApi();
     const { isLoading } = useApiClient();
     const timeSelectorRef = useRef<TimeSelectorRef>(null);
+    const instanceAbortControllerRef = useRef<AbortController | null>(null);
+    const instanceRequestIdRef = useRef(0);
     const [layout, setLayout] = useState<LayoutItem[]>([]);
     const [originalLayout, setOriginalLayout] = useState<LayoutItem[]>([]);
     const [refreshKey, setRefreshKey] = useState(0);
     const [otherConfig, setOtherConfig] = useState<any>({});
-    const [originalOtherConfig, setOriginalOtherConfig] = useState<any>({});
+    const [originalOtherConfig] = useState<any>({});
     const [pageLoading, setPageLoading] = useState<boolean>(false);
     const timeDefaultValue: TimeSelectorDefaultValue = {
       selectValue: 15,
-      rangePickerVaule: null,
+      rangePickerVaule: null
     };
     const [groups, setGroups] = useState<React.Key[]>([]);
     const [groupList, setGroupList] = useState<ListItem[]>([]);
+    const [instanceOptions, setInstanceOptions] = useState<ListItem[]>([]);
+    const [instanceIds, setInstanceIds] = useState<React.Key[]>([]);
+    const [instanceLoading, setInstanceLoading] = useState(false);
+    const collectTypeName = selectedDashboard?.collectTypeName || '';
+    const showInstanceFilter = !!collectTypeName;
 
-    // 监听 selectedDashboard 的变化，重置状态
+    // 初始化分组数据（仅首次加载）
     useEffect(() => {
-      setRefreshKey(0);
       if (!isLoading) {
         initData();
       }
+    }, [isLoading]);
+
+    // 监听 selectedDashboard 的变化，仅更新 layout，保留筛选条件
+    useEffect(() => {
       if (!selectedDashboard) {
         setLayout([]);
         setOriginalLayout([]);
-        setOtherConfig({});
-        setOriginalOtherConfig({});
+        setInstanceIds([]);
+        setInstanceOptions([]);
         return;
       }
       const viewSets = selectedDashboard.view_sets || [];
       setLayout(viewSets);
       setOriginalLayout([...viewSets]);
-      const savedOtherConfig = selectedDashboard.other || {};
-      setOtherConfig(savedOtherConfig);
-      setOriginalOtherConfig({ ...savedOtherConfig });
-    }, [selectedDashboard?.id, isLoading]);
+      if (!groups.length && !isLoading) {
+        message.error(t('log.search.searchError'));
+        return;
+      }
+      setRefreshKey((prev) => prev + 1);
+    }, [selectedDashboard?.id]);
+
+    useEffect(() => {
+      if (!showInstanceFilter) {
+        instanceAbortControllerRef.current?.abort();
+        setInstanceIds([]);
+        setInstanceOptions([]);
+        setOtherConfig((prev: any) => ({
+          ...prev,
+          instanceIds: []
+        }));
+        return;
+      }
+
+      setInstanceIds([]);
+      setOtherConfig((prev: any) => ({
+        ...prev,
+        instanceIds: []
+      }));
+
+      if (!isLoading) {
+        loadInstancesByCollectType(selectedCollectTypeId);
+      }
+    }, [collectTypeName, isLoading, selectedCollectTypeId, showInstanceFilter]);
+
+    useEffect(() => {
+      return () => {
+        instanceAbortControllerRef.current?.abort();
+      };
+    }, []);
 
     const onFrequenceChange = (val: number) => {
       setOtherConfig((prev: any) => ({
         ...prev,
-        frequence: val,
+        frequence: val
       }));
     };
 
     // 暴露方法给父组件
     useImperativeHandle(ref, () => ({
-      hasUnsavedChanges,
+      hasUnsavedChanges
     }));
 
     const getTimeRange = () => {
@@ -95,7 +141,7 @@ const Dashboard = forwardRef<DashboardRef, DashboardProps>(
         setPageLoading(true);
         const data = await getLogStreams({
           page_size: -1,
-          page: 1,
+          page: 1
         });
         const list = data || [];
         const ids = list.at()?.id ? [list.at().id] : [];
@@ -103,10 +149,51 @@ const Dashboard = forwardRef<DashboardRef, DashboardProps>(
         setGroups(ids);
         setOtherConfig((prev: any) => ({
           ...prev,
-          groupIds: ids,
+          groupIds: ids
         }));
       } finally {
         setPageLoading(false);
+      }
+    };
+
+    const loadInstancesByCollectType = async (
+      collectTypeId: React.Key | null
+    ) => {
+      instanceAbortControllerRef.current?.abort();
+      const abortController = new AbortController();
+      instanceAbortControllerRef.current = abortController;
+      const currentRequestId = ++instanceRequestIdRef.current;
+
+      try {
+        setInstanceLoading(true);
+        if (!collectTypeId) {
+          setInstanceOptions([]);
+          return;
+        }
+        const instanceData = await getInstanceList(
+          {
+            collect_type_id: collectTypeId,
+            page: 1,
+            page_size: 1000
+          },
+          { signal: abortController.signal }
+        );
+        if (currentRequestId !== instanceRequestIdRef.current) return;
+
+        setInstanceOptions(
+          ((instanceData?.items as ListItem[]) || []).map((item) => ({
+            id: item.id,
+            name: item.name
+          }))
+        );
+      } catch (err: any) {
+        if (err?.name === 'CanceledError' || err?.code === 'ERR_CANCELED')
+          return;
+        setInstanceOptions([]);
+      } finally {
+        if (currentRequestId === instanceRequestIdRef.current) {
+          setInstanceLoading(false);
+        }
       }
     };
 
@@ -133,22 +220,47 @@ const Dashboard = forwardRef<DashboardRef, DashboardProps>(
     };
 
     const handleTimeChange = (range: number[]) => {
+      if (!groups.length) {
+        message.error(t('log.search.searchError'));
+        return;
+      }
       // 更新全局时间范围
       setOtherConfig((prev: any) => ({
         ...prev,
-        timeRange: range,
+        timeRange: range
       }));
     };
 
     const onGroupChange = (val: React.Key[]) => {
       setGroups(val);
+      if (!val.length) {
+        message.error(t('log.search.searchError'));
+      }
       setOtherConfig((prev: any) => ({
         ...prev,
-        groupIds: val,
+        groupIds: val
+      }));
+    };
+
+    const onInstanceChange = (val: React.Key[]) => {
+      setInstanceIds(val);
+      setOtherConfig((prev: any) => ({
+        ...prev,
+        instanceIds: val
       }));
     };
 
     const handleRefresh = () => {
+      if (!groups.length) {
+        message.error(t('log.search.searchError'));
+        return;
+      }
+      // 重新获取时间选择器的最新值，确保定时刷新时时间范围是最新的
+      const latestTimeRange = getTimeRange();
+      setOtherConfig((prev: any) => ({
+        ...prev,
+        timeRange: latestTimeRange
+      }));
       setRefreshKey((prev) => prev + 1);
     };
 
@@ -170,7 +282,7 @@ const Dashboard = forwardRef<DashboardRef, DashboardProps>(
         desc: selectedDashboard?.desc || '',
         filters: {},
         other: otherConfig,
-        view_sets: layout,
+        view_sets: layout
       };
       console.log(saveData);
     };
@@ -192,7 +304,7 @@ const Dashboard = forwardRef<DashboardRef, DashboardProps>(
           } catch {
             console.error(t('common.operateFailed'));
           }
-        },
+        }
       });
     };
 
@@ -205,25 +317,25 @@ const Dashboard = forwardRef<DashboardRef, DashboardProps>(
               .readonly-widget .react-resizable-handle {
                 display: none !important;
               }
-            `,
+            `
             }}
           />
         )}
-        <div className="w-full mb-2 flex items-center justify-between rounded-lg shadow-sm bg-[var(--color-bg-1)] p-3 border border-[var(--color-border-2)]">
+        <div className="w-full mb-2 flex items-center justify-between gap-3 overflow-x-auto rounded-lg shadow-sm bg-[var(--color-bg-1)] p-3 border border-[var(--color-border-2)]">
           {selectedDashboard && (
-            <div className="p-1 pt-0">
-              <h2 className="text-lg font-semibold mb-1 text-[var(--color-text-1)]">
+            <div className="min-w-fit shrink-0 p-1 pt-0">
+              <h2 className="mb-1 whitespace-nowrap text-lg font-semibold text-[var(--color-text-1)]">
                 {t('log.analysis.dashboard')}
               </h2>
-              <p className="text-sm text-[var(--color-text-2)]">
+              <p className="max-w-[220px] truncate text-sm text-[var(--color-text-2)]">
                 {selectedDashboard.desc}
               </p>
             </div>
           )}
-          <div className="flex items-center mx-4 my-2 justify-between">
+          <div className="mx-4 my-2 flex min-w-0 flex-1 items-center justify-end gap-2 whitespace-nowrap">
             <Select
               style={{
-                width: '250px',
+                width: '150px'
               }}
               loading={pageLoading}
               showSearch
@@ -239,20 +351,39 @@ const Dashboard = forwardRef<DashboardRef, DashboardProps>(
                 </Option>
               ))}
             </Select>
-            {
-              <div className="flex items-center mx-[8px]">
-                <TimeSelector
-                  ref={timeSelectorRef}
-                  key={`time-selector-${selectedDashboard?.id || 'default'}`}
-                  defaultValue={timeDefaultValue}
-                  onChange={handleTimeChange}
-                  onRefresh={handleRefresh}
-                  onFrequenceChange={onFrequenceChange}
-                />
-              </div>
-            }
+            {showInstanceFilter && (
+              <Select
+                className="w-[150px] flex-none"
+                loading={instanceLoading}
+                showSearch
+                mode="multiple"
+                maxTagCount="responsive"
+                placeholder={t('log.analysis.selectInstance')}
+                value={instanceIds}
+                onChange={(val) => onInstanceChange(val)}
+                optionFilterProp="children"
+              >
+                {instanceOptions.map((item) => (
+                  <Option value={item.id} key={item.id}>
+                    {item.name}
+                  </Option>
+                ))}
+              </Select>
+            )}
+            <div className="flex flex-none items-center">
+              <TimeSelector
+                className="flex-none"
+                ref={timeSelectorRef}
+                key="time-selector"
+                defaultValue={timeDefaultValue}
+                onChange={handleTimeChange}
+                onRefresh={handleRefresh}
+                onFrequenceChange={onFrequenceChange}
+              />
+            </div>
             {editable && (
               <Button
+                className="flex-none"
                 icon={<SaveOutlined />}
                 disabled={!selectedDashboard?.id}
                 onClick={handleSave}
@@ -332,6 +463,7 @@ const Dashboard = forwardRef<DashboardRef, DashboardProps>(
                           globalTimeRange={getTimeRange()}
                           refreshKey={refreshKey}
                           editable={editable}
+                          getLatestTimeRange={getTimeRange}
                         />
                       </div>
                     </div>

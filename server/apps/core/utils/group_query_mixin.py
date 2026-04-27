@@ -2,7 +2,9 @@
 组织级联查询混合类
 提供统一的组织权限过滤方法，确保查询集合与"选择组织 + 用户权限"一致
 """
+
 from apps.core.logger import logger
+from apps.core.utils.user_group import normalize_user_group_ids
 from apps.system_mgmt.utils.group_utils import GroupUtils
 
 
@@ -81,7 +83,7 @@ class GroupQueryMixin:
 
         # 普通用户，从user.group_list获取
         if hasattr(request.user, "group_list"):
-            return [i["id"] for i in request.user.group_list] or []
+            return normalize_user_group_ids(request.user.group_list)
 
         logger.warning(f"无法获取用户 {request.user.username} 的组织列表")
         return []

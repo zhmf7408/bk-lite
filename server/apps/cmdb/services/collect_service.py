@@ -9,7 +9,7 @@ from django.conf import settings
 from django.db import transaction
 from django.utils.timezone import now
 
-from apps.cmdb.constants.constants import CollectRunStatusType, OPERATOR_COLLECT_TASK, DataCleanupStrategy
+from apps.cmdb.constants.constants import CollectPluginTypes, CollectRunStatusType, OPERATOR_COLLECT_TASK, DataCleanupStrategy
 from apps.cmdb.models import CREATE_INST, UPDATE_INST, DELETE_INST, EXECUTE
 from apps.cmdb.node_configs.config_factory import NodeParamsFactory
 from apps.cmdb.collection.collect_tasks.protocol_collect import ProtocolCollect
@@ -22,6 +22,8 @@ from apps.core.utils.web_utils import WebUtils
 from apps.rpc.node_mgmt import NodeMgmt
 from apps.rpc.stargazer import Stargazer
 from apps.cmdb.tasks.celery_tasks import sync_collect_task
+from apps.node_mgmt.models.cloud_region import CloudRegion
+from apps.node_mgmt.models.sidecar import Node
 
 
 class CollectModelService(object):
@@ -31,6 +33,10 @@ class CollectModelService(object):
     DELAY_SYNC_THRESHOLD_MINUTES = 15
     # 延迟补跑等待时长（秒）
     DELAY_SYNC_COUNTDOWN_SECONDS = 4 * 60
+
+    @staticmethod
+    def should_sync_node_params(instance):
+        return not instance.is_k8s
 
     @staticmethod
     def has_permission(request, instance, view_self):
@@ -69,7 +75,7 @@ class CollectModelService(object):
             "cycle_value": data["scan_cycle"]["value"],
             "cycle_value_type": data["scan_cycle"]["value_type"],
             "team": data["team"],  # 把组织单独抽出来，方便权限控制
-            "expire_days":data.get("expire_days", 0),
+            "expire_days": data.get("expire_days", 0),
             "data_cleanup_strategy": data.get("data_cleanup_strategy", DataCleanupStrategy.NO_CLEANUP),
         }
 
@@ -81,6 +87,151 @@ class CollectModelService(object):
             params["scan_cycle"] = scan_cycle
 
         return params, is_interval, scan_cycle
+
+    @staticmethod
+    def _get_snapshot_item(snapshot):
+        if isinstance(snapshot, dict):
+            return snapshot
+        if isinstance(snapshot, list) and snapshot:
+            item = snapshot[0]
+            if isinstance(item, dict):
+                return item
+        return {}
+
+    @staticmethod
+    def _get_cloud_region_id_by_node(node_id):
+        if node_id in (None, ""):
+            return None
+        node = Node.objects.filter(id=str(node_id)).only("cloud_region_id").first()
+        return getattr(node, "cloud_region_id", None)
+
+    @staticmethod
+    def _get_cloud_region_name(cloud_id):
+        if cloud_id in (None, ""):
+            return ""
+        cloud_name = CloudRegion.objects.filter(id=cloud_id).values_list("name", flat=True).first()
+        return str(cloud_name or "").strip()
+
+    @classmethod
+    def _resolve_host_cloud_meta(cls, params=None, access_point=None, instances=None, prefer_access_point=False):
+        params = params if isinstance(params, dict) else {}
+        access_point_item = cls._get_snapshot_item(access_point)
+        instance_item = cls._get_snapshot_item(instances)
+
+        access_point_cloud = (
+            access_point_item.get("cloud")
+            or access_point_item.get("cloud_id")
+            or access_point_item.get("cloud_region")
+        )
+        access_point_cloud_name = access_point_item.get("cloud_name") or access_point_item.get("cloud_region_name")
+
+        task_cloud = params.get("cloud") or instance_item.get("cloud") or instance_item.get("cloud_id")
+        task_cloud_name = params.get("cloud_name") or instance_item.get("cloud_name")
+
+        if prefer_access_point:
+            if access_point_cloud not in (None, ""):
+                cloud = access_point_cloud
+                cloud_name = access_point_cloud_name or ""
+            else:
+                cloud = task_cloud
+                cloud_name = task_cloud_name
+        else:
+            cloud = task_cloud or access_point_cloud
+            cloud_name = task_cloud_name or access_point_cloud_name
+
+        if cloud in (None, ""):
+            node_id = access_point_item.get("id") or access_point_item.get("node_id")
+            cloud = cls._get_cloud_region_id_by_node(node_id)
+
+        if not cloud_name:
+            cloud_name = cls._get_cloud_region_name(cloud)
+
+        return cloud, cloud_name
+
+    @classmethod
+    def enrich_host_cloud_snapshot_payload(cls, data):
+        if not isinstance(data, dict) or data.get("task_type") != CollectPluginTypes.HOST:
+            return False
+
+        params = data.get("params")
+        if not isinstance(params, dict):
+            params = {}
+
+        instances = data.get("instances")
+        if not isinstance(instances, list):
+            instances = []
+
+        cloud, cloud_name = cls._resolve_host_cloud_meta(
+            params=params,
+            access_point=data.get("access_point"),
+            instances=instances,
+            prefer_access_point=True,
+        )
+
+        changed = False
+        if cloud not in (None, "") and params.get("cloud") != cloud:
+            params["cloud"] = cloud
+            changed = True
+        if cloud_name and params.get("cloud_name") != cloud_name:
+            params["cloud_name"] = cloud_name
+            changed = True
+
+        for instance_item in instances:
+            if not isinstance(instance_item, dict):
+                continue
+            if cloud not in (None, "") and instance_item.get("cloud") != cloud:
+                instance_item["cloud"] = cloud
+                changed = True
+            if cloud_name and instance_item.get("cloud_name") != cloud_name:
+                instance_item["cloud_name"] = cloud_name
+                changed = True
+
+        data["params"] = params
+        data["instances"] = instances
+        return changed
+
+    @classmethod
+    def repair_host_cloud_snapshot(cls, instance, persist=True):
+        if not instance or not instance.is_host:
+            return False
+
+        payload = {
+            "task_type": instance.task_type,
+            "access_point": copy.deepcopy(instance.access_point),
+            "instances": copy.deepcopy(instance.instances),
+            "params": copy.deepcopy(instance.params),
+        }
+        changed = cls.enrich_host_cloud_snapshot_payload(payload)
+        if not changed:
+            cloud, cloud_name = cls._resolve_host_cloud_meta(
+                params=payload["params"],
+                access_point=payload["access_point"],
+                instances=payload["instances"],
+                prefer_access_point=False,
+            )
+            if cloud not in (None, "") and payload["params"].get("cloud") != cloud:
+                payload["params"]["cloud"] = cloud
+                changed = True
+            if cloud_name and payload["params"].get("cloud_name") != cloud_name:
+                payload["params"]["cloud_name"] = cloud_name
+                changed = True
+            for instance_item in payload["instances"]:
+                if not isinstance(instance_item, dict):
+                    continue
+                if cloud not in (None, "") and instance_item.get("cloud") != cloud:
+                    instance_item["cloud"] = cloud
+                    changed = True
+                if cloud_name and instance_item.get("cloud_name") != cloud_name:
+                    instance_item["cloud_name"] = cloud_name
+                    changed = True
+            if not changed:
+                return False
+
+        instance.params = payload["params"]
+        instance.instances = payload["instances"]
+        if persist:
+            instance.save(update_fields=["params", "instances"])
+        return True
 
     @staticmethod
     def format_update_credential(instance, data):
@@ -150,12 +301,14 @@ class CollectModelService(object):
     @staticmethod
     def is_schedule_config_changed(old_instance, new_instance):
         # update 仅在调度配置变化时才补跑，避免普通字段编辑导致重复触发
-        return any([
-            old_instance.is_interval != new_instance.is_interval,
-            old_instance.cycle_value_type != new_instance.cycle_value_type,
-            str(old_instance.cycle_value or "") != str(new_instance.cycle_value or ""),
-            str(old_instance.scan_cycle or "") != str(new_instance.scan_cycle or ""),
-        ])
+        return any(
+            [
+                old_instance.is_interval != new_instance.is_interval,
+                old_instance.cycle_value_type != new_instance.cycle_value_type,
+                str(old_instance.cycle_value or "") != str(new_instance.cycle_value or ""),
+                str(old_instance.scan_cycle or "") != str(new_instance.scan_cycle or ""),
+            ]
+        )
 
     @staticmethod
     def push_butch_node_params(instance):
@@ -184,6 +337,7 @@ class CollectModelService(object):
     @classmethod
     def create(cls, request, view_self):
         create_data, is_interval, scan_cycle = cls.format_params(request.data)
+        cls.enrich_host_cloud_snapshot_payload(create_data)
 
         # 使用数据库事务保证原子性：DB + 外部操作要么全成功，要么全失败
         with transaction.atomic():
@@ -198,31 +352,34 @@ class CollectModelService(object):
                 # 更新定时任务
                 if is_interval:
                     task_name = f"{cls.NAME}_{instance.id}"
-                    CeleryUtils.create_or_update_periodic_task(name=task_name, crontab=scan_cycle, args=[instance.id],
-                                                               task=cls.TASK)
+                    CeleryUtils.create_or_update_periodic_task(name=task_name, crontab=scan_cycle, args=[instance.id], task=cls.TASK)
                     # create 场景满足阈值则注册一次延迟补跑
                     cls.schedule_delayed_sync_if_needed(instance=instance, is_interval=is_interval)
 
                 # RPC 调用：推送节点参数
-                if not instance.is_k8s:
+                if cls.should_sync_node_params(instance):
                     cls.push_butch_node_params(instance)
             except Exception as e:
                 # 外部操作失败，记录详细错误日志并抛出异常，触发事务回滚
-                logger.error(
-                    f"创建采集任务时外部操作失败，事务将回滚: task_name={instance.name}, error={str(e)}")
+                logger.error(f"创建采集任务时外部操作失败，事务将回滚: task_name={instance.name}, error={str(e)}")
                 # 重新抛出异常，让事务回滚
                 raise BaseAppException(f"创建采集任务失败：{str(e)}")
 
             # 只有所有操作都成功，才创建变更记录
-            create_change_record(operator=request.user.username, model_id=instance.model_id, label="采集任务",
-                                 _type=CREATE_INST, message=f"创建采集任务. 任务名称: {instance.name}",
-                                 inst_id=instance.id, model_object=OPERATOR_COLLECT_TASK)
+            create_change_record(
+                operator=request.user.username,
+                model_id=instance.model_id,
+                label="采集任务",
+                _type=CREATE_INST,
+                message=f"创建采集任务. 任务名称: {instance.name}",
+                inst_id=instance.id,
+                model_object=OPERATOR_COLLECT_TASK,
+            )
 
         return instance.id
 
     @classmethod
     def update(cls, request, view_self):
-
         # 获取旧实例数据（在事务外）
         instance = view_self.get_object()
         old_instance = copy.deepcopy(instance)
@@ -230,10 +387,10 @@ class CollectModelService(object):
         cls.has_permission(request, instance, view_self)
         update_data, is_interval, scan_cycle = cls.format_params(request.data)
         cls.format_update_credential(instance, update_data)
+        cls.enrich_host_cloud_snapshot_payload(update_data)
         # 使用数据库事务保证原子性
         with transaction.atomic():
-            serializer = view_self.get_serializer(
-                instance, data=update_data, partial=True)
+            serializer = view_self.get_serializer(instance, data=update_data, partial=True)
             serializer.is_valid(raise_exception=True)
             view_self.perform_update(serializer)
 
@@ -242,8 +399,7 @@ class CollectModelService(object):
                 task_name = f"{cls.NAME}_{instance.id}"
                 # 更新定时任务
                 if is_interval:
-                    CeleryUtils.create_or_update_periodic_task(name=task_name, crontab=scan_cycle,
-                                                               args=[instance.id], task=cls.TASK)
+                    CeleryUtils.create_or_update_periodic_task(name=task_name, crontab=scan_cycle, args=[instance.id], task=cls.TASK)
                     if cls.is_schedule_config_changed(old_instance=old_instance, new_instance=instance):
                         # update 场景仅在调度参数变更时注册延迟补跑
                         cls.schedule_delayed_sync_if_needed(instance=instance, is_interval=is_interval)
@@ -251,20 +407,25 @@ class CollectModelService(object):
                     CeleryUtils.delete_periodic_task(task_name)
 
                 # RPC 调用：先删除旧节点参数，再推送新节点参数
-                if not instance.is_k8s:
+                if cls.should_sync_node_params(instance):
                     cls.delete_butch_node_params(old_instance)
                     cls.push_butch_node_params(instance)
             except Exception as e:
                 # 外部操作失败，记录错误并抛出异常，触发事务回滚
-                logger.error(
-                    f"更新采集任务时外部操作失败，事务将回滚: task_name={instance.name}, error={str(e)}")
+                logger.error(f"更新采集任务时外部操作失败，事务将回滚: task_name={instance.name}, error={str(e)}")
                 raise BaseAppException(f"更新采集任务失败：{str(e)}")
 
             cls.delete_team(instance.id, old_instance.team, request.data["team"], view_self)
             # 只有所有操作都成功，才创建变更记录
-            create_change_record(operator=request.user.username, model_id=instance.model_id, label="采集任务",
-                                 _type=UPDATE_INST, message=f"修改采集任务. 任务名称: {instance.name}",
-                                 inst_id=instance.id, model_object=OPERATOR_COLLECT_TASK)
+            create_change_record(
+                operator=request.user.username,
+                model_id=instance.model_id,
+                label="采集任务",
+                _type=UPDATE_INST,
+                message=f"修改采集任务. 任务名称: {instance.name}",
+                inst_id=instance.id,
+                model_object=OPERATOR_COLLECT_TASK,
+            )
 
         return instance.id
 
@@ -290,19 +451,24 @@ class CollectModelService(object):
                 CeleryUtils.delete_periodic_task(task_name)
 
                 # RPC 调用：删除节点参数
-                if not is_k8s:
+                if cls.should_sync_node_params(instance_copy):
                     cls.delete_butch_node_params(instance_copy)
             except Exception as e:
                 # 外部资源清理失败，记录错误并抛出异常，触发事务回滚
-                logger.error(
-                    f"删除采集任务时外部资源清理失败，事务将回滚: task_name={instance_name}, error={str(e)}")
+                logger.error(f"删除采集任务时外部资源清理失败，事务将回滚: task_name={instance_name}, error={str(e)}")
                 raise BaseAppException(f"删除采集任务失败：{str(e)}")
 
             # 外部资源清理成功后，再删除数据库记录
             instance.delete()
-            create_change_record(operator=request.user.username, model_id=model_id, label="采集任务",
-                                 _type=DELETE_INST, message=f"删除采集任务. 任务名称: {instance_name}",
-                                 inst_id=instance_id, model_object=OPERATOR_COLLECT_TASK)
+            create_change_record(
+                operator=request.user.username,
+                model_id=model_id,
+                label="采集任务",
+                _type=DELETE_INST,
+                message=f"删除采集任务. 任务名称: {instance_name}",
+                inst_id=instance_id,
+                model_object=OPERATOR_COLLECT_TASK,
+            )
 
         cls.delete_team(instance_copy.id, instance_copy.team, [], view_self)
 
@@ -327,6 +493,7 @@ class CollectModelService(object):
         if instance.exec_status == CollectRunStatusType.RUNNING:
             return WebUtils.response_error(error_message="任务正在执行中!无法重复执行！", status_code=400)
 
+        cls.repair_host_cloud_snapshot(instance)
         instance.exec_time = now()
         instance.exec_status = CollectRunStatusType.RUNNING
         instance.format_data = {}
@@ -338,8 +505,14 @@ class CollectModelService(object):
         else:
             sync_collect_task(instance.id)
 
-        create_change_record(operator=request.user.username, model_id=instance.model_id, label="采集任务",
-                             _type=EXECUTE, message=f"执行采集任务. 任务名称: {instance.name}",
-                             inst_id=instance.id, model_object=OPERATOR_COLLECT_TASK)
+        create_change_record(
+            operator=request.user.username,
+            model_id=instance.model_id,
+            label="采集任务",
+            _type=EXECUTE,
+            message=f"执行采集任务. 任务名称: {instance.name}",
+            inst_id=instance.id,
+            model_object=OPERATOR_COLLECT_TASK,
+        )
 
         return WebUtils.response_success(instance.id)

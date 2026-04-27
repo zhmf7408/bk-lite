@@ -4,5 +4,6 @@ export { useInstanceApi } from './instance';
 export { useChangeRecordApi } from './changeRecord';
 export { useOidApi } from './oid';
 export { useCollectApi } from './collect';
+export { useConfigFileApi } from './configFile';
 export { useUserConfigApi, useSavedFiltersApi, type SavedFilterItem, type SavedFilterCondition } from './userConfig';
 export { useSubscriptionApi } from './subscription';

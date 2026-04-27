@@ -13,6 +13,7 @@ from apps.opspilot.models import LLMModel, LLMSkill
 from apps.opspilot.services.chat_service import ChatService, chat_service
 from apps.opspilot.utils.agent_factory import create_agent_instance
 from apps.opspilot.utils.chat_flow_utils.engine.core.base_executor import BaseNodeExecutor
+from apps.opspilot.utils.prompt_utils import resolve_skill_params
 
 
 class AgentNode(BaseNodeExecutor):
@@ -128,7 +129,7 @@ class AgentNode(BaseNodeExecutor):
         logger.info(f"is_third_party：{is_third_party}")
         return {
             "llm_model": skill.llm_model_id,
-            "skill_prompt": skill.skill_prompt,
+            "skill_prompt": resolve_skill_params(skill.skill_prompt, skill.skill_params),
             "temperature": skill.temperature,
             "chat_history": [{"event": "user", "message": final_message}],
             "user_message": final_message,
