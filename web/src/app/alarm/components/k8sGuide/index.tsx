@@ -105,14 +105,6 @@ const K8sGuide: React.FC<K8sGuideProps> = ({
         <div>
           <div className="font-medium mb-2">3. {t('integration.prepareImage')}</div>
           <div className="rounded border border-[var(--color-border-1)] bg-[var(--color-bg-1)] p-3 space-y-2">
-            <Space wrap>
-              <Button
-                icon={<DownloadOutlined />}
-                onClick={() => onDownload('image_tar', 'kubernetes-event-exporter.tar', renderParams)}
-              >
-                {t('integration.downloadOfflineImagePackage')}
-              </Button>
-            </Space>
             <div className="flex items-center gap-2 break-all">
               <span>{meta.image_reference}</span>
               <Button type="link" size="small" icon={<CopyOutlined />} onClick={() => copy(meta.image_reference)} />
