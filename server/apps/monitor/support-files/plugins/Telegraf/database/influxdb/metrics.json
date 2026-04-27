@@ -11,6 +11,7 @@
   "supplementary_indicators": [
     "influxdb_database_numSeries",
     "influxdb_httpd_writeReq_rate",
+    "influxdb_httpd_queryReq_rate",
     "influxdb_httpd_pointsWrittenFail_rate",
     "influxdb_httpd_pointsWrittenDropped_rate",
     "influxdb_runtime_HeapAlloc"
@@ -38,15 +39,15 @@
       "display_name": "HTTP 认证失败速率",
       "instance_id_keys": ["instance_id"],
       "data_type": "Number",
-      "unit": "cpm",
+      "unit": "cps",
       "dimensions": [
         {
           "name": "bind",
           "description": "监听地址"
         }
       ],
-      "description": "HTTP 接口最近 1 分钟的认证失败次数。",
-      "query": "sum(increase(influxdb_httpd_authFail{__$labels__}[1m])) by (instance_id, bind)"
+      "description": "最近 5 分钟 HTTP 接口认证失败的平均速率。",
+      "query": "sum(rate(influxdb_httpd_authFail{__$labels__}[5m])) by (instance_id, bind)"
     },
     {
       "metric_group": "请求与错误",
@@ -54,15 +55,15 @@
       "display_name": "HTTP 4XX 错误速率",
       "instance_id_keys": ["instance_id"],
       "data_type": "Number",
-      "unit": "cpm",
+      "unit": "cps",
       "dimensions": [
         {
           "name": "bind",
           "description": "监听地址"
         }
       ],
-      "description": "HTTP 接口最近 1 分钟返回的 4XX 错误次数。",
-      "query": "sum(increase(influxdb_httpd_clientError{__$labels__}[1m])) by (instance_id, bind)"
+      "description": "最近 5 分钟 HTTP 接口返回 4XX 错误的平均速率。",
+      "query": "sum(rate(influxdb_httpd_clientError{__$labels__}[5m])) by (instance_id, bind)"
     },
     {
       "metric_group": "请求与错误",
@@ -70,15 +71,15 @@
       "display_name": "HTTP 5XX 错误速率",
       "instance_id_keys": ["instance_id"],
       "data_type": "Number",
-      "unit": "cpm",
+      "unit": "cps",
       "dimensions": [
         {
           "name": "bind",
           "description": "监听地址"
         }
       ],
-      "description": "HTTP 接口最近 1 分钟返回的 5XX 错误次数。",
-      "query": "sum(increase(influxdb_httpd_serverError{__$labels__}[1m])) by (instance_id, bind)"
+      "description": "最近 5 分钟 HTTP 接口返回 5XX 错误的平均速率。",
+      "query": "sum(rate(influxdb_httpd_serverError{__$labels__}[5m])) by (instance_id, bind)"
     },
     {
       "metric_group": "写入稳定性",
@@ -86,15 +87,15 @@
       "display_name": "写点丢弃速率",
       "instance_id_keys": ["instance_id"],
       "data_type": "Number",
-      "unit": "cpm",
+      "unit": "cps",
       "dimensions": [
         {
           "name": "bind",
           "description": "监听地址"
         }
       ],
-      "description": "写入接口最近 1 分钟已接收但在持久化前被丢弃的数据点数量。",
-      "query": "sum(increase(influxdb_httpd_pointsWrittenDropped{__$labels__}[1m])) by (instance_id, bind)"
+      "description": "最近 5 分钟写入接口已接收但在持久化前被丢弃的数据点平均速率。",
+      "query": "sum(rate(influxdb_httpd_pointsWrittenDropped{__$labels__}[5m])) by (instance_id, bind)"
     },
     {
       "metric_group": "写入稳定性",
@@ -102,15 +103,15 @@
       "display_name": "写入持久化失败速率",
       "instance_id_keys": ["instance_id"],
       "data_type": "Number",
-      "unit": "cpm",
+      "unit": "cps",
       "dimensions": [
         {
           "name": "bind",
           "description": "监听地址"
         }
       ],
-      "description": "写入接口最近 1 分钟已接收但持久化失败的数据点数量。",
-      "query": "sum(increase(influxdb_httpd_pointsWrittenFail{__$labels__}[1m])) by (instance_id, bind)"
+      "description": "最近 5 分钟写入接口已接收但持久化失败的数据点平均速率。",
+      "query": "sum(rate(influxdb_httpd_pointsWrittenFail{__$labels__}[5m])) by (instance_id, bind)"
     },
     {
       "metric_group": "请求与错误",
