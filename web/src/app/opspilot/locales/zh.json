@@ -621,6 +621,7 @@
       "key": "密钥",
       "copied": "已复制到粘贴板",
       "selectGroup": "选择组织",
+      "group": "组织",
       "content": "为了防止API滥用，请保护你的API密钥。",
       "deleteConfirm": "你确定要删除选中的密钥吗？",
       "create": "创建新密钥"
