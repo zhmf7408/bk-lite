@@ -11,6 +11,7 @@ import { SelectTool, ToolVariable } from '@/app/opspilot/types/tool';
 import { useSkillApi } from '@/app/opspilot/api/skill';
 import OperateModal from '@/components/operate-modal';
 import EditablePasswordField from '@/components/dynamic-form/editPasswordField';
+import GroupTreeSelect from '@/components/group-tree-select';
 import RedisToolEditor, { RedisInstanceFormValue } from './redisToolEditor';
 import MysqlToolEditor, { MysqlInstanceFormValue } from './mysqlToolEditor';
 import OracleToolEditor, { OracleInstanceFormValue } from './oracleToolEditor';
@@ -380,6 +381,7 @@ const serializeOracleToolConfig = (instances: OracleInstanceFormValue[]): ToolVa
 const isOracleTool = (tool?: SelectTool | null) => (tool?.rawName || tool?.name) === ORACLE_TOOL_NAME;
 
 const MSSQL_TOOL_NAME = 'mssql';
+const MONITOR_TOOL_NAME = 'monitor';
 const MSSQL_INSTANCES_KEY = 'mssql_instances';
 const MSSQL_DEFAULT_INSTANCE_ID_KEY = 'mssql_default_instance_id';
 const MSSQL_AUTO_NAME_PREFIX = 'MSSQL - ';
@@ -484,6 +486,7 @@ const serializeMssqlToolConfig = (instances: MssqlInstanceFormValue[]): ToolVari
 };
 
 const isMssqlTool = (tool?: SelectTool | null) => (tool?.rawName || tool?.name) === MSSQL_TOOL_NAME;
+const isMonitorTool = (tool?: SelectTool | null) => (tool?.rawName || tool?.name) === MONITOR_TOOL_NAME;
 
 interface ToolSelectorProps {
   defaultTools: SelectTool[];
@@ -1073,6 +1076,16 @@ const ToolSelector: React.FC<ToolSelectorProps> = ({ defaultTools, onChange }) =
                     const isRequired = form.getFieldValue(['kwargs', name, 'isRequired']);
 
                     const renderInput = () => {
+                      if (isMonitorTool(editingTool) && fieldLabel === 'team_id') {
+                        return (
+                          <GroupTreeSelect
+                            multiple={false}
+                            showSearch
+                            placeholder={t('common.pleaseSelect')}
+                          />
+                        );
+                      }
+
                       switch (fieldType) {
                         case 'text':
                           return <Input />;

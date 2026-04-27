@@ -78,6 +78,11 @@ class SystemMgmt(object):
         return_data = self.client.run("verify_token", token=token)
         return return_data
 
+    def revoke_token(self, token):
+        """撤销 token，将其 jti 加入黑名单。"""
+        return_data = self.client.run("revoke_token", token=token)
+        return return_data
+
     def get_group_users(self, group, include_children=False):
         """
         :param group: 当前组的ID
