@@ -435,6 +435,86 @@ def parse_ansible_output_per_host(output: str) -> list[dict[str, Any]]:
     return results
 
 
+def parse_playbook_recap(output: str) -> list[dict[str, Any]]:
+    """
+    解析 playbook 输出的 PLAY RECAP 部分，构建 per-host 结果数组。
+
+    PLAY RECAP 格式示例：
+        10.10.41.149  : ok=1  changed=0  unreachable=0  failed=0  skipped=0  rescued=0  ignored=0
+
+    判定逻辑：failed > 0 或 unreachable > 0 时视为失败。
+    """
+    recap_pattern = re.compile(r"^(\S+)\s+:\s+ok=(\d+)\s+changed=(\d+)\s+unreachable=(\d+)\s+failed=(\d+)")
+
+    # 找到 PLAY RECAP 行之后的内容
+    lines = str(output or "").splitlines()
+    recap_start = -1
+    for i, line in enumerate(lines):
+        if line.strip().startswith("PLAY RECAP"):
+            recap_start = i + 1
+            break
+
+    if recap_start < 0:
+        return []
+
+    results: list[dict[str, Any]] = []
+    for line in lines[recap_start:]:
+        matched = recap_pattern.match(line.strip())
+        if not matched:
+            continue
+
+        host = matched.group(1)
+        unreachable = int(matched.group(4))
+        failed = int(matched.group(5))
+
+        is_failed = failed > 0 or unreachable > 0
+        status = "failed" if is_failed else "success"
+
+        # 提取该 host 的 task 输出片段
+        host_output = _extract_host_task_output(lines[: recap_start - 1], host)
+
+        results.append(
+            {
+                "host": host,
+                "status": status,
+                "raw_status": "FAILED" if is_failed else "SUCCESS",
+                "stdout": host_output if not is_failed else "",
+                "stderr": host_output if is_failed else "",
+                "exit_code": 1 if is_failed else 0,
+                "error_message": host_output if is_failed else "",
+            }
+        )
+
+    return results
+
+
+def _extract_host_task_output(lines: list[str], host: str) -> str:
+    """从 playbook 输出中提取指定 host 的 task 输出行。"""
+    host_lines: list[str] = []
+    capturing = False
+
+    for line in lines:
+        # 匹配 ok: [host], changed: [host], fatal: [host], skipping: [host] 等
+        if re.match(rf"^(ok|changed|fatal|failed|skipping|unreachable):\s+\[{re.escape(host)}\]", line):
+            capturing = True
+            host_lines.append(line)
+            continue
+
+        # 新 TASK 或 PLAY 行结束当前捕获
+        if line.startswith("TASK [") or line.startswith("PLAY [") or line.startswith("PLAY RECAP"):
+            capturing = False
+            continue
+
+        # task path 行跳过
+        if line.startswith("task path:"):
+            continue
+
+        if capturing:
+            host_lines.append(line)
+
+    return "\n".join(host_lines).strip()
+
+
 def _build_host_credentials_inventory(workspace: Path, host_credentials: list[dict[str, Any]]) -> str:
     lines: list[str] = []
     for idx, item in enumerate(host_credentials):
