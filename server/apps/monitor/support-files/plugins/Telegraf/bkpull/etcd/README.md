@@ -28,7 +28,7 @@ Etcd 监控用于帮助使用者持续观察 etcd 集群的健康状态、容量
 | 项目 | 内容 |
 | --- | --- |
 | 监控对象 | Etcd |
-| 采集方式 | 基于 Prometheus 指标端点的主动拉取采集 |
+| 采集方式 | 由 Telegraf Pull 采集器基于 Prometheus 指标端点主动拉取采集 |
 | 数据来源 | etcd 实例暴露的 `/metrics` 指标端点 |
 | 默认采集地址 | `http(s)://<host>:<port>/metrics` |
 
@@ -36,7 +36,9 @@ Etcd 监控用于帮助使用者持续观察 etcd 集群的健康状态、容量
 
 - 本文档中的指标均按 `instance_id` 维度聚合，因此当前“维度”列统一为 `None`。
 - 频率类指标大多基于最近 5 分钟窗口计算。
-- `bytes` 与 `Bps` 在阅读时可按 `KB/MB/GB`、`KB/s` 或 `MB/s` 理解。
+- 容量类指标使用产品标准单位 `bytes`，页面会按 `B/KiB/MiB/GiB` 自动展示。
+- 流量类指标使用产品标准单位 `byteps`，页面会按 `B/s`、`KiB/s`、`MiB/s` 自动展示。
+- 频率类指标使用产品标准单位 `hertz`，页面会按 `Hz/KHz/MHz` 自动展示。
 - `s` 类指标建议按 `ms` 或 `s` 理解其实际耗时水平。
 
 ## 建议优先关注指标
@@ -69,10 +71,10 @@ Etcd 监控用于帮助使用者持续观察 etcd 集群的健康状态、容量
 | --- | --- | --- | --- | --- | --- |
 | 集群是否有主节点 | `etcd_server_has_leader_gauge` | Enum | `0/1` | 是否为 `1` | 判断当前成员是否能观察到 Leader。返回 `0` 往往意味着选主异常、网络分区或集群短时不可写。 |
 | 当前角色 | `etcd_server_is_leader_gauge` | Enum | `0/1` | 当前是 Leader 还是 Follower | 用于确认当前成员在集群中的角色，方便排查请求是否集中在 Leader。 |
-| 活跃节点连接数 | `etcd_network_active_peers_gauge` | Number | `count` | 是否持续下降 | 表示当前成员与其他 etcd 节点间保持活跃状态的连接数量。持续下降通常意味着节点失联或复制链路异常。 |
-| 主节点切换频率 | `etcd_server_leader_changes_seen_total_counter_rate` | Number | `次/秒` | 是否持续偏高 | 表示最近 5 分钟 Leader 切换速率。持续偏高通常意味着网络抖动、时钟漂移或节点负载不稳定。 |
-| 心跳发送失败频率 | `etcd_server_heartbeat_send_failures_total_counter_rate` | Number | `次/秒` | 是否持续非零 | 表示最近 5 分钟 Raft 心跳发送失败速率。持续非零说明 Leader 到 Follower 的通信可能存在异常。 |
-| 健康检查失败频率 | `etcd_server_health_failures_counter_rate` | Number | `次/秒` | 是否出现明显升高 | 表示最近 5 分钟 etcd 内部健康检查失败速率，可用于辅助判断服务是否进入异常状态。 |
+| 活跃节点连接数 | `etcd_network_active_peers_gauge` | Number | `counts` | 是否持续下降 | 表示当前成员与其他 etcd 节点间保持活跃状态的连接数量。持续下降通常意味着节点失联或复制链路异常。 |
+| 主节点切换频率 | `etcd_server_leader_changes_seen_total_counter_rate` | Number | `hertz` | 是否持续偏高 | 表示最近 5 分钟 Leader 切换速率。持续偏高通常意味着网络抖动、时钟漂移或节点负载不稳定。 |
+| 心跳发送失败频率 | `etcd_server_heartbeat_send_failures_total_counter_rate` | Number | `hertz` | 是否持续非零 | 表示最近 5 分钟 Raft 心跳发送失败速率。持续非零说明 Leader 到 Follower 的通信可能存在异常。 |
+| 健康检查失败频率 | `etcd_server_health_failures_counter_rate` | Number | `hertz` | 是否出现明显升高 | 表示最近 5 分钟 etcd 内部健康检查失败速率，可用于辅助判断服务是否进入异常状态。 |
 
 ### 存储与碎片
 
@@ -83,11 +85,11 @@ Etcd 监控用于帮助使用者持续观察 etcd 集群的健康状态、容量
 | 后端已分配空间 | `etcd_mvcc_db_total_size_in_bytes_gauge` | Number | `bytes` | 是否持续增长 | 表示 etcd Backend 当前已申请并占用的物理空间，是观察容量压力和碎片增长的基础指标。 |
 | 后端实际使用空间 | `etcd_mvcc_db_total_size_in_use_in_bytes_gauge` | Number | `bytes` | 与已分配空间差距是否扩大 | 表示 Backend 中真正承载有效数据的逻辑空间，可与已分配空间结合判断碎片程度。 |
 | 后端存储配额 | `etcd_server_quota_backend_bytes_gauge` | Number | `bytes` | 配额上限是否合理 | 表示 etcd Backend 的容量上限配置。接近该值时，写入可能被限制甚至失败。 |
-| 后端存储使用率 | `etcd_backend_allocated_usage_percent` | Number | `%` | 是否接近 80% 或 90% | 表示已分配空间占 Backend 配额的比例，是容量风险最直观的判断指标之一。 |
+| 后端存储使用率 | `etcd_backend_allocated_usage_percent` | Number | `percent` | 是否接近 80% 或 90% | 表示已分配空间占 Backend 配额的比例，是容量风险最直观的判断指标之一。 |
 | 后端剩余容量 | `etcd_backend_remaining_bytes` | Number | `bytes` | 是否快速下降 | 表示距离 Backend 配额上限还剩余多少空间，适合用于评估短期扩容和清理窗口。 |
-| 后端碎片率 | `etcd_backend_fragmentation_percent` | Number | `%` | 是否持续升高 | 表示已分配空间中未被有效数据使用的比例。持续升高通常意味着需要执行 compact 或 defrag。 |
+| 后端碎片率 | `etcd_backend_fragmentation_percent` | Number | `percent` | 是否持续升高 | 表示已分配空间中未被有效数据使用的比例。持续升高通常意味着需要执行 compact 或 defrag。 |
 | 是否需要整理碎片 | `etcd_backend_urgent_defrag` | Enum | `0/1` | 是否变为 `1` | 当已分配空间达到配额 80% 及以上时返回 `1`，用于快速标识需要尽快整理碎片的实例。 |
-| 键数量 | `etcd_debugging_mvcc_keys_total_gauge` | Number | `count` | 是否快速增长 | 表示当前 MVCC 存储中的键总数。键数量增长过快通常会推高内存占用、碎片和压缩压力。 |
+| 键数量 | `etcd_debugging_mvcc_keys_total_gauge` | Number | `counts` | 是否快速增长 | 表示当前 MVCC 存储中的键总数。键数量增长过快通常会推高内存占用、碎片和压缩压力。 |
 | 进程常驻内存 | `process_resident_memory_bytes_gauge` | Number | `bytes` | 是否持续升高 | 表示 etcd 进程当前的常驻内存占用，可结合键数量、Watcher 数量和碎片率共同判断内存风险。 |
 
 ### 磁盘时延
@@ -106,14 +108,14 @@ Etcd 监控用于帮助使用者持续观察 etcd 集群的健康状态、容量
 
 | 指标中文名 | 指标ID | 数据类型 | 单位 | 重点关注 | 指标说明 |
 | --- | --- | --- | --- | --- | --- |
-| 提案积压数 | `etcd_server_proposals_pending_gauge` | Number | `count` | 是否持续积压 | 表示当前等待提交的 Raft 提案数量。持续积压说明 Leader 的提交链路已受到磁盘、网络或负载影响。 |
-| 提案失败频率 | `etcd_server_proposals_failed_total_counter_rate` | Number | `次/秒` | 是否持续升高 | 表示最近 5 分钟提案失败速率。持续升高意味着一致性提交链路存在异常。 |
-| 提案提交频率 | `etcd_server_proposals_committed_rate` | Number | `次/秒` | 是否明显下降 | 表示最近 5 分钟提案进入 committed 状态的速率，可用于衡量集群提交吞吐。 |
-| 提案应用频率 | `etcd_server_proposals_applied_rate` | Number | `次/秒` | 是否明显下降 | 表示最近 5 分钟提案被状态机应用的速率，可用于衡量最终落地吞吐。 |
-| 提案应用落后数 | `etcd_server_proposals_apply_lag` | Number | `count` | 是否持续扩大 | 表示已提交提案与已应用提案之间的差值。该值扩大说明状态机处理速度跟不上提交速度。 |
-| 慢应用请求频率 | `etcd_server_slow_apply_total_counter_rate` | Number | `次/秒` | 是否持续升高 | 表示最近 5 分钟慢应用事件速率。持续升高说明 apply 路径已出现明显性能退化。 |
-| 读索引失败频率 | `etcd_server_read_indexes_failed_total_counter_rate` | Number | `次/秒` | 是否持续非零 | 表示最近 5 分钟 Read Index 失败速率，升高说明线性一致性读路径出现异常。 |
-| 慢读索引频率 | `etcd_server_slow_read_indexes_total_counter_rate` | Number | `次/秒` | 是否持续升高 | 表示最近 5 分钟慢读索引事件速率，通常与 Leader 压力升高或网络抖动有关。 |
+| 提案积压数 | `etcd_server_proposals_pending_gauge` | Number | `counts` | 是否持续积压 | 表示当前等待提交的 Raft 提案数量。持续积压说明 Leader 的提交链路已受到磁盘、网络或负载影响。 |
+| 提案失败频率 | `etcd_server_proposals_failed_total_counter_rate` | Number | `hertz` | 是否持续升高 | 表示最近 5 分钟提案失败速率。持续升高意味着一致性提交链路存在异常。 |
+| 提案提交频率 | `etcd_server_proposals_committed_rate` | Number | `hertz` | 是否明显下降 | 表示最近 5 分钟提案进入 committed 状态的速率，可用于衡量集群提交吞吐。 |
+| 提案应用频率 | `etcd_server_proposals_applied_rate` | Number | `hertz` | 是否明显下降 | 表示最近 5 分钟提案被状态机应用的速率，可用于衡量最终落地吞吐。 |
+| 提案应用落后数 | `etcd_server_proposals_apply_lag` | Number | `counts` | 是否持续扩大 | 表示已提交提案与已应用提案之间的差值。该值扩大说明状态机处理速度跟不上提交速度。 |
+| 慢应用请求频率 | `etcd_server_slow_apply_total_counter_rate` | Number | `hertz` | 是否持续升高 | 表示最近 5 分钟慢应用事件速率。持续升高说明 apply 路径已出现明显性能退化。 |
+| 读索引失败频率 | `etcd_server_read_indexes_failed_total_counter_rate` | Number | `hertz` | 是否持续非零 | 表示最近 5 分钟 Read Index 失败速率，升高说明线性一致性读路径出现异常。 |
+| 慢读索引频率 | `etcd_server_slow_read_indexes_total_counter_rate` | Number | `hertz` | 是否持续升高 | 表示最近 5 分钟慢读索引事件速率，通常与 Leader 压力升高或网络抖动有关。 |
 
 ### 请求与流量
 
@@ -121,14 +123,14 @@ Etcd 监控用于帮助使用者持续观察 etcd 集群的健康状态、容量
 
 | 指标中文名 | 指标ID | 数据类型 | 单位 | 重点关注 | 指标说明 |
 | --- | --- | --- | --- | --- | --- |
-| 客户端请求频率 | `etcd_server_client_requests_total_counter_rate` | Number | `次/秒` | 是否突增或骤降 | 表示最近 5 分钟 etcd 处理客户端请求的总速率，可用于衡量业务侧访问压力。 |
-| RPC 请求频率 | `etcd_rpc_rate` | Number | `次/秒` | 是否与业务峰值一致 | 表示最近 5 分钟 etcd 一元 gRPC 请求的启动速率，可用于观察 API 调用吞吐。 |
-| RPC 失败频率 | `etcd_rpc_failed_rate` | Number | `次/秒` | 是否明显升高 | 表示最近 5 分钟非 OK 状态的一元 RPC 失败速率，升高说明客户端访问路径已经出现明显错误。 |
-| 客户端入站流量 | `etcd_network_client_grpc_received_bytes_total_counter_rate` | Number | `Bps` | 是否异常放大 | 表示最近 5 分钟来自客户端的 gRPC 入站流量，用于评估写入和查询请求的数据输入压力。 |
-| 客户端出站流量 | `etcd_network_client_grpc_sent_bytes_total_counter_rate` | Number | `Bps` | 是否异常放大 | 表示最近 5 分钟返回给客户端的 gRPC 出站流量，适合观察查询返回量和 Watch 返回压力。 |
-| 节点间入站流量 | `etcd_network_peer_received_bytes_total_counter_rate` | Number | `Bps` | 是否明显失衡 | 表示最近 5 分钟来自其他 Peer 的网络入站流量，是判断复制流量压力的重要指标。 |
-| 节点间出站流量 | `etcd_network_peer_sent_bytes_total_counter_rate` | Number | `Bps` | 是否明显失衡 | 表示最近 5 分钟发送给其他 Peer 的网络出站流量，可用于观察复制和同步成本。 |
-| 节点间发送失败频率 | `etcd_network_peer_sent_failures_total_counter_rate` | Number | `次/秒` | 是否持续非零 | 表示最近 5 分钟 Peer 间发送失败速率。持续非零通常说明复制链路存在网络异常或连接中断。 |
+| 客户端请求频率 | `etcd_server_client_requests_total_counter_rate` | Number | `hertz` | 是否突增或骤降 | 表示最近 5 分钟 etcd 处理客户端请求的总速率，可用于衡量业务侧访问压力。 |
+| RPC 请求频率 | `etcd_rpc_rate` | Number | `hertz` | 是否与业务峰值一致 | 表示最近 5 分钟 etcd 一元 gRPC 请求的启动速率，可用于观察 API 调用吞吐。 |
+| RPC 失败频率 | `etcd_rpc_failed_rate` | Number | `hertz` | 是否明显升高 | 表示最近 5 分钟非 OK 状态的一元 RPC 失败速率，升高说明客户端访问路径已经出现明显错误。 |
+| 客户端入站流量 | `etcd_network_client_grpc_received_bytes_total_counter_rate` | Number | `byteps` | 是否异常放大 | 表示最近 5 分钟来自客户端的 gRPC 入站流量，用于评估写入和查询请求的数据输入压力。 |
+| 客户端出站流量 | `etcd_network_client_grpc_sent_bytes_total_counter_rate` | Number | `byteps` | 是否异常放大 | 表示最近 5 分钟返回给客户端的 gRPC 出站流量，适合观察查询返回量和 Watch 返回压力。 |
+| 节点间入站流量 | `etcd_network_peer_received_bytes_total_counter_rate` | Number | `byteps` | 是否明显失衡 | 表示最近 5 分钟来自其他 Peer 的网络入站流量，是判断复制流量压力的重要指标。 |
+| 节点间出站流量 | `etcd_network_peer_sent_bytes_total_counter_rate` | Number | `byteps` | 是否明显失衡 | 表示最近 5 分钟发送给其他 Peer 的网络出站流量，可用于观察复制和同步成本。 |
+| 节点间发送失败频率 | `etcd_network_peer_sent_failures_total_counter_rate` | Number | `hertz` | 是否持续非零 | 表示最近 5 分钟 Peer 间发送失败速率。持续非零通常说明复制链路存在网络异常或连接中断。 |
 
 ### 监听与压缩
 
@@ -136,11 +138,11 @@ Etcd 监控用于帮助使用者持续观察 etcd 集群的健康状态、容量
 
 | 指标中文名 | 指标ID | 数据类型 | 单位 | 重点关注 | 指标说明 |
 | --- | --- | --- | --- | --- | --- |
-| 监听器数量 | `etcd_debugging_mvcc_watcher_total_gauge` | Number | `count` | 是否持续增长 | 表示当前 MVCC Watcher 总数。Watcher 过多会增加内存占用和事件分发压力。 |
-| 活跃监听流 | `etcd_watch_streams_active` | Number | `count` | 是否异常增长 | 表示当前活跃 Watch 流数量，可用于判断长连接监听压力。 |
-| 压缩键处理频率 | `etcd_debugging_mvcc_db_compaction_keys_total_counter_rate` | Number | `次/秒` | 是否长期偏低 | 表示最近 5 分钟 compaction 处理键的速率，用于观察压缩动作是否正常推进。 |
-| 写入频率 | `etcd_mvcc_put_total_counter_rate` | Number | `次/秒` | 是否明显上升 | 表示最近 5 分钟 KV 写入操作速率，可用于观察写入负载变化趋势。 |
-| 删除频率 | `etcd_mvcc_delete_total_counter_rate` | Number | `次/秒` | 是否明显上升 | 表示最近 5 分钟 KV 删除操作速率，可用于判断清理行为和数据变更模式。 |
+| 监听器数量 | `etcd_debugging_mvcc_watcher_total_gauge` | Number | `counts` | 是否持续增长 | 表示当前 MVCC Watcher 总数。Watcher 过多会增加内存占用和事件分发压力。 |
+| 活跃监听流 | `etcd_watch_streams_active` | Number | `counts` | 是否异常增长 | 表示当前活跃 Watch 流数量，可用于判断长连接监听压力。 |
+| 压缩键处理频率 | `etcd_debugging_mvcc_db_compaction_keys_total_counter_rate` | Number | `hertz` | 是否长期偏低 | 表示最近 5 分钟 compaction 处理键的速率，用于观察压缩动作是否正常推进。 |
+| 写入频率 | `etcd_mvcc_put_total_counter_rate` | Number | `hertz` | 是否明显上升 | 表示最近 5 分钟 KV 写入操作速率，可用于观察写入负载变化趋势。 |
+| 删除频率 | `etcd_mvcc_delete_total_counter_rate` | Number | `hertz` | 是否明显上升 | 表示最近 5 分钟 KV 删除操作速率，可用于判断清理行为和数据变更模式。 |
 
 ## 使用建议
 
