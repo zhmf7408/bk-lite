@@ -50,8 +50,8 @@ def trigger_jenkins_build(
 
     Args:
         job_name: Name of the job to build
-        parameters: Optional build parameters as a dictionary
-            (e.g. {"param1": "value1"})
+        parameters: Optional build parameters as a dictionary,
+            for example key-value pairs like param1=value1
 
     Returns:
         Dictionary containing build information including the build number
