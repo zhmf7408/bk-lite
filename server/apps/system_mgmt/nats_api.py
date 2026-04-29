@@ -331,6 +331,7 @@ def get_client_detail(client_id):
         "data": {
             "id": app_obj.id,
             "name": app_obj.name,
+            "display_name": app_obj.display_name,
             "description": app_obj.description,
             "description_cn": app_obj.description_cn,
         },

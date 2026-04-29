@@ -480,6 +480,13 @@ def get_client_detail(request):
     try:
         client = _create_system_mgmt_client()
         return_data = client.get_client_detail(client_id=client_name)
+        if return_data.get("result") and return_data.get("data"):
+            data = return_data["data"]
+            locale = getattr(getattr(request, "user", None), "locale", None) or "en"
+            loader = LanguageLoader(app="system_mgmt", default_lang=locale)
+            desc_key = data.get("description", "")
+            translated = loader.get(desc_key) if desc_key else ""
+            data["description"] = translated or desc_key
         return JsonResponse(return_data)
     except Exception as e:
         logger.error(f"Error retrieving client detail for {client_name}: {e}")

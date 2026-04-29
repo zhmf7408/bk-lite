@@ -270,8 +270,12 @@ class UserViewSet(ViewSetUtils):
         groups, _ = _normalize_group_ids(groups)
         params["groups"] = groups
         is_superuser = params.pop("is_superuser", False)
+        admin_role_id = Role.objects.get(name="admin", app="").id
         if is_superuser:
-            params["roles"] = [Role.objects.get(name="admin", app="").id]
+            params["roles"] = [admin_role_id]
+        else:
+            role_ids = params.get("roles") or []
+            params["roles"] = [role_id for role_id in role_ids if role_id != admin_role_id]
         with transaction.atomic():
             # 删除旧的规则
             UserRule.objects.filter(username=params["username"]).delete()

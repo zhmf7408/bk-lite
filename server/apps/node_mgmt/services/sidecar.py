@@ -28,6 +28,7 @@ from apps.node_mgmt.tasks.installer import (
 from apps.node_mgmt.utils.step_tracker import build_step, now_iso, update_step_by_action
 from apps.node_mgmt.utils.task_result_schema import apply_result_envelope, normalize_task_details
 from apps.node_mgmt.utils.sidecar import format_tags_dynamic
+from apps.node_mgmt.utils.architecture import normalize_cpu_architecture
 from apps.core.utils.crypto.aes_crypto import AESCryptor
 from jinja2 import Template as JinjaTemplate
 
@@ -231,6 +232,8 @@ class Sidecar:
 
         # 操作系统转小写
         request_data.update(operating_system=request_data["operating_system"].lower())
+        request_data.update(cpu_architecture=normalize_cpu_architecture(request_data.get("architecture")))
+        request_data.pop("architecture", None)
 
         logger.debug(f"node data: {request_data}")
 
