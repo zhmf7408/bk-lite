@@ -55,6 +55,15 @@ def test_skill_packages_are_serialized_and_updatable():
     assert "skill_packages" in LLMViewSet.UPDATABLE_SKILL_FIELDS
 
 
+def test_memory_space_fields_are_serialized_and_updatable():
+    """技能设置页的记忆空间需走模型字段，update 白名单用 FK 的 _id 写入。"""
+    assert "memory_space" in LLMSerializer.Meta.fields
+    assert "memory_write_rounds" in LLMSerializer.Meta.fields
+    assert "memory_space_id" in LLMViewSet.UPDATABLE_SKILL_FIELDS
+    assert "memory_write_rounds" in LLMViewSet.UPDATABLE_SKILL_FIELDS
+    assert "memory_space" not in LLMViewSet.UPDATABLE_SKILL_FIELDS
+
+
 def test_apply_skill_packages_records_visible_match_summary(mocker):
     """执行智能体时要把命中的技能包注入提示词，并保留可观测的命中摘要。"""
     mocker.patch("apps.opspilot.viewsets.llm_view.hydrate_skill_packages", side_effect=lambda packages: packages)

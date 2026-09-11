@@ -125,6 +125,8 @@ class LLMViewSet(PinMixin, AuthViewSet):
             "instance_id",
             "skill_id",
             "force_wiki_grounded",
+            "memory_space_id",
+            "memory_write_rounds",
         }
     )
 
@@ -280,6 +282,8 @@ class LLMViewSet(PinMixin, AuthViewSet):
             self._validate_org_field_permission(request, extra_orgs)
         if "llm_model" in params:
             params["llm_model_id"] = params.pop("llm_model")
+        if "memory_space" in params:
+            params["memory_space_id"] = params.pop("memory_space") or None
         for tool in params.get("tools", []):
             for i in tool.get("kwargs", []):
                 if i.get("type") == "password":
