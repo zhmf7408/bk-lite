@@ -76,11 +76,13 @@
 
 ## Cursor Cloud specific instructions
 
-云上默认没有本机 Postgres/Redis/NATS。开发依赖由 `.cursor/environment.json` 的 `install` 安装（`server`/`stargazer` 的 `uv sync --all-groups --all-extras`，`web` 的 `pnpm install`，`webchat` 的 `npm ci`）。验证时用 sqlite，不要为跑单测去起整套中间件。
+云上默认没有 Redis、NATS、MinIO。`.cursor/environment.json` 的 `install` 安装构建工具、Node 24、pnpm 11.20.0、本机 PostgreSQL 软件包，以及 `server`/`stargazer` 的 `uv sync --all-groups --all-extras`、`web` 的 `pnpm install`、`webchat` 的 `npm ci`。仅当文件不存在时写入本地 `server/.env` 与 `web/.env.local`。`start` 拉起 PostgreSQL，执行 migrate 和 `batch_init --apps system_mgmt`，并在 tmux 会话 `bklite-api`（:8011）与 `bklite-web`（:3000）中启动开发服务。登录页是 `http://127.0.0.1:3000/auth/signin`。
 
-- Server：`cd server && DB_ENGINE=sqlite DB_NAME=:memory: SECRET_KEY=cursor-cloud-dev ENABLE_CELERY=true uv run pytest <paths> --no-cov`
+- 单测仍用 sqlite，不要为跑单测去起 Redis/NATS：`cd server && DB_ENGINE=sqlite DB_NAME=:memory: SECRET_KEY=cursor-cloud-dev ENABLE_CELERY=true uv run pytest <paths> --no-cov`
+- 从零 migrate 走 `start` 准备的本机 PostgreSQL。历史 migration 不能在 SQLite 上建库。
+- `uv` 在 `/usr/local/bin`。Node 24 由 nvm 安装；登录 shell 会把它放到 PATH 前面。
 - Web：`cd web && pnpm lint` / 相关 `pnpm test:*`；改了类型或布局再跑 `pnpm type-check`
-- 缺 `server/.env` 时按上面的 sqlite 变量补一份即可；不要写入真实密钥
+- 不要把真实密钥写入 `.env`
 
 ## 交付
 
