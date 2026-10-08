@@ -80,7 +80,7 @@
 
 - 单测仍用 sqlite，不要为跑单测去起 Redis/NATS：`cd server && DB_ENGINE=sqlite DB_NAME=:memory: SECRET_KEY=cursor-cloud-dev ENABLE_CELERY=true uv run pytest <paths> --no-cov`
 - 从零 migrate 走 `start` 准备的本机 PostgreSQL。历史 migration 不能在 SQLite 上建库。
-- `uv` 在 `/usr/local/bin`。Node 24 由 nvm 安装；登录 shell 会把它放到 PATH 前面。
+- `uv` 在 `/usr/local/bin`。Node 24 由 nvm 安装，并链接到登录 shell 与非登录 shell 都会先搜到的位置，避免用到镜像自带的 Node 22。
 - Web：`cd web && pnpm lint` / 相关 `pnpm test:*`；改了类型或布局再跑 `pnpm type-check`
 - 不要把真实密钥写入 `.env`
 
