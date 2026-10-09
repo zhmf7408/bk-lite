@@ -29,14 +29,14 @@ def test_dashboard_toolkit_is_loaded_only_when_selected():
 
 
 def test_dashboard_tool_does_not_assemble_or_backfill():
-    from apps.operation_analysis.tools import dashboard as tools
+    from apps.opspilot.metis.llm.tools import dashboard as tools
 
     assert not hasattr(tools, "execute_dashboard_build")
     assert not hasattr(tools, "dashboard_fallback_messages")
 
 
 def test_search_uses_explicit_requirements_and_operation_analysis_rpc(monkeypatch):
-    from apps.operation_analysis.tools.dashboard import search_data_sources
+    from apps.opspilot.metis.llm.tools.dashboard import search_data_sources
 
     requirements = [
         {
@@ -53,7 +53,7 @@ def test_search_uses_explicit_requirements_and_operation_analysis_rpc(monkeypatc
         calls.append((method, kwargs))
         return {"candidates": [{"id": 193, "name": "告警趋势"}]}
 
-    monkeypatch.setattr("apps.operation_analysis.tools.dashboard._run_dashboard_rpc", fake_run)
+    monkeypatch.setattr("apps.opspilot.metis.llm.tools.dashboard._run_dashboard_rpc", fake_run)
     result = search_data_sources.func(requirements, _config())
 
     assert result == {
@@ -69,7 +69,7 @@ def test_search_uses_explicit_requirements_and_operation_analysis_rpc(monkeypatc
 
 
 def test_prepare_returns_page_action_without_dispatching_or_caching(monkeypatch):
-    from apps.operation_analysis.tools.dashboard import prepare_dashboard_proposal
+    from apps.opspilot.metis.llm.tools.dashboard import prepare_dashboard_proposal
 
     proposal = {
         "schemaVersion": "1.0",
@@ -83,7 +83,7 @@ def test_prepare_returns_page_action_without_dispatching_or_caching(monkeypatch)
         assert kwargs == {"proposal": proposal, "team_id": 7}
         return {"ok": True, "proposal": prepared}
 
-    monkeypatch.setattr("apps.operation_analysis.tools.dashboard._run_dashboard_rpc", fake_run)
+    monkeypatch.setattr("apps.opspilot.metis.llm.tools.dashboard._run_dashboard_rpc", fake_run)
     result = prepare_dashboard_proposal.func(proposal, "dashboard_426", _config())
 
     assert result == {
@@ -103,18 +103,46 @@ def test_prepare_returns_page_action_without_dispatching_or_caching(monkeypatch)
 
 
 def test_prepare_does_not_emit_page_action_when_validation_is_pending(monkeypatch):
-    from apps.operation_analysis.tools.dashboard import prepare_dashboard_proposal
+    from apps.opspilot.metis.llm.tools.dashboard import prepare_dashboard_proposal
 
     pending = {"ok": False, "reason": "pending", "pending": [{"reason": "required_param"}]}
-    monkeypatch.setattr("apps.operation_analysis.tools.dashboard._run_dashboard_rpc", lambda method, **kwargs: pending)
+    monkeypatch.setattr("apps.opspilot.metis.llm.tools.dashboard._run_dashboard_rpc", lambda method, **kwargs: pending)
     result = prepare_dashboard_proposal.func({"schemaVersion": "1.0"}, "current", _config())
 
     assert result == {"success": True, "data": pending}
 
 
+def test_prepare_schema_rejection_tells_the_model_the_required_shape(monkeypatch):
+    from apps.opspilot.metis.llm.tools.dashboard import prepare_dashboard_proposal
+
+    monkeypatch.setattr(
+        "apps.opspilot.metis.llm.tools.dashboard._run_dashboard_rpc",
+        lambda method, **kwargs: {"ok": False, "reason": "schema", "pending": []},
+    )
+    result = prepare_dashboard_proposal.func(
+        {"title": "CMDB 数据概览", "panels": [{"chart_type": "pie", "data_source_id": 34}]},
+        "current",
+        _config(),
+    )
+
+    assert result["success"] is True
+    assert result["data"]["reason"] == "schema"
+    assert "pageAction" not in result["data"]
+    hint = result["_next_step_hint"]
+    assert "schemaVersion" in hint
+    assert "layout" in hint
+    assert "valueConfig.chartType" in hint
+    assert "valueConfig.dataSource" in hint
+    assert "panels" in hint
+    description = prepare_dashboard_proposal.description
+    assert "schemaVersion" in description
+    assert "valueConfig.dataSource" in description
+    assert "禁止使用 title、panels、chart_type、data_source_id" in description
+
+
 @pytest.mark.parametrize("tool_name", ["search_data_sources", "prepare_dashboard_proposal"])
 def test_dashboard_tools_require_caller_team(tool_name):
-    from apps.operation_analysis.tools import dashboard as module
+    from apps.opspilot.metis.llm.tools import dashboard as module
 
     tool = getattr(module, tool_name)
     args = ([{"text": "告警"}], {}) if tool_name == "search_data_sources" else ({"schemaVersion": "1.0"}, "current", {})
@@ -150,7 +178,7 @@ def test_tool_metadata_and_translations_are_registered():
 def test_dashboard_rpc_can_run_inside_a_live_event_loop(monkeypatch):
     import asyncio
 
-    from apps.operation_analysis.tools import dashboard as tools
+    from apps.opspilot.metis.llm.tools import dashboard as tools
 
     def run_that_needs_its_own_loop(method, **kwargs):
         asyncio.run(asyncio.sleep(0))
