@@ -8,6 +8,7 @@ from django.db.models import Q
 
 from apps.core.logger import opspilot_logger as logger
 from apps.core.models.maintainer_info import maintainer_kwargs
+from apps.opspilot.services.caller_identity import CALLER_IDENTITY_CONFIG_KEY
 from apps.opspilot.models import BuildRecord, LLMSkill, Material, WikiKnowledgeBase
 from apps.opspilot.services.wiki.material_build_queue_service import QUEUE_ITEM_TRIGGER, enqueue_material_builds
 from apps.opspilot.services.wiki.material_source_service import source_metadata
@@ -30,6 +31,19 @@ _BODY_EXCERPT_LEN = 50
 _CREATED_BY_MAX = 32
 _DISCARDABLE_STATUSES = frozenset({"pending", "queued"})
 _ACTOR_MODES = frozenset({"system", "external", "anonymous"})
+_WIKI_MATERIAL_TOOL_MARKER = f"langchain:{WIKI_MATERIAL_TOOL_NAME}"
+# ChatFlow 渠道入口写进 flow_input["channel"] 的值。钉钉执行参数用 ding_talk，渠道码是 dingtalk。
+_CHAT_FLOW_EXTERNAL_CHANNELS = frozenset(
+    {
+        "ding_talk",
+        "dingtalk",
+        "enterprise_wechat",
+        "enterprise_wechat_aibot",
+        "wechat_official_account",
+        "wechat_official",
+        "feishu",
+    }
+)
 
 _PROMPT_WHEN_OFF = "\n\n【知识库写入】本智能体不能修改知识库。" f"如果用户要求记下、保存、写入或修正知识库中的知识，只回复「{REPLY_SWITCH_OFF}」，不要声称已经写入。"
 _PROMPT_WHEN_NO_KB = "\n\n【知识库写入】本智能体没有选择知识库。" f"如果用户要求记下、保存、写入或修正知识库中的知识，只回复「{REPLY_NO_KB}」，不要声称已经写入。"
@@ -78,6 +92,30 @@ def actor_for_caller_identity(identity) -> dict:
     return actor_for_platform_user(SimpleNamespace(username=identity.get("username"), domain=identity.get("domain")))
 
 
+def actor_for_chat_flow_input(flow_input) -> dict:
+    """平台身份优先。只有已知外部渠道才采用入口注入的发送者。"""
+    if not isinstance(flow_input, dict):
+        return anonymous_actor()
+    caller = actor_for_caller_identity(flow_input.get(CALLER_IDENTITY_CONFIG_KEY))
+    if caller["mode"] == "system":
+        return caller
+    channel = str(flow_input.get("channel") or "").strip()
+    if channel not in _CHAT_FLOW_EXTERNAL_CHANNELS:
+        return anonymous_actor()
+    injected = flow_input.get(WIKI_MATERIAL_ACTOR_KEY)
+    if isinstance(injected, dict) and injected.get("mode") == "external":
+        return external_actor(str(injected.get("sender_id") or ""))
+    sender = flow_input.get("user_id")
+    if isinstance(sender, str):
+        return external_actor(sender)
+    return anonymous_actor()
+
+
+def is_chat_sourced_material(material) -> bool:
+    """只有对话写入打下的标记才放宽同主题比较。来源路径可由上传指定，不能用来分流。"""
+    return bool(getattr(material, "chat_sourced", False))
+
+
 def normalize_actor(value) -> dict:
     if not isinstance(value, dict) or value.get("mode") not in _ACTOR_MODES:
         return anonymous_actor()
@@ -124,6 +162,22 @@ def wiki_material_tool_server() -> dict:
     }
 
 
+def _is_wiki_material_tool(tool) -> bool:
+    if not isinstance(tool, dict):
+        return False
+    if tool.get("name") == WIKI_MATERIAL_TOOL_NAME:
+        return True
+    url = tool.get("url")
+    if isinstance(url, str) and _WIKI_MATERIAL_TOOL_MARKER in url:
+        return True
+    category = tool.get("category")
+    if isinstance(category, str):
+        return _WIKI_MATERIAL_TOOL_MARKER in category
+    if isinstance(category, (list, tuple)):
+        return any(isinstance(item, str) and _WIKI_MATERIAL_TOOL_MARKER in item for item in category)
+    return False
+
+
 def apply_wiki_material_runtime(chat_kwargs: dict, kwargs: dict) -> None:
     """按库里的开关注入提示和工具，并把服务端行动者写入 extra_config。"""
     mode = wiki_material_write_mode(kwargs.get("skill_id"))
@@ -132,7 +186,7 @@ def apply_wiki_material_runtime(chat_kwargs: dict, kwargs: dict) -> None:
         addition = {"on": _PROMPT_WHEN_ON, "no_kb": _PROMPT_WHEN_NO_KB}.get(mode, _PROMPT_WHEN_OFF)
         chat_kwargs["system_message_prompt"] = prompt + addition
     raw_tools = chat_kwargs.get("tools_servers")
-    tools = [tool for tool in list(raw_tools or []) if not (isinstance(tool, dict) and tool.get("name") == WIKI_MATERIAL_TOOL_NAME)]
+    tools = [tool for tool in list(raw_tools or []) if not _is_wiki_material_tool(tool)]
     if mode == "on":
         tools.append(wiki_material_tool_server())
     if raw_tools is not None or mode == "on":
@@ -213,7 +267,7 @@ def _enqueue_succeeded(material_id: int, result: dict) -> bool:
 
 
 def _assign_chat_source(material: Material) -> None:
-    """补上构建要求的来源身份。对话资料没有上传路径，用资料 ID 生成稳定相对路径。"""
+    """补上构建要求的来源身份。相对路径只用于来源身份，不决定是否放宽冲突比较。"""
     metadata = source_metadata(material.knowledge_base, source_relative_path=f"chat/{material.pk}.txt")
     material.source_relative_path = metadata["source_relative_path"]
     material.source_folder_path = metadata["source_folder_path"]
@@ -251,7 +305,7 @@ def write_chat_wiki_material(
     knowledge_base_name: str = "",
     actor=None,
 ) -> str:
-    """创建一条文本资料并入队。失败时不留下未构建或刚入队的资料，也不记成功日志。"""
+    """创建一条文本资料并入队。入队尚未成功时不留下资料，也不记成功日志。入队成功后即使操作日志失败也保留资料。"""
     if explicit_request is not True:
         return REPLY_NOT_WRITTEN
     cleaned_title = (title or "").strip()
@@ -278,6 +332,7 @@ def write_chat_wiki_material(
         material_type="text",
         text_content=cleaned_body,
         status="pending",
+        chat_sourced=True,
         **maintainer,
     )
     try:
@@ -308,6 +363,4 @@ def write_chat_wiki_material(
             material.id,
             type(exc).__name__,
         )
-        _discard_unbuilt_material(material.id)
-        return REPLY_FAILED
     return REPLY_SUCCESS

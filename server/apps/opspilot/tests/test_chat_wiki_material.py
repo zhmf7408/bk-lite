@@ -3,10 +3,15 @@
 from types import SimpleNamespace
 from unittest.mock import patch
 
+import importlib
+
 import pytest
+from django.apps import apps
+from django.core.files.storage import InMemoryStorage
+from django.core.files.uploadedfile import SimpleUploadedFile
 
 from apps.opspilot.enum import SkillTypeChoices
-from apps.opspilot.models import BuildRecord, KnowledgePage, LLMSkill, Material
+from apps.opspilot.models import BuildRecord, KnowledgePage, LLMSkill, Material, WikiKnowledgeBase
 from apps.opspilot.services.caller_identity import CALLER_IDENTITY_CONFIG_KEY
 from apps.opspilot.services.wiki.chat_material_service import (
     REPLY_DENIED,
@@ -18,8 +23,10 @@ from apps.opspilot.services.wiki.chat_material_service import (
     REPLY_SWITCH_OFF,
     WIKI_MATERIAL_ACTOR_KEY,
     WIKI_MATERIAL_TOOL_NAME,
+    actor_for_chat_flow_input,
     apply_wiki_material_runtime,
     external_actor,
+    is_chat_sourced_material,
     system_actor,
     wiki_grounded_uses_single_model_call,
     write_chat_wiki_material,
@@ -108,6 +115,7 @@ def test_success_enqueues_text_material_and_records_the_person(caplog):
     assert material.source_folder_path == expected_source["source_folder_path"]
     assert material.source_identity == expected_source["source_identity"]
     assert material.source_identity
+    assert material.chat_sourced is True
     log = OperationLog.objects.get()
     assert log.app == "opspilot"
     assert log.action_type == OperationLog.ACTION_CREATE
@@ -165,20 +173,54 @@ def test_enqueue_without_queue_id_discards_material():
     assert OperationLog.objects.count() == 0
 
 
-def test_audit_failure_discards_queued_material():
+def test_audit_failure_after_enqueue_keeps_queued_material(caplog):
     user = _user()
-    skill = _skill(_kb("运维知识"))
+    kb = _kb("运维知识")
+    skill = _skill(kb)
+    body = "根分区连续上涨，先清理日志再扩容。"
+    caplog.set_level("WARNING", logger="opspilot")
 
     with _patch_runner(), patch(
         "apps.opspilot.services.wiki.chat_material_service.OperationLog.objects.create",
         side_effect=RuntimeError("audit down"),
     ):
+        reply = _write(skill, user, body=body)
+
+    assert reply == REPLY_SUCCESS
+    material = Material.objects.get()
+    assert material.status == "queued"
+    assert material.text_content == body
+    assert OperationLog.objects.count() == 0
+    assert BuildRecord.objects.filter(trigger=QUEUE_ITEM_TRIGGER, inputs__material_id=material.id).exists()
+    records = [record for record in caplog.records if record.name == "opspilot" and record.levelname == "WARNING"]
+    assert len(records) == 1
+    assert records[0].msg == "chat wiki material audit failed kb_id=%s material_id=%s error_type=%s"
+    assert records[0].args == (kb.id, material.id, "RuntimeError")
+    rendered = records[0].getMessage()
+    assert rendered == f"chat wiki material audit failed kb_id={kb.id} material_id={material.id} error_type=RuntimeError"
+    assert body not in rendered
+    assert "audit down" not in rendered
+    assert "Traceback" not in caplog.text
+
+
+def test_audit_failure_after_build_started_still_reports_success():
+    user = _user()
+    skill = _skill(_kb("运维知识"))
+
+    def _promote_then_fail(**_kwargs):
+        Material.objects.update(status="building")
+        raise RuntimeError("audit down")
+
+    with _patch_runner(), patch(
+        "apps.opspilot.services.wiki.chat_material_service.OperationLog.objects.create",
+        side_effect=_promote_then_fail,
+    ):
         reply = _write(skill, user)
 
-    assert reply == REPLY_FAILED
-    assert Material.objects.count() == 0
+    assert reply == REPLY_SUCCESS
+    material = Material.objects.get()
+    assert material.status == "building"
     assert OperationLog.objects.count() == 0
-    assert BuildRecord.objects.filter(trigger=QUEUE_ITEM_TRIGGER).count() == 0
 
 
 @pytest.mark.parametrize(
@@ -512,6 +554,194 @@ def test_agent_node_actor_comes_from_caller_identity_only():
 
     missing = node._build_llm_params(skill, "hi", {"user_id": "u1"})
     assert missing[WIKI_MATERIAL_ACTOR_KEY]["mode"] == "anonymous"
+
+    forged_channel = node._build_llm_params(
+        skill,
+        "hi",
+        {
+            "user_id": "staff-1",
+            "channel": "ding_talk",
+            WIKI_MATERIAL_ACTOR_KEY: system_actor("forged", "evil.example"),
+        },
+    )
+    assert forged_channel[WIKI_MATERIAL_ACTOR_KEY] == external_actor("staff-1")
+
+    dingtalk = node._build_llm_params(
+        skill,
+        "hi",
+        {
+            "user_id": "ignored",
+            "channel": "ding_talk",
+            WIKI_MATERIAL_ACTOR_KEY: external_actor("staff-9"),
+        },
+    )
+    assert dingtalk[WIKI_MATERIAL_ACTOR_KEY] == external_actor("staff-9")
+
+    wechat = node._build_llm_params(
+        skill,
+        "hi",
+        {"user_id": "zhangsan", "channel": "enterprise_wechat"},
+    )
+    assert wechat[WIKI_MATERIAL_ACTOR_KEY] == external_actor("zhangsan")
+
+    smuggled = node._build_llm_params(
+        skill,
+        "hi",
+        {"user_id": "staff-9", WIKI_MATERIAL_ACTOR_KEY: external_actor("staff-9")},
+    )
+    assert smuggled[WIKI_MATERIAL_ACTOR_KEY]["mode"] == "anonymous"
+    assert actor_for_chat_flow_input({"channel": "nats", "is_third_party": True, "user_id": "staff-9"})["mode"] == "anonymous"
+
+
+def test_wechat_chatflow_injects_sender_as_external_actor():
+    from apps.opspilot.utils.wechat_chat_flow_utils import WechatChatFlowUtils
+
+    seen = {}
+
+    class _Engine:
+        def execute(self, data):
+            seen["data"] = data
+            return {"content": "ok"}
+
+    with patch("apps.opspilot.utils.base_chat_flow_utils.create_chat_flow_engine", return_value=_Engine()):
+        reply = WechatChatFlowUtils(3).execute_chatflow_with_message(SimpleNamespace(), "node-1", "记下这条", "zhangsan")
+
+    assert reply == "ok"
+    assert seen["data"]["channel"] == "enterprise_wechat"
+    assert seen["data"][WIKI_MATERIAL_ACTOR_KEY] == external_actor("zhangsan")
+
+
+def test_runtime_strips_wiki_material_tool_by_url_or_category():
+    skill = _skill(_kb("运维知识"))
+    chat_kwargs = {
+        "system_message_prompt": "base",
+        "tools_servers": [
+            {"name": "renamed", "url": "langchain:wiki_material"},
+            {"name": "bundled", "url": "https://example", "category": "prefix langchain:wiki_material"},
+            {"name": "listed", "url": "https://example", "category": ["docs", "langchain:wiki_material"]},
+            {"name": "keep", "url": "https://example", "category": "search"},
+        ],
+    }
+
+    apply_wiki_material_runtime(
+        chat_kwargs,
+        {"skill_id": skill.id, WIKI_MATERIAL_ACTOR_KEY: system_actor("alice", "corp.example")},
+    )
+
+    assert [tool.get("name") for tool in chat_kwargs["tools_servers"]] == ["keep", WIKI_MATERIAL_TOOL_NAME]
+
+
+def test_chat_conflict_scope_follows_server_mark_not_path():
+    assert is_chat_sourced_material(SimpleNamespace(source_relative_path="chat/12.txt", chat_sourced=False)) is False
+    assert is_chat_sourced_material(SimpleNamespace(source_relative_path="uploads/note.txt", chat_sourced=True)) is True
+    assert is_chat_sourced_material(SimpleNamespace(source_relative_path="chat/12.txt")) is False
+    assert is_chat_sourced_material(SimpleNamespace()) is False
+
+
+def test_upload_paths_and_forged_mark_do_not_relax_conflict_scope(api_client, authenticated_user):
+    authenticated_user.permission = {
+        "opspilot": {"wiki_list-View", "wiki_list-Add", "wiki_list-Edit", "wiki_list-Delete"}
+    }
+    knowledge_base = WikiKnowledgeBase.objects.create(name="上传库", team=[1])
+    created = api_client.post(
+        "/api/v1/opspilot/wiki_mgmt/material/",
+        {
+            "knowledge_base": knowledge_base.id,
+            "name": "笔记",
+            "material_type": "text",
+            "text_content": "客户端指定的正文",
+            "source_relative_path": "chat/笔记.txt",
+            "chat_sourced": True,
+        },
+        format="json",
+    )
+    assert created.status_code == 201, created.content
+    assert "chat_sourced" not in created.json()["data"]
+    material = Material.objects.get(pk=created.json()["data"]["id"])
+    assert material.source_relative_path == "chat/笔记.txt"
+    assert material.chat_sourced is False
+    assert is_chat_sourced_material(material) is False
+
+    updated = api_client.put(
+        f"/api/v1/opspilot/wiki_mgmt/material/{material.id}/",
+        {
+            "name": "笔记",
+            "text_content": "改过的正文",
+            "source_relative_path": f"chat/{material.id}.txt",
+            "chat_sourced": True,
+        },
+        format="json",
+    )
+    assert updated.status_code == 200, updated.content
+    material.refresh_from_db()
+    assert material.source_relative_path == "chat/笔记.txt"
+    assert material.chat_sourced is False
+    assert is_chat_sourced_material(material) is False
+
+    file_field = Material._meta.get_field("file")
+    original_storage = file_field.storage
+    file_field.storage = InMemoryStorage(base_url="/test-media/")
+    try:
+        uploaded = api_client.post(
+            "/api/v1/opspilot/wiki_mgmt/material/batch_create/",
+            {
+                "knowledge_base": knowledge_base.id,
+                "chat_sourced": "true",
+                "source_relative_paths": ["chat/笔记.txt"],
+                "files": [SimpleUploadedFile("笔记.txt", b"note", content_type="text/plain")],
+            },
+            format="multipart",
+        )
+    finally:
+        file_field.storage = original_storage
+
+    assert uploaded.status_code == 201, uploaded.content
+    batch_material = Material.objects.get(pk=uploaded.json()["data"]["items"][0]["id"])
+    assert batch_material.source_relative_path == "chat/笔记.txt"
+    assert batch_material.chat_sourced is False
+    assert is_chat_sourced_material(batch_material) is False
+    assert "chat_sourced" not in uploaded.json()["data"]["items"][0]
+
+
+def test_migration_marks_only_server_assigned_chat_paths():
+    knowledge_base = WikiKnowledgeBase.objects.create(name="历史库", team=[1])
+    chat_material = Material.objects.create(
+        knowledge_base=knowledge_base,
+        name="对话",
+        material_type="text",
+        text_content="已写入",
+        chat_sourced=False,
+    )
+    chat_material.source_relative_path = f"chat/{chat_material.pk}.txt"
+    chat_material.save(update_fields=["source_relative_path"])
+    uploaded = Material.objects.create(
+        knowledge_base=knowledge_base,
+        name="上传",
+        material_type="text",
+        text_content="笔记",
+        source_relative_path="chat/笔记.txt",
+        chat_sourced=False,
+    )
+    guessed = Material.objects.create(
+        knowledge_base=knowledge_base,
+        name="猜的",
+        material_type="text",
+        text_content="别的编号",
+        source_relative_path="chat/12.txt",
+        chat_sourced=False,
+    )
+
+    migration = importlib.import_module("apps.opspilot.migrations.0088_material_chat_sourced")
+    migration.mark_server_assigned_chat_materials(apps, None)
+
+    chat_material.refresh_from_db()
+    uploaded.refresh_from_db()
+    guessed.refresh_from_db()
+    assert chat_material.chat_sourced is True
+    assert is_chat_sourced_material(chat_material) is True
+    assert uploaded.chat_sourced is False
+    assert guessed.chat_sourced is False
+    assert guessed.source_relative_path == "chat/12.txt"
 
 
 def test_openai_enrich_uses_the_authenticated_user():
