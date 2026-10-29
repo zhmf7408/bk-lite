@@ -348,6 +348,135 @@ def test_conflict_routing_treats_same_title_different_subject_as_unrelated(wiki_
     assert result.comparisons[0]["old_page_id"] == page.pk
 
 
+def test_conflict_routing_compares_generic_title_against_existing_page(wiki_factory):
+    from apps.opspilot.services.wiki.conflict_candidate_routing_service import route_material_conflicts
+    from apps.opspilot.services.wiki.structure_service import bootstrap_knowledge_base
+    from apps.opspilot.services.wiki.wiki_budget_service import LLMCallBudget
+
+    knowledge_base = wiki_factory.knowledge_base()
+    bootstrap_knowledge_base(knowledge_base, operator="admin")
+    page = wiki_factory.page(
+        knowledge_base=knowledge_base,
+        title="机房温湿度巡检标准",
+        body="广州一号机房夏季温度应保持在 28℃ 到 32℃。湿度不需要控制。",
+        contribution="human",
+    )
+    knowledge_base.refresh_from_db()
+    prompts = []
+
+    def invoke_llm(_model_id, prompt, *, budget, stage, output_reserve):
+        reservation = budget.ensure_call(stage, prompt, output_reserve=output_reserve)
+        prompts.append(prompt)
+        output = json.dumps(
+            {
+                "comparisons": [
+                    {
+                        "incoming_index": 0,
+                        "old_page_id": page.pk,
+                        "same_subject": True,
+                        "relation": "conflict",
+                        "reason": "同一巡检标准的温度结论相反",
+                    }
+                ]
+            },
+            ensure_ascii=False,
+        )
+        budget.record_call(reservation, output)
+        return output
+
+    result = route_material_conflicts(
+        knowledge_base.active_generation_id,
+        [
+            {
+                "title": "定义",
+                "page_type": "concept",
+                "keywords": ["机房", "温度", "湿度"],
+                "body": ("## 定义\n\n" "机房温湿度控制标准规定温度保持在 18℃ 到 27℃，相对湿度保持在 40% 到 70%。" "旧结论「夏季温度保持在 28℃ 到 32℃，湿度不需要控制」有误。"),
+            }
+        ],
+        llm_model_id=1,
+        budget=LLMCallBudget(max_calls=4, max_total_tokens=20000, scope="wiki_material:test"),
+        invoke_llm=invoke_llm,
+        base_generation_id=knowledge_base.active_generation_id,
+    )
+
+    assert prompts
+    assert str(page.pk) in prompts[0]
+    assert result.llm_called is True
+    assert result.comparisons[0]["relation"] == "conflict"
+    assert result.comparisons[0]["same_subject"] is True
+    assert result.comparisons[0]["old_page_id"] == page.pk
+
+
+def test_conflict_routing_prefers_human_page_when_titles_share_subject_stem(wiki_factory):
+    from apps.opspilot.services.wiki.conflict_candidate_routing_service import route_material_conflicts
+    from apps.opspilot.services.wiki.structure_service import bootstrap_knowledge_base
+    from apps.opspilot.services.wiki.wiki_budget_service import LLMCallBudget
+
+    knowledge_base = wiki_factory.knowledge_base()
+    bootstrap_knowledge_base(knowledge_base, operator="admin")
+    human_page = wiki_factory.page(
+        knowledge_base=knowledge_base,
+        title="机房温湿度巡检标准",
+        body="广州一号机房夏季温度应保持在 28℃ 到 32℃。湿度不需要控制。",
+        contribution="human",
+    )
+    ai_page = wiki_factory.page(
+        knowledge_base=knowledge_base,
+        title="定义",
+        body="## 定义\n\n机房温度保持在 18℃ 到 27℃，相对湿度保持在 40% 到 70%。",
+        contribution="ai",
+    )
+    knowledge_base.refresh_from_db()
+
+    def invoke_llm(_model_id, prompt, *, budget, stage, output_reserve):
+        reservation = budget.ensure_call(stage, prompt, output_reserve=output_reserve)
+        output = json.dumps(
+            {
+                "comparisons": [
+                    {
+                        "incoming_index": 0,
+                        "old_page_id": ai_page.pk,
+                        "same_subject": True,
+                        "relation": "conflict",
+                        "reason": "区间不同",
+                    },
+                    {
+                        "incoming_index": 0,
+                        "old_page_id": human_page.pk,
+                        "same_subject": True,
+                        "relation": "conflict",
+                        "reason": "旧结论被明确否定",
+                    },
+                ]
+            },
+            ensure_ascii=False,
+        )
+        budget.record_call(reservation, output)
+        return output
+
+    result = route_material_conflicts(
+        knowledge_base.active_generation_id,
+        [
+            {
+                "title": "机房温湿度控制标准",
+                "page_type": "concept",
+                "keywords": ["机房", "温度", "湿度"],
+                "body": ("## 定义\n\n" "温度保持在 24℃ 到 27℃，相对湿度保持在 50% 到 80%。" "旧结论「夏季温度保持在 28℃ 到 32℃，湿度不需要控制」有误。"),
+            }
+        ],
+        llm_model_id=1,
+        budget=LLMCallBudget(max_calls=4, max_total_tokens=20000, scope="wiki_material:test"),
+        invoke_llm=invoke_llm,
+        base_generation_id=knowledge_base.active_generation_id,
+    )
+
+    assert result.llm_called is True
+    assert human_page.pk in result.evidence_page_ids
+    assert result.comparisons[0]["old_page_id"] == human_page.pk
+    assert result.comparisons[0]["relation"] == "conflict"
+
+
 def test_conflict_routing_treats_different_module_titles_as_unrelated(wiki_factory):
     from apps.opspilot.services.wiki.conflict_candidate_routing_service import route_material_conflicts
     from apps.opspilot.services.wiki.structure_service import bootstrap_knowledge_base

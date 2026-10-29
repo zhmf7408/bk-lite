@@ -7,7 +7,7 @@ import re
 from dataclasses import dataclass
 
 from apps.core.logger import opspilot_logger as logger
-from apps.opspilot.models import PageVersion, WikiGeneration, WikiGenerationIndexEntry
+from apps.opspilot.models import KnowledgePage, PageVersion, WikiGeneration, WikiGenerationIndexEntry
 from apps.opspilot.services.wiki.build_service import BuildOutputInvalid
 from apps.opspilot.services.wiki.title_service import COMMON_TITLE_ALIASES, compact_title_key, title_identity_key
 from apps.opspilot.services.wiki.wiki_budget_service import WikiBudgetExceeded, estimate_tokens
@@ -42,8 +42,15 @@ _GENERIC_SUBJECTS = frozenset(
         "修订记录",
         "范围",
         "目的",
+        "具体标准",
+        "作废说明",
+        "适用边界",
+        "版本说明",
+        "版本与作废说明",
+        "信息缺口",
     )
 )
+_SUBJECT_SUFFIX_MAX = 4
 _MIN_SUBJECT_CONTAINMENT_LEN = 4
 
 
@@ -87,7 +94,8 @@ def _concrete_subject(title, body):
     title_key = title_identity_key(title)
     if title_key and title_key not in _GENERIC_SUBJECTS:
         return title_key
-    return heading or title_key
+    # 「定义」「概述」这类标题不能证明是另一个主题，留给后续冲突比较。
+    return ""
 
 
 def _canonical_subject_key(value):
@@ -109,7 +117,20 @@ def _subjects_compatible(left, right):
     if left_key == right_key:
         return True
     shorter, longer = sorted((left_key, right_key), key=len)
-    return len(shorter) >= _MIN_SUBJECT_CONTAINMENT_LEN and shorter in longer
+    if len(shorter) >= _MIN_SUBJECT_CONTAINMENT_LEN and shorter in longer:
+        return True
+    return _shares_subject_stem(left_key, right_key)
+
+
+def _shares_subject_stem(left_key, right_key):
+    """前缀相同且两侧只多了短后缀时，仍要做冲突比较。"""
+    limit = min(len(left_key), len(right_key))
+    stem = 0
+    while stem < limit and left_key[stem] == right_key[stem]:
+        stem += 1
+    if stem < _MIN_SUBJECT_CONTAINMENT_LEN:
+        return False
+    return len(left_key) - stem <= _SUBJECT_SUFFIX_MAX and len(right_key) - stem <= _SUBJECT_SUFFIX_MAX
 
 
 def _distinct_subject_pair(page_data, old_title, old_body):
@@ -339,12 +360,15 @@ def _reduce_by_incoming(comparisons):
     by_incoming = {}
     same_subject_priority = {"unresolved": 5, "conflict": 4, "supplement": 3, "unchanged": 2, "unrelated": 1}
     other_priority = {"unrelated": 4, "unchanged": 3, "supplement": 2, "conflict": 1, "unresolved": 0}
+    page_ids = {old_page_id for (_incoming_index, old_page_id) in comparisons}
+    contributions = dict(KnowledgePage.objects.filter(pk__in=page_ids).values_list("pk", "contribution"))
 
     def rank(item):
         relation = item["relation"]
+        edited = 1 if contributions.get(item["old_page_id"]) not in (None, "", "ai") else 0
         if item.get("same_subject") is True:
-            return (1, same_subject_priority[relation])
-        return (0, other_priority[relation])
+            return (1, same_subject_priority[relation], edited)
+        return (0, other_priority[relation], 0)
 
     for (incoming_index, old_page_id), comparison in comparisons.items():
         candidate = {**comparison, "old_page_id": old_page_id}
