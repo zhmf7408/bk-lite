@@ -18,8 +18,10 @@ from apps.opspilot.services.wiki.chat_material_service import (
     REPLY_SWITCH_OFF,
     WIKI_MATERIAL_ACTOR_KEY,
     WIKI_MATERIAL_TOOL_NAME,
+    actor_for_chat_flow_input,
     apply_wiki_material_runtime,
     external_actor,
+    is_chat_sourced_material,
     system_actor,
     wiki_grounded_uses_single_model_call,
     write_chat_wiki_material,
@@ -165,20 +167,54 @@ def test_enqueue_without_queue_id_discards_material():
     assert OperationLog.objects.count() == 0
 
 
-def test_audit_failure_discards_queued_material():
+def test_audit_failure_after_enqueue_keeps_queued_material(caplog):
     user = _user()
-    skill = _skill(_kb("运维知识"))
+    kb = _kb("运维知识")
+    skill = _skill(kb)
+    body = "根分区连续上涨，先清理日志再扩容。"
+    caplog.set_level("WARNING", logger="opspilot")
 
     with _patch_runner(), patch(
         "apps.opspilot.services.wiki.chat_material_service.OperationLog.objects.create",
         side_effect=RuntimeError("audit down"),
     ):
+        reply = _write(skill, user, body=body)
+
+    assert reply == REPLY_SUCCESS
+    material = Material.objects.get()
+    assert material.status == "queued"
+    assert material.text_content == body
+    assert OperationLog.objects.count() == 0
+    assert BuildRecord.objects.filter(trigger=QUEUE_ITEM_TRIGGER, inputs__material_id=material.id).exists()
+    records = [record for record in caplog.records if record.name == "opspilot" and record.levelname == "WARNING"]
+    assert len(records) == 1
+    assert records[0].msg == "chat wiki material audit failed kb_id=%s material_id=%s error_type=%s"
+    assert records[0].args == (kb.id, material.id, "RuntimeError")
+    rendered = records[0].getMessage()
+    assert rendered == f"chat wiki material audit failed kb_id={kb.id} material_id={material.id} error_type=RuntimeError"
+    assert body not in rendered
+    assert "audit down" not in rendered
+    assert "Traceback" not in caplog.text
+
+
+def test_audit_failure_after_build_started_still_reports_success():
+    user = _user()
+    skill = _skill(_kb("运维知识"))
+
+    def _promote_then_fail(**_kwargs):
+        Material.objects.update(status="building")
+        raise RuntimeError("audit down")
+
+    with _patch_runner(), patch(
+        "apps.opspilot.services.wiki.chat_material_service.OperationLog.objects.create",
+        side_effect=_promote_then_fail,
+    ):
         reply = _write(skill, user)
 
-    assert reply == REPLY_FAILED
-    assert Material.objects.count() == 0
+    assert reply == REPLY_SUCCESS
+    material = Material.objects.get()
+    assert material.status == "building"
     assert OperationLog.objects.count() == 0
-    assert BuildRecord.objects.filter(trigger=QUEUE_ITEM_TRIGGER).count() == 0
 
 
 @pytest.mark.parametrize(
@@ -512,6 +548,87 @@ def test_agent_node_actor_comes_from_caller_identity_only():
 
     missing = node._build_llm_params(skill, "hi", {"user_id": "u1"})
     assert missing[WIKI_MATERIAL_ACTOR_KEY]["mode"] == "anonymous"
+
+    forged_channel = node._build_llm_params(
+        skill,
+        "hi",
+        {
+            "user_id": "staff-1",
+            "channel": "ding_talk",
+            WIKI_MATERIAL_ACTOR_KEY: system_actor("forged", "evil.example"),
+        },
+    )
+    assert forged_channel[WIKI_MATERIAL_ACTOR_KEY] == external_actor("staff-1")
+
+    dingtalk = node._build_llm_params(
+        skill,
+        "hi",
+        {
+            "user_id": "ignored",
+            "channel": "ding_talk",
+            WIKI_MATERIAL_ACTOR_KEY: external_actor("staff-9"),
+        },
+    )
+    assert dingtalk[WIKI_MATERIAL_ACTOR_KEY] == external_actor("staff-9")
+
+    wechat = node._build_llm_params(
+        skill,
+        "hi",
+        {"user_id": "zhangsan", "channel": "enterprise_wechat"},
+    )
+    assert wechat[WIKI_MATERIAL_ACTOR_KEY] == external_actor("zhangsan")
+
+    smuggled = node._build_llm_params(
+        skill,
+        "hi",
+        {"user_id": "staff-9", WIKI_MATERIAL_ACTOR_KEY: external_actor("staff-9")},
+    )
+    assert smuggled[WIKI_MATERIAL_ACTOR_KEY]["mode"] == "anonymous"
+    assert actor_for_chat_flow_input({"channel": "nats", "is_third_party": True, "user_id": "staff-9"})["mode"] == "anonymous"
+
+
+def test_wechat_chatflow_injects_sender_as_external_actor():
+    from apps.opspilot.utils.wechat_chat_flow_utils import WechatChatFlowUtils
+
+    seen = {}
+
+    class _Engine:
+        def execute(self, data):
+            seen["data"] = data
+            return {"content": "ok"}
+
+    with patch("apps.opspilot.utils.base_chat_flow_utils.create_chat_flow_engine", return_value=_Engine()):
+        reply = WechatChatFlowUtils(3).execute_chatflow_with_message(SimpleNamespace(), "node-1", "记下这条", "zhangsan")
+
+    assert reply == "ok"
+    assert seen["data"]["channel"] == "enterprise_wechat"
+    assert seen["data"][WIKI_MATERIAL_ACTOR_KEY] == external_actor("zhangsan")
+
+
+def test_runtime_strips_wiki_material_tool_by_url_or_category():
+    skill = _skill(_kb("运维知识"))
+    chat_kwargs = {
+        "system_message_prompt": "base",
+        "tools_servers": [
+            {"name": "renamed", "url": "langchain:wiki_material"},
+            {"name": "bundled", "url": "https://example", "category": "prefix langchain:wiki_material"},
+            {"name": "listed", "url": "https://example", "category": ["docs", "langchain:wiki_material"]},
+            {"name": "keep", "url": "https://example", "category": "search"},
+        ],
+    }
+
+    apply_wiki_material_runtime(
+        chat_kwargs,
+        {"skill_id": skill.id, WIKI_MATERIAL_ACTOR_KEY: system_actor("alice", "corp.example")},
+    )
+
+    assert [tool.get("name") for tool in chat_kwargs["tools_servers"]] == ["keep", WIKI_MATERIAL_TOOL_NAME]
+
+
+def test_chat_source_path_is_the_only_relaxed_conflict_scope():
+    assert is_chat_sourced_material(SimpleNamespace(source_relative_path="chat/12.txt")) is True
+    assert is_chat_sourced_material(SimpleNamespace(source_relative_path="uploads/chat/12.txt")) is False
+    assert is_chat_sourced_material(SimpleNamespace(source_relative_path="")) is False
 
 
 def test_openai_enrich_uses_the_authenticated_user():
