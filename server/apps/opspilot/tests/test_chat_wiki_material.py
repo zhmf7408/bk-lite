@@ -3,10 +3,15 @@
 from types import SimpleNamespace
 from unittest.mock import patch
 
+import importlib
+
 import pytest
+from django.apps import apps
+from django.core.files.storage import InMemoryStorage
+from django.core.files.uploadedfile import SimpleUploadedFile
 
 from apps.opspilot.enum import SkillTypeChoices
-from apps.opspilot.models import BuildRecord, KnowledgePage, LLMSkill, Material
+from apps.opspilot.models import BuildRecord, KnowledgePage, LLMSkill, Material, WikiKnowledgeBase
 from apps.opspilot.services.caller_identity import CALLER_IDENTITY_CONFIG_KEY
 from apps.opspilot.services.wiki.chat_material_service import (
     REPLY_DENIED,
@@ -110,6 +115,7 @@ def test_success_enqueues_text_material_and_records_the_person(caplog):
     assert material.source_folder_path == expected_source["source_folder_path"]
     assert material.source_identity == expected_source["source_identity"]
     assert material.source_identity
+    assert material.chat_sourced is True
     log = OperationLog.objects.get()
     assert log.app == "opspilot"
     assert log.action_type == OperationLog.ACTION_CREATE
@@ -625,10 +631,117 @@ def test_runtime_strips_wiki_material_tool_by_url_or_category():
     assert [tool.get("name") for tool in chat_kwargs["tools_servers"]] == ["keep", WIKI_MATERIAL_TOOL_NAME]
 
 
-def test_chat_source_path_is_the_only_relaxed_conflict_scope():
-    assert is_chat_sourced_material(SimpleNamespace(source_relative_path="chat/12.txt")) is True
-    assert is_chat_sourced_material(SimpleNamespace(source_relative_path="uploads/chat/12.txt")) is False
-    assert is_chat_sourced_material(SimpleNamespace(source_relative_path="")) is False
+def test_chat_conflict_scope_follows_server_mark_not_path():
+    assert is_chat_sourced_material(SimpleNamespace(source_relative_path="chat/12.txt", chat_sourced=False)) is False
+    assert is_chat_sourced_material(SimpleNamespace(source_relative_path="uploads/note.txt", chat_sourced=True)) is True
+    assert is_chat_sourced_material(SimpleNamespace(source_relative_path="chat/12.txt")) is False
+    assert is_chat_sourced_material(SimpleNamespace()) is False
+
+
+def test_upload_paths_and_forged_mark_do_not_relax_conflict_scope(api_client, authenticated_user):
+    authenticated_user.permission = {
+        "opspilot": {"wiki_list-View", "wiki_list-Add", "wiki_list-Edit", "wiki_list-Delete"}
+    }
+    knowledge_base = WikiKnowledgeBase.objects.create(name="上传库", team=[1])
+    created = api_client.post(
+        "/api/v1/opspilot/wiki_mgmt/material/",
+        {
+            "knowledge_base": knowledge_base.id,
+            "name": "笔记",
+            "material_type": "text",
+            "text_content": "客户端指定的正文",
+            "source_relative_path": "chat/笔记.txt",
+            "chat_sourced": True,
+        },
+        format="json",
+    )
+    assert created.status_code == 201, created.content
+    assert "chat_sourced" not in created.json()["data"]
+    material = Material.objects.get(pk=created.json()["data"]["id"])
+    assert material.source_relative_path == "chat/笔记.txt"
+    assert material.chat_sourced is False
+    assert is_chat_sourced_material(material) is False
+
+    updated = api_client.put(
+        f"/api/v1/opspilot/wiki_mgmt/material/{material.id}/",
+        {
+            "name": "笔记",
+            "text_content": "改过的正文",
+            "source_relative_path": f"chat/{material.id}.txt",
+            "chat_sourced": True,
+        },
+        format="json",
+    )
+    assert updated.status_code == 200, updated.content
+    material.refresh_from_db()
+    assert material.source_relative_path == "chat/笔记.txt"
+    assert material.chat_sourced is False
+    assert is_chat_sourced_material(material) is False
+
+    file_field = Material._meta.get_field("file")
+    original_storage = file_field.storage
+    file_field.storage = InMemoryStorage(base_url="/test-media/")
+    try:
+        uploaded = api_client.post(
+            "/api/v1/opspilot/wiki_mgmt/material/batch_create/",
+            {
+                "knowledge_base": knowledge_base.id,
+                "chat_sourced": "true",
+                "source_relative_paths": ["chat/笔记.txt"],
+                "files": [SimpleUploadedFile("笔记.txt", b"note", content_type="text/plain")],
+            },
+            format="multipart",
+        )
+    finally:
+        file_field.storage = original_storage
+
+    assert uploaded.status_code == 201, uploaded.content
+    batch_material = Material.objects.get(pk=uploaded.json()["data"]["items"][0]["id"])
+    assert batch_material.source_relative_path == "chat/笔记.txt"
+    assert batch_material.chat_sourced is False
+    assert is_chat_sourced_material(batch_material) is False
+    assert "chat_sourced" not in uploaded.json()["data"]["items"][0]
+
+
+def test_migration_marks_only_server_assigned_chat_paths():
+    knowledge_base = WikiKnowledgeBase.objects.create(name="历史库", team=[1])
+    chat_material = Material.objects.create(
+        knowledge_base=knowledge_base,
+        name="对话",
+        material_type="text",
+        text_content="已写入",
+        chat_sourced=False,
+    )
+    chat_material.source_relative_path = f"chat/{chat_material.pk}.txt"
+    chat_material.save(update_fields=["source_relative_path"])
+    uploaded = Material.objects.create(
+        knowledge_base=knowledge_base,
+        name="上传",
+        material_type="text",
+        text_content="笔记",
+        source_relative_path="chat/笔记.txt",
+        chat_sourced=False,
+    )
+    guessed = Material.objects.create(
+        knowledge_base=knowledge_base,
+        name="猜的",
+        material_type="text",
+        text_content="别的编号",
+        source_relative_path="chat/12.txt",
+        chat_sourced=False,
+    )
+
+    migration = importlib.import_module("apps.opspilot.migrations.0088_material_chat_sourced")
+    migration.mark_server_assigned_chat_materials(apps, None)
+
+    chat_material.refresh_from_db()
+    uploaded.refresh_from_db()
+    guessed.refresh_from_db()
+    assert chat_material.chat_sourced is True
+    assert is_chat_sourced_material(chat_material) is True
+    assert uploaded.chat_sourced is False
+    assert guessed.chat_sourced is False
+    assert guessed.source_relative_path == "chat/12.txt"
 
 
 def test_openai_enrich_uses_the_authenticated_user():

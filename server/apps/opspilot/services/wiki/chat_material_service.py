@@ -112,9 +112,8 @@ def actor_for_chat_flow_input(flow_input) -> dict:
 
 
 def is_chat_sourced_material(material) -> bool:
-    """对话写入的来源路径是 chat/{id}.txt。只有这类资料放宽同主题比较。"""
-    path = str(getattr(material, "source_relative_path", "") or "").replace("\\", "/").strip()
-    return path.startswith("chat/")
+    """只有对话写入打下的标记才放宽同主题比较。来源路径可由上传指定，不能用来分流。"""
+    return bool(getattr(material, "chat_sourced", False))
 
 
 def normalize_actor(value) -> dict:
@@ -268,7 +267,7 @@ def _enqueue_succeeded(material_id: int, result: dict) -> bool:
 
 
 def _assign_chat_source(material: Material) -> None:
-    """补上构建要求的来源身份。对话资料没有上传路径，用资料 ID 生成稳定相对路径。"""
+    """补上构建要求的来源身份。相对路径只用于来源身份，不决定是否放宽冲突比较。"""
     metadata = source_metadata(material.knowledge_base, source_relative_path=f"chat/{material.pk}.txt")
     material.source_relative_path = metadata["source_relative_path"]
     material.source_folder_path = metadata["source_folder_path"]
@@ -333,6 +332,7 @@ def write_chat_wiki_material(
         material_type="text",
         text_content=cleaned_body,
         status="pending",
+        chat_sourced=True,
         **maintainer,
     )
     try:
