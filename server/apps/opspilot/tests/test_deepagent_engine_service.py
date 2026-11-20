@@ -916,6 +916,63 @@ class TestBuildDeepagentNodes:
         traceback_errors = [r for r in caplog.records if r.name == "opspilot" and r.levelno >= logging.ERROR and r.exc_info]
         assert traceback_errors == owned
 
+    def test_planner_upstream_502_surfaces_failure_instead_of_lightweight_progress(self, caplog):
+        """规划器上游 502 不得落入零工具轻量直答，否则页面先空等再留下「正在获取…」假进度。"""
+        node = ToolsNodes()
+        node.all_tools = [_tool("alerts_list_alerts")]
+        req = _request(user_message="汇总下告警中心的活动告警，整理总结成一个PPT")
+        captured = {}
+
+        gb = _FakeGraphBuilder()
+        name = asyncio.run(node.build_deepagent_nodes(gb, composite_node_name="deep_agent"))
+        wrapper = gb.nodes[name]
+
+        from langchain_core.messages import AIMessage, HumanMessage
+
+        class InternalServerError(Exception):
+            pass
+
+        class _PlannerLLM:
+            async def ainvoke(self, messages, config=None):
+                captured.setdefault("planner_calls", []).append(messages)
+                raise InternalServerError("Error code: 502")
+
+            async def astream(self, messages, config=None):
+                captured["lightweight_astream"] = True
+                yield AIMessage(content="我先查询当前活动告警的数据，再整理成 PPT。\n正在获取告警数据。")
+
+        caplog.set_level(logging.ERROR, logger="opspilot")
+        with (
+            patch("apps.opspilot.metis.llm.chain.node.create_planned_agent", return_value=MagicMock()),
+            patch("apps.opspilot.metis.llm.chain.node.create_deep_agent", return_value=MagicMock()),
+            patch.object(ToolsNodes, "get_llm_client", return_value=_PlannerLLM()),
+            patch.object(ToolsNodes, "_build_knowledge_retrieve_tool", return_value=None),
+            patch.object(ToolsNodes, "_resolve_skill_packages", return_value=[{"name": "PPT Master Skill"}]),
+            patch.object(ToolsNodes, "_build_skill_backend_and_sources", return_value=(None, [], None)),
+        ):
+            result = asyncio.run(
+                wrapper(
+                    {"messages": [HumanMessage(content=req.user_message)]},
+                    {"configurable": {"graph_request": req}},
+                )
+            )
+
+        content = str(result["messages"][-1].content)
+        assert "上游请求失败" in content or "模型服务暂时不可用" in content or "无法连接大模型服务" in content
+        assert "正在获取告警数据" not in content
+        assert "lightweight_astream" not in captured
+        owned = [
+            rec
+            for rec in caplog.records
+            if rec.name == "opspilot"
+            and rec.levelno == logging.ERROR
+            and rec.exc_info
+            and rec.msg == "event=deepagent_llm_upstream_failed failed_stage=%s error_type=%s request_id=%s"
+        ]
+        assert len(owned) == 1
+        assert owned[0].args[0] == "tool_execution_planning"
+        assert owned[0].args[1] == "InternalServerError"
+
     def test_successful_step_compacts_history_before_next_step(self):
         node = ToolsNodes()
         node.all_tools = [
