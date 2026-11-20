@@ -2803,6 +2803,10 @@ class ToolsNodes(
                     ppt_master_packages=matched_for_ppt,
                 )
             except Exception as planning_exc:
+                # 上游模型不可用时与步骤失败同一收口，禁止落入零工具直答编造「正在获取…」。
+                if is_llm_upstream_error(planning_exc):
+                    await _emit_planned_execution_status("idle", reason="planning_failed_upstream")
+                    return _llm_upstream_failure_result(planning_exc, failed_stage="tool_execution_planning")
                 # 规划失败时保持零工具可见，仍允许模型直接回答，绝不退回全量工具。
                 logger.exception(
                     "DeepAgent 工具执行规划失败，将以零工具模式回答: %s",
