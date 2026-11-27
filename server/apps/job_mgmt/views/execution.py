@@ -223,6 +223,7 @@ class JobExecutionViewSet(AuthViewSet):
         response = StreamingHttpResponse(generator, content_type="text/event-stream")
         response["Cache-Control"] = "no-cache"
         response["X-Accel-Buffering"] = "no"
+        response.stop_on_client_disconnect = True
         return response
 
     @action(detail=True, methods=["post"])
