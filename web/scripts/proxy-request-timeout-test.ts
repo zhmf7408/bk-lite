@@ -9,6 +9,7 @@ import {
   linkAbortSignal,
   PROXY_TIMEOUT_HEADER,
   proxyAbortStatus,
+  proxyReleasesUpstreamOnClientAbort,
   scheduleProxyAbort,
   SSE_TIMEOUT_MS,
 } from '../src/utils/proxyTimeout.ts';
@@ -62,6 +63,9 @@ assert.match(
   /consumeProxyTimeoutMs\(headers\)/,
   'the proxy must consume its timeout contract before fetch'
 );
+assert.equal(proxyReleasesUpstreamOnClientAbort('/log/search/tail/'), true);
+assert.equal(proxyReleasesUpstreamOnClientAbort('/opspilot/model_provider_mgmt/llm/execute_agui/'), false);
+assert.equal(proxyReleasesUpstreamOnClientAbort('/opspilot/skill_channel/1/chat/?q=1'), false);
 assert.equal(proxyAbortStatus(true), 499);
 assert.equal(proxyAbortStatus(false), 504);
 

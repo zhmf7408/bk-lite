@@ -14,6 +14,7 @@ from typing import Any, List, Optional
 from django.http import StreamingHttpResponse
 
 from apps.core.logger import opspilot_logger as logger
+from apps.opspilot.utils.stream_common import OpspilotEventStream
 
 _SSE_ACCUMULATE_SKIP_TYPES = frozenset(
     {
@@ -97,7 +98,7 @@ class SSEResponderMixin:
             yield f"data: {json.dumps({'result': False, 'error': error_message})}\n\n"
             yield "data: [DONE]\n\n"
 
-        response = StreamingHttpResponse(error_gen(), content_type="text/event-stream")
+        response = OpspilotEventStream(error_gen(), content_type="text/event-stream")
         response["Cache-Control"] = "no-cache, no-store, must-revalidate"
         response["X-Accel-Buffering"] = "no"
         return response

@@ -3,7 +3,6 @@ import re
 import time
 
 from asgiref.sync import sync_to_async
-from django.http import StreamingHttpResponse
 
 from apps.core.logger import opspilot_logger as logger
 from apps.opspilot.models import LLMModel
@@ -14,6 +13,7 @@ from apps.opspilot.utils import stream_common
 from apps.opspilot.utils.agent_factory import create_agent_instance, create_sse_response_headers, normalize_llm_error_message
 from apps.opspilot.utils.bot_utils import insert_skill_log
 from apps.opspilot.utils.run_locale import reset_run_locale, set_run_locale
+from apps.opspilot.utils.stream_common import OpspilotEventStream
 
 
 def create_error_stream_response(error_message):
@@ -41,7 +41,7 @@ def generate_stream_error(message):
         yield f"data: {json.dumps(error_chunk)}\n\n"
 
     # 直接使用异步生成器
-    response = StreamingHttpResponse(generator(), content_type="text/event-stream")
+    response = OpspilotEventStream(generator(), content_type="text/event-stream")
     # 添加必要的头信息以防止缓冲
     response["Cache-Control"] = "no-cache"
     response["X-Accel-Buffering"] = "no"
@@ -212,7 +212,7 @@ def _log_and_update_tokens_sync(final_stats, skill_name, skill_id, current_ip, k
 def stream_chat(params, skill_name, kwargs, current_ip, user_message, skill_id=None, history_log=None):
     """流式聊天接口 - 返回 StreamingHttpResponse"""
     # 直接使用异步生成器，不需要额外包装
-    response = StreamingHttpResponse(
+    response = OpspilotEventStream(
         create_stream_generator(params, skill_name, kwargs, current_ip, user_message, skill_id, history_log), content_type="text/event-stream"
     )
 

@@ -1,5 +1,5 @@
 import {NextRequest, NextResponse} from 'next/server';
-import {consumeProxyTimeoutMs, getProxyBodyTimeoutMs, linkAbortSignal, proxyAbortStatus, scheduleProxyAbort} from '@/utils/proxyTimeout';
+import {consumeProxyTimeoutMs, getProxyBodyTimeoutMs, linkAbortSignal, proxyAbortStatus, proxyReleasesUpstreamOnClientAbort, scheduleProxyAbort} from '@/utils/proxyTimeout';
 
 import {isLegacyThirdLoginExchangePath} from './legacyThirdLoginCors';
 import {buildProxyTargets} from './proxyTarget';
@@ -85,9 +85,11 @@ async function handleProxy(req: NextRequest): Promise<NextResponse | Response> {
   headers.set('X-Forwarded-For', req.headers.get('x-forwarded-for') || '');
   headers.set('X-Forwarded-Proto', req.nextUrl.protocol || 'http');
 
-  // 创建 AbortController 用于超时控制。客户端断开也要关掉上游，否则 SSE 会一直占着后端。
+  // 创建 AbortController 用于超时控制。日志 tail 断开时关掉上游，对话流保持到自己结束。
   const controller = new AbortController();
-  linkAbortSignal(req.signal, controller);
+  if (proxyReleasesUpstreamOnClientAbort(targetPath)) {
+    linkAbortSignal(req.signal, controller);
+  }
   // fetch 返回前无法从响应 Content-Type 判断 SSE，因此由请求契约选择并消费内部首包超时。
   let timeoutId = scheduleProxyAbort(controller, Math.max(consumeProxyTimeoutMs(headers), getProxyBodyTimeoutMs(targetPath, req.method)));
 

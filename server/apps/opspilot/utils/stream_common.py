@@ -15,10 +15,17 @@ __all__ = [
     "process_think_content",
     "split_think_content",
     "is_interrupt_requested_async",
+    "OpspilotEventStream",
     "make_sse_response",
     "make_sse_error_response",
     "apply_sse_response_headers",
 ]
+
+
+class OpspilotEventStream(StreamingHttpResponse):
+    """对话事件流。客户端断开不取消生成器，结束事件要能发出去。"""
+
+    stop_on_client_disconnect = False
 
 
 def apply_sse_response_headers(response: StreamingHttpResponse, extra_headers: Optional[dict[str, str]] = None) -> StreamingHttpResponse:
@@ -33,7 +40,7 @@ def apply_sse_response_headers(response: StreamingHttpResponse, extra_headers: O
 
 
 def make_sse_response(stream: Callable[[], AsyncIterator | Iterator], *, extra_headers: Optional[dict[str, str]] = None) -> StreamingHttpResponse:
-    response = StreamingHttpResponse(stream(), content_type="text/event-stream")
+    response = OpspilotEventStream(stream(), content_type="text/event-stream")
     return apply_sse_response_headers(response, extra_headers)
 
 

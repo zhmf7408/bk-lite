@@ -404,6 +404,8 @@ class SearchService:
                 )
 
         response = StreamingHttpResponse(async_event_stream(), content_type="text/event-stream")
+        # 离开终端时由 ASGI 关掉这个生成器，finally 才会停掉 VictoriaLogs。
+        response.stop_on_client_disconnect = True
         # ASGI兼容的响应头设置
         response["Cache-Control"] = "no-cache, no-store, must-revalidate"
         response["Pragma"] = "no-cache"

@@ -20,6 +20,12 @@ from django.utils import timezone
 urlpatterns = []
 
 
+def _disconnect_watched(stream):
+    response = StreamingHttpResponse(stream)
+    response.stop_on_client_disconnect = True
+    return response
+
+
 class PgActivity(models.Model):
     pid = models.IntegerField(primary_key=True)
 
@@ -351,7 +357,7 @@ def test_async_stream_closes_nested_generator_when_client_disconnects(applicatio
             finally:
                 state["outer"] = True
 
-        return StreamingHttpResponse(outer())
+        return _disconnect_watched(outer())
 
     install_view(monkeypatch, view)
     calls = {"n": 0}
@@ -394,6 +400,43 @@ def test_async_stream_closes_nested_generator_when_client_disconnects(applicatio
     assert calls["n"] == 2
 
 
+def test_unmarked_async_stream_keeps_running_after_disconnect(application, monkeypatch):
+    """对话流没有标记时，断开不能取消生成器。"""
+    state = {"late": False}
+
+    async def view(request):
+        async def stream():
+            yield b"alive"
+            await asyncio.sleep(0)
+            state["late"] = True
+            yield b"late"
+
+        return StreamingHttpResponse(stream())
+
+    install_view(monkeypatch, view)
+    calls = {"n": 0}
+
+    async def receive():
+        calls["n"] += 1
+        if calls["n"] == 1:
+            return {"type": "http.request", "body": b"", "more_body": False}
+        return {"type": "http.disconnect"}
+
+    async def exercise():
+        messages = []
+
+        async def send(message):
+            messages.append(message)
+
+        await asyncio.wait_for(application(scope(), receive, send), 2)
+        body = b"".join(message.get("body", b"") for message in messages)
+        assert body == b"alivelate"
+
+    asyncio.run(exercise())
+    assert state["late"]
+    assert calls["n"] == 1
+
+
 def test_finished_async_stream_does_not_wait_for_the_next_request(application, monkeypatch):
     """正常结束的流要取消断开监听，不能占住这条 keep-alive 连接的下一次 receive。"""
     calls = {"n": 0, "watched": False}
@@ -402,7 +445,7 @@ def test_finished_async_stream_does_not_wait_for_the_next_request(application, m
         async def stream():
             yield b"done"
 
-        return StreamingHttpResponse(stream())
+        return _disconnect_watched(stream())
 
     install_view(monkeypatch, view)
 
@@ -440,7 +483,7 @@ def test_disconnect_watch_failure_stops_stream_without_leaking_the_error(applica
             finally:
                 state["closed"] = True
 
-        return StreamingHttpResponse(stream())
+        return _disconnect_watched(stream())
 
     install_view(monkeypatch, view)
     calls = {"n": 0}
@@ -480,7 +523,7 @@ def test_one_async_stream_disconnect_does_not_stop_another(application, monkeypa
                 await asyncio.sleep(30)
             yield f"end-{key}".encode()
 
-        return StreamingHttpResponse(stream())
+        return _disconnect_watched(stream())
 
     install_view(monkeypatch, view)
     stop_started = asyncio.Event()

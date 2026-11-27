@@ -51,6 +51,11 @@ export function proxyAbortStatus(clientAborted: boolean): 499 | 504 {
   return clientAborted ? 499 : 504;
 }
 
+/** 日志 tail 离开页面要放开上游。对话流不跟着断，否则结束事件发不出去。 */
+export function proxyReleasesUpstreamOnClientAbort(path: string): boolean {
+  return !path.split('?')[0].includes('/opspilot/');
+}
+
 /** 浏览器断开时终止上游 fetch。SSE 清掉超时后，只靠这条链路释放后端连接。 */
 export function linkAbortSignal(source: AbortSignal | undefined, controller: AbortController): void {
   if (!source) return;

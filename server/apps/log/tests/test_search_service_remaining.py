@@ -54,6 +54,7 @@ def test_tail_sets_sse_headers(mocker):
     assert response["Content-Type"] == "text/event-stream"
     assert response["Cache-Control"] == "no-cache, no-store, must-revalidate"
     assert response["X-Accel-Buffering"] == "no"
+    assert response.stop_on_client_disconnect is True
 
 
 @pytest.mark.asyncio

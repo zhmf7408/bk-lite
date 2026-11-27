@@ -62,6 +62,7 @@ from apps.opspilot.utils.auto_mode import parse_auto_command
 from apps.opspilot.utils.prompt_utils import merge_skill_params
 from apps.opspilot.utils.skill_execution_params import resolve_request_tools
 from apps.opspilot.utils.sse_chat import create_error_stream_response
+from apps.opspilot.utils.stream_common import OpspilotEventStream
 from apps.system_mgmt.models import User as SystemUser
 
 PAGE_CONTEXT_TEXT_BUDGET = 8000
@@ -1739,7 +1740,7 @@ def _wrap_stream_persist_assistant(
         for frame in terminal_frames:
             yield frame
 
-    wrapped = StreamingHttpResponse(generator(), content_type=response["Content-Type"])
+    wrapped = OpspilotEventStream(generator(), content_type=response["Content-Type"])
     for key, value in response.items():
         wrapped[key] = value
     return wrapped

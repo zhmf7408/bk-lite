@@ -77,6 +77,13 @@ async def _stop_on_disconnect(iterator, disconnect: asyncio.Event):
                 await aclose()
 
 
+def _should_stop_on_client_disconnect(response, receive) -> bool:
+    """只有显式标记的异步流才监听断开。日志 tail 需要停上游，对话流要能写完。"""
+    if receive is None or not response.streaming or not getattr(response, "is_async", False):
+        return False
+    return bool(getattr(response, "stop_on_client_disconnect", False))
+
+
 async def _finish_disconnect_watch(watch_task: asyncio.Task | None) -> None:
     if watch_task is None:
         return
@@ -141,8 +148,7 @@ class ResponseCleanupASGIHandler(ASGIHandler):
         watch_task = None
         try:
             receive = _asgi_receive.get()
-            # 只包异步流。同步文件下载保持原路径，短请求也不再读下一条 ASGI 消息。
-            if response.streaming and getattr(response, "is_async", False) and receive is not None:
+            if _should_stop_on_client_disconnect(response, receive):
                 disconnect = asyncio.Event()
                 response.streaming_content = _stop_on_disconnect(response._iterator, disconnect)
                 watch_task = asyncio.create_task(
