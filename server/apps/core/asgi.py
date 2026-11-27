@@ -78,7 +78,11 @@ async def _stop_on_disconnect(iterator, disconnect: asyncio.Event):
 
 
 def _should_stop_on_client_disconnect(response, receive) -> bool:
-    """只有显式标记的异步流才监听断开。日志 tail 需要停上游，对话流要能写完。"""
+    """只有显式标记的异步流才监听断开。
+
+    长连接异步流必须显式设置 stop_on_client_disconnect=True。
+    对话事件流除外，断开后仍要跑完，结束事件才能发出。
+    """
     if receive is None or not response.streaming or not getattr(response, "is_async", False):
         return False
     return bool(getattr(response, "stop_on_client_disconnect", False))

@@ -47,6 +47,7 @@ def test_stream_terminal_execution_returns_snapshot(api_client):
     url = f"/api/v1/job_mgmt/api/execution/{execution.id}/stream/"
     resp = api_client.get(url)
     assert isinstance(resp, StreamingHttpResponse)
+    assert resp.stop_on_client_disconnect is True
     assert resp["Content-Type"].startswith("text/event-stream")
     chunks = _collect(resp)
     assert any("done-out" in c for c in chunks)
@@ -83,6 +84,7 @@ def test_stream_running_execution_uses_live_generator(api_client):
         url = f"/api/v1/job_mgmt/api/execution/{execution.id}/stream/"
         resp = api_client.get(url)
         assert isinstance(resp, StreamingHttpResponse)
+        assert resp.stop_on_client_disconnect is True
         chunks = _collect(resp)
 
     mock_ensure.assert_called_once()
